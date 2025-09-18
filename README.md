@@ -1,5 +1,14 @@
 # IPU PY - Sistema Simplificado de Tesorería
 
+<p align="left">
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
+  <a href="https://github.com/anthonybir/ipupy_tesoreria/issues"><img alt="Issues" src="https://img.shields.io/github/issues/anthonybir/ipupy_tesoreria"></a>
+  <a href="https://github.com/anthonybir/ipupy_tesoreria/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/anthonybir/ipupy_tesoreria?style=social"></a>
+  <img alt="Platform" src="https://img.shields.io/badge/Platform-Vercel-black?logo=vercel"/>
+  <img alt="Tech" src="https://img.shields.io/badge/Stack-HTML%2FJS%20%2B%20Python-ffb000"/>
+</p>
+
+
 > Consulta el documento [`AGENTS.md`](AGENTS.md) para lineamientos de contribución y desarrollo.
 
 ## 🚀 Versión Ultra-Simplificada
