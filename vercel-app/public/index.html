@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPU PY Tesorería Nacional</title>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --dark: #1f2937;
+            --light: #f9fafb;
+            --border: #e5e7eb;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--light);
+            color: var(--dark);
+            line-height: 1.6;
+        }
+        
+        .header {
+            background: white;
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 1rem;
+        }
+        
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        h1 {
+            font-size: 1.5rem;
+            color: var(--dark);
+        }        
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            background: white;
+            padding: 1rem;
+            border-bottom: 2px solid var(--border);
+            overflow-x: auto;
+        }
+        
+        .tab {
+            padding: 0.5rem 1.5rem;
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 500;
+            color: var(--dark);
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        
+        .tab:hover {
+            background: var(--light);
+        }
+        
+        .tab.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        
+        .content {
+            padding: 2rem 0;
+        }
+        
+        .panel {
+            display: none;
+        }
+        
+        .panel.active {
+            display: block;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border);
+            transition: box-shadow 0.2s;
+        }
+        
+        .stat-card:hover {
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .stat-label {
+            font-size: 0.875rem;
+            color: #6b7280;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 600;
+            color: var(--dark);
+        }
+        
+        .stat-change {
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+        }
+        
+        .positive { color: var(--success); }
+        .negative { color: var(--danger); }        
+        .form-section {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border);
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--dark);
+            border-bottom: 2px solid var(--light);
+            padding-bottom: 0.5rem;
+        }
+        
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        label {
+            font-size: 0.875rem;
+            color: #4b5563;
+            margin-bottom: 0.25rem;
+            font-weight: 500;
+        }
+        
+        input, select, textarea {
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            transition: border-color 0.2s;
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+        
+        input[readonly] {
+            background: var(--light);
+            color: #6b7280;
+        }        
+        button {
+            padding: 0.625rem 1.25rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        button:hover {
+            background: #1d4ed8;
+        }
+        
+        button.success {
+            background: var(--success);
+        }
+        
+        button.success:hover {
+            background: #059669;
+        }
+        
+        .table-wrapper {
+            background: white;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border);
+            overflow: hidden;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        thead {
+            background: var(--light);
+        }
+        
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        th {
+            font-weight: 600;
+            font-size: 0.875rem;
+            color: var(--dark);
+        }        
+        tbody tr:hover {
+            background: var(--light);
+        }
+        
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 0.5rem;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--light);
+        }
+        
+        .upload-zone:hover {
+            border-color: var(--primary);
+            background: white;
+        }
+        
+        .upload-zone.dragging {
+            border-color: var(--primary);
+            background: rgba(37, 99, 235, 0.05);
+        }
+        
+        .photo-preview {
+            max-width: 300px;
+            margin: 1rem auto;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .alert {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+        
+        .alert-error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0,0,0,0.1);
+            border-radius: 50%;
+            border-top-color: var(--primary);
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+            .tabs {
+                flex-wrap: wrap;
+            }
+            
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <h1>💒 IPU PY - Sistema de Tesorería Nacional</h1>
+                <div class="header-info">
+                    <span>RUC: 80017726-6</span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <div class="tabs">
+        <div class="container">
+            <button class="tab active" onclick="switchTab('dashboard')">📊 Dashboard</button>
+            <button class="tab" onclick="switchTab('informe')">📝 Nuevo Informe</button>
+            <button class="tab" onclick="switchTab('iglesias')">⛪ Iglesias</button>
+            <button class="tab" onclick="switchTab('reportes')">📈 Reportes</button>
+        </div>
+    </div>
+    
+    <main class="content">
+        <div class="container">
+            <!-- Dashboard Panel -->
+            <div id="dashboard" class="panel active">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Iglesias Activas</div>
+                        <div class="stat-value" id="totalChurches">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Iglesias Reportadas</div>
+                        <div class="stat-value" id="reportedChurches">0</div>
+                        <div class="stat-change negative" id="pendingText">0 pendientes</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Total Mes Actual</div>
+                        <div class="stat-value" id="monthTotal">₲ 0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Fondo Nacional (10%)</div>
+                        <div class="stat-value" id="nationalFund">₲ 0</div>
+                    </div>
+                </div>
+                
+                <div class="table-wrapper">
+                    <table id="recentReports">
+                        <thead>
+                            <tr>
+                                <th>Iglesia</th>
+                                <th>Ciudad</th>
+                                <th>Mes</th>
+                                <th>Total Entradas</th>
+                                <th>Fondo Nacional</th>
+                                <th>Nro. Depósito</th>
+                                <th>Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>            
+            <!-- Nuevo Informe Panel -->
+            <div id="informe" class="panel">
+                <form id="reportForm">
+                    <!-- Datos Generales -->
+                    <div class="form-section">
+                        <h3 class="form-title">📋 Datos Generales</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Iglesia (filial) *</label>
+                                <select id="church_id" required>
+                                    <option value="">Seleccionar iglesia...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Mes *</label>
+                                <select id="month" required>
+                                    <option value="1">Enero</option>
+                                    <option value="2">Febrero</option>
+                                    <option value="3">Marzo</option>
+                                    <option value="4">Abril</option>
+                                    <option value="5">Mayo</option>
+                                    <option value="6">Junio</option>
+                                    <option value="7">Julio</option>
+                                    <option value="8">Agosto</option>
+                                    <option value="9">Septiembre</option>
+                                    <option value="10">Octubre</option>
+                                    <option value="11">Noviembre</option>
+                                    <option value="12">Diciembre</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Año *</label>
+                                <input type="number" id="year" value="2025" required>
+                            </div>
+                        </div>
+                    </div>            
+            <!-- Nuevo Informe Panel -->
+            <div id="informe" class="panel">
+                <form id="reportForm">
+                    <!-- Datos Generales -->
+                    <div class="form-section">
+                        <h3 class="form-title">📋 Datos Generales</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Iglesia (filial) *</label>
+                                <select id="church_id" required>
+                                    <option value="">Seleccionar iglesia...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Mes *</label>
+                                <select id="month" required>
+                                    <option value="1">Enero</option>
+                                    <option value="2">Febrero</option>
+                                    <option value="3">Marzo</option>
+                                    <option value="4">Abril</option>
+                                    <option value="5">Mayo</option>
+                                    <option value="6">Junio</option>
+                                    <option value="7">Julio</option>
+                                    <option value="8">Agosto</option>
+                                    <option value="9">Septiembre</option>
+                                    <option value="10">Octubre</option>
+                                    <option value="11">Noviembre</option>
+                                    <option value="12">Diciembre</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Año *</label>
+                                <input type="number" id="year" value="2025" required>
+                            </div>
+                        </div>
+                    </div>                    
+                    <!-- Entradas del Mes -->
+                    <div class="form-section">
+                        <h3 class="form-title">💰 Entradas del Mes</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Diezmos</label>
+                                <input type="number" id="diezmos" placeholder="0" oninput="calcularTotales()">
+                            </div>
+                            <div class="form-group">
+                                <label>Ofrendas</label>
+                                <input type="number" id="ofrendas" placeholder="0" oninput="calcularTotales()">
+                            </div>
+                            <div class="form-group">
+                                <label>Anexos</label>
+                                <input type="number" id="anexos" placeholder="0" oninput="calcularTotales()">
+                            </div>
+                            <div class="form-group">
+                                <label>Caballeros</label>
+                                <input type="number" id="caballeros" placeholder="0" oninput="calcularTotales()">
+                            </div>
+                            <div class="form-group">
+                                <label>Damas</label>
+                                <input type="number" id="damas" placeholder="0" oninput="calcularTotales()">
+                            </div>
+                            <div class="form-group">
+                                <label>Jóvenes</label>
+                                <input type="number" id="jovenes" placeholder="0" oninput="calcularTotales()">
+                            </div>
+                            <div class="form-group">
+                                <label>Niños</label>
+                                <input type="number" id="ninos" placeholder="0" oninput="calcularTotales()">
+                            </div>
+                            <div class="form-group">
+                                <label>Otros</label>
+                                <input type="number" id="otros" placeholder="0" oninput="calcularTotales()">
+                            </div>
+                            <div class="form-group">
+                                <label><strong>TOTAL ENTRADAS</strong></label>
+                                <input type="number" id="total_entradas" readonly style="font-weight:bold">
+                            </div>
+                        </div>
+                    </div>                    
+                    <!-- Salidas del Mes -->
+                    <div class="form-section">
+                        <h3 class="form-title">💸 Salidas del Mes</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Honorarios Pastorales (con Factura)</label>
+                                <input type="number" id="honorarios_pastoral" placeholder="0" oninput="calcularTotales()">
+                            </div>
+                            <div class="form-group">
+                                <label>10% Fondo Nacional (Auto)</label>
+                                <input type="number" id="fondo_nacional" readonly>
+                            </div>
+                            <div class="form-group">
+                                <label>Servicios (ANDE, ESSAP, etc)</label>
+                                <input type="number" id="servicios" placeholder="0" oninput="calcularTotales()">
+                            </div>
+                            <div class="form-group">
+                                <label><strong>TOTAL SALIDAS</strong></label>
+                                <input type="number" id="total_salidas" readonly style="font-weight:bold">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Boleta de Depósito -->
+                    <div class="form-section">
+                        <h3 class="form-title">🏦 Boleta de Depósito (Obligatorio)</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Fecha de Depósito *</label>
+                                <input type="date" id="fecha_deposito" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Número de Boleta *</label>
+                                <input type="text" id="numero_deposito" placeholder="Ej: 123456" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Monto Depositado (10% Nacional)</label>
+                                <input type="number" id="monto_depositado" readonly>
+                            </div>
+                        </div>
+                    </div>                    
+                    <!-- Fotos del Informe -->
+                    <div class="form-section">
+                        <h3 class="form-title">📸 Fotos del Informe</h3>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Foto del Informe Físico</label>
+                                <div class="upload-zone" onclick="document.getElementById('foto_informe').click()">
+                                    <p>📷 Subir foto del informe</p>
+                                    <input type="file" id="foto_informe" accept="image/*" style="display:none" onchange="previewPhoto(this, 'preview_informe')">
+                                </div>
+                                <div id="preview_informe"></div>
+                            </div>
+                            <div class="form-group">
+                                <label>Foto del Comprobante Bancario</label>
+                                <div class="upload-zone" onclick="document.getElementById('foto_deposito').click()">
+                                    <p>🏦 Subir foto del depósito</p>
+                                    <input type="file" id="foto_deposito" accept="image/*" style="display:none" onchange="previewPhoto(this, 'preview_deposito')">
+                                </div>
+                                <div id="preview_deposito"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Observaciones -->
+                    <div class="form-section">
+                        <h3 class="form-title">📝 Observaciones</h3>
+                        <textarea id="observaciones" rows="3" style="width:100%" placeholder="Notas adicionales (opcional)"></textarea>
+                    </div>
+                    
+                    <div style="text-align:right; margin-top:2rem">
+                        <button type="button" onclick="limpiarFormulario()">Limpiar</button>
+                        <button type="submit" class="success" style="margin-left:1rem">💾 Guardar Informe</button>
+                    </div>
+                </form>
+            </div>            
+            <!-- Iglesias Panel -->
+            <div id="iglesias" class="panel">
+                <div class="table-wrapper">
+                    <table id="churchesTable">
+                        <thead>
+                            <tr>
+                                <th>Iglesia</th>
+                                <th>Ciudad</th>
+                                <th>Pastor</th>
+                                <th>Teléfono</th>
+                                <th>Estado</th>
+                                <th>Último Reporte</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Reportes Panel -->
+            <div id="reportes" class="panel">
+                <div class="form-section">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Mes</label>
+                            <select id="report_month">
+                                <option value="1">Enero</option>
+                                <option value="2">Febrero</option>
+                                <option value="3">Marzo</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Mayo</option>
+                                <option value="6">Junio</option>
+                                <option value="7">Julio</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Septiembre</option>
+                                <option value="10">Octubre</option>
+                                <option value="11">Noviembre</option>
+                                <option value="12">Diciembre</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Año</label>
+                            <input type="number" id="report_year" value="2025">
+                        </div>
+                        <div class="form-group" style="display:flex;align-items:flex-end">
+                            <button onclick="generarReporte()">🔍 Generar Reporte</button>
+                            <button onclick="exportarExcel()" style="margin-left:0.5rem">📥 Excel</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="monthlyReportContent"></div>
+            </div>
+        </div>
+    </main>    
+    <script>
+        // API Base URL - cambiar en producción
+        const API_URL = window.location.hostname === 'localhost' ? '' : '';
+        
+        // Inicializar al cargar
+        document.addEventListener('DOMContentLoaded', () => {
+            loadDashboard();
+            loadChurches();
+            setCurrentMonth();
+            
+            // Event listener para el formulario
+            document.getElementById('reportForm').addEventListener('submit', guardarInforme);
+        });
+        
+        // Cambiar tabs
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+            
+            // Cargar datos según el tab
+            if (tabName === 'dashboard') loadDashboard();
+            if (tabName === 'iglesias') loadChurchesTable();
+        }
+        
+        // Cargar Dashboard
+        async function loadDashboard() {
+            try {
+                const response = await fetch('/api/dashboard');
+                const data = await response.json();
+                
+                document.getElementById('totalChurches').textContent = data.totalChurches;
+                document.getElementById('reportedChurches').textContent = data.reportedChurches;
+                document.getElementById('monthTotal').textContent = formatMoney(data.monthTotal);
+                document.getElementById('nationalFund').textContent = formatMoney(data.nationalFund);
+                document.getElementById('pendingText').textContent = `${data.pendingChurches} pendientes`;
+                
+                // Cargar últimos reportes
+                loadRecentReports();
+            } catch (error) {
+                console.error('Error cargando dashboard:', error);
+            }
+        }

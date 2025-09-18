@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPU PY Tesorería Nacional - Sistema Modernizado</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <style>
+        .glassmorphism {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="gradient-bg text-white shadow-lg">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl font-bold">IPU Paraguay</h1>
+                    <p class="text-blue-100">Sistema Nacional de Tesorería</p>
+                </div>
+                <div id="userInfo" class="hidden">
+                    <span id="userEmail" class="mr-4"></span>
+                    <button onclick="logout()" class="bg-white/20 px-3 py-1 rounded hover:bg-white/30 transition">
+                        Cerrar Sesión
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Login Screen -->
+    <div id="loginScreen" class="min-h-screen flex items-center justify-center gradient-bg">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+            <h2 class="text-2xl font-bold text-center mb-6 text-gray-800">Iniciar Sesión</h2>
+
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input type="email" id="loginEmail" required
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+                    <input type="password" id="loginPassword" required
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition flex items-center justify-center">
+                    <span id="loginText">Iniciar Sesión</span>
+                    <div id="loginLoading" class="loading hidden ml-2"></div>
+                </button>
+            </form>
+
+            <div class="mt-6 text-center">
+                <p class="text-sm text-gray-600">¿Primera vez?
+                    <button onclick="showInitForm()" class="text-blue-600 hover:underline">Inicializar Sistema</button>
+                </p>
+            </div>
+
+            <!-- Init Form -->
+            <div id="initForm" class="hidden mt-4 p-4 bg-gray-50 rounded">
+                <h3 class="font-semibold mb-3">Configuración Inicial</h3>
+                <div class="space-y-3">
+                    <input type="email" id="initEmail" placeholder="Email del administrador"
+                           class="w-full px-3 py-2 border rounded">
+                    <input type="password" id="initPassword" placeholder="Contraseña (mín. 6 caracteres)"
+                           class="w-full px-3 py-2 border rounded">
+                    <button onclick="initSystem()" class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">
+                        Inicializar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="mainApp" class="hidden">
+        <!-- Navigation -->
+        <nav class="bg-white shadow-sm border-b">
+            <div class="container mx-auto px-4">
+                <div class="flex space-x-1 overflow-x-auto">
+                    <button onclick="showTab('dashboard')" class="tab-button active" data-tab="dashboard">
+                        📊 Dashboard
+                    </button>
+                    <button onclick="showTab('reports')" class="tab-button" data-tab="reports">
+                        📄 Informes
+                    </button>
+                    <button onclick="showTab('churches')" class="tab-button" data-tab="churches">
+                        ⛪ Iglesias
+                    </button>
+                    <button onclick="showTab('import')" class="tab-button" data-tab="import">
+                        📤 Importar
+                    </button>
+                    <button onclick="showTab('export')" class="tab-button" data-tab="export">
+                        📥 Exportar
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Content -->
+        <main class="container mx-auto px-4 py-6">
+            <!-- Dashboard -->
+            <div id="dashboardTab" class="tab-content">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-white p-6 rounded-lg shadow-sm border">
+                        <div class="text-sm text-gray-500 uppercase tracking-wide">Total Iglesias</div>
+                        <div id="totalChurches" class="text-3xl font-bold text-gray-900">0</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border">
+                        <div class="text-sm text-gray-500 uppercase tracking-wide">Reportadas Este Mes</div>
+                        <div id="reportedChurches" class="text-3xl font-bold text-green-600">0</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border">
+                        <div class="text-sm text-gray-500 uppercase tracking-wide">Total Mes (Gs.)</div>
+                        <div id="monthTotal" class="text-3xl font-bold text-blue-600">0</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border">
+                        <div class="text-sm text-gray-500 uppercase tracking-wide">Fondo Nacional (Gs.)</div>
+                        <div id="nationalFund" class="text-3xl font-bold text-purple-600">0</div>
+                    </div>
+                </div>
+
+                <!-- Recent Reports -->
+                <div class="bg-white rounded-lg shadow-sm border">
+                    <div class="p-6 border-b">
+                        <h3 class="text-lg font-semibold">Informes Recientes</h3>
+                    </div>
+                    <div id="recentReports" class="p-6">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reports Tab -->
+            <div id="reportsTab" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow-sm border">
+                    <div class="p-6 border-b">
+                        <h3 class="text-lg font-semibold">Gestión de Informes</h3>
+                    </div>
+                    <div class="p-6">
+                        <!-- Filtros -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <select id="filterYear" class="px-3 py-2 border rounded">
+                                <option value="">Todos los años</option>
+                            </select>
+                            <select id="filterMonth" class="px-3 py-2 border rounded">
+                                <option value="">Todos los meses</option>
+                                <option value="1">Enero</option>
+                                <option value="2">Febrero</option>
+                                <option value="3">Marzo</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Mayo</option>
+                                <option value="6">Junio</option>
+                                <option value="7">Julio</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Septiembre</option>
+                                <option value="10">Octubre</option>
+                                <option value="11">Noviembre</option>
+                                <option value="12">Diciembre</option>
+                            </select>
+                            <button onclick="filterReports()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                                Filtrar
+                            </button>
+                        </div>
+
+                        <!-- Lista de informes -->
+                        <div id="reportsList" class="space-y-4">
+                            <!-- Se llena dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Churches Tab -->
+            <div id="churchesTab" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow-sm border">
+                    <div class="p-6 border-b">
+                        <h3 class="text-lg font-semibold">Lista de Iglesias</h3>
+                    </div>
+                    <div id="churchesList" class="p-6">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Import Tab -->
+            <div id="importTab" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow-sm border">
+                    <div class="p-6 border-b">
+                        <h3 class="text-lg font-semibold">Importar Datos desde Excel</h3>
+                    </div>
+                    <div class="p-6">
+                        <form id="importForm" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Tipo de Importación</label>
+                                <select id="importType" class="w-full px-3 py-2 border rounded">
+                                    <option value="reports">Informes Mensuales</option>
+                                    <option value="churches">Lista de Iglesias</option>
+                                </select>
+                            </div>
+
+                            <div id="importReportsFields" class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Año</label>
+                                    <input type="number" id="importYear" value="2024" min="2020" max="2030"
+                                           class="w-full px-3 py-2 border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Mes</label>
+                                    <select id="importMonth" class="w-full px-3 py-2 border rounded">
+                                        <option value="1">Enero</option>
+                                        <option value="2">Febrero</option>
+                                        <option value="3">Marzo</option>
+                                        <option value="4">Abril</option>
+                                        <option value="5">Mayo</option>
+                                        <option value="6">Junio</option>
+                                        <option value="7">Julio</option>
+                                        <option value="8">Agosto</option>
+                                        <option value="9">Septiembre</option>
+                                        <option value="10">Octubre</option>
+                                        <option value="11">Noviembre</option>
+                                        <option value="12">Diciembre</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Archivo Excel</label>
+                                <input type="file" id="importFile" accept=".xlsx,.xls"
+                                       class="w-full px-3 py-2 border rounded">
+                            </div>
+
+                            <div class="flex items-center">
+                                <input type="checkbox" id="overwrite" class="mr-2">
+                                <label for="overwrite" class="text-sm">Sobrescribir datos existentes</label>
+                            </div>
+
+                            <button type="submit" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700">
+                                Importar Datos
+                            </button>
+                        </form>
+
+                        <div id="importProgress" class="hidden mt-4 p-4 bg-blue-50 rounded">
+                            <div class="flex items-center">
+                                <div class="loading mr-2"></div>
+                                <span>Procesando archivo...</span>
+                            </div>
+                        </div>
+
+                        <div id="importResults" class="hidden mt-4"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export Tab -->
+            <div id="exportTab" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow-sm border">
+                    <div class="p-6 border-b">
+                        <h3 class="text-lg font-semibold">Exportar Datos a Excel</h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <!-- Exportar Informe Mensual -->
+                            <div class="border rounded-lg p-4">
+                                <h4 class="font-semibold mb-3">Informe Mensual</h4>
+                                <div class="space-y-3">
+                                    <select id="exportYear" class="w-full px-3 py-2 border rounded">
+                                        <option value="2024">2024</option>
+                                        <option value="2023">2023</option>
+                                    </select>
+                                    <select id="exportMonth" class="w-full px-3 py-2 border rounded">
+                                        <option value="1">Enero</option>
+                                        <option value="2">Febrero</option>
+                                        <option value="3">Marzo</option>
+                                        <option value="4">Abril</option>
+                                        <option value="5">Mayo</option>
+                                        <option value="6">Junio</option>
+                                        <option value="7">Julio</option>
+                                        <option value="8">Agosto</option>
+                                        <option value="9">Septiembre</option>
+                                        <option value="10">Octubre</option>
+                                        <option value="11">Noviembre</option>
+                                        <option value="12">Diciembre</option>
+                                    </select>
+                                    <button onclick="exportData('monthly')"
+                                            class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+                                        Exportar Mes
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Exportar Resumen Anual -->
+                            <div class="border rounded-lg p-4">
+                                <h4 class="font-semibold mb-3">Resumen Anual</h4>
+                                <div class="space-y-3">
+                                    <select id="exportYearlyYear" class="w-full px-3 py-2 border rounded">
+                                        <option value="2024">2024</option>
+                                        <option value="2023">2023</option>
+                                    </select>
+                                    <button onclick="exportData('yearly')"
+                                            class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">
+                                        Exportar Año
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Exportar Lista de Iglesias -->
+                            <div class="border rounded-lg p-4">
+                                <h4 class="font-semibold mb-3">Lista de Iglesias</h4>
+                                <div class="space-y-3">
+                                    <p class="text-sm text-gray-600">Exportar lista completa de iglesias con información de pastores.</p>
+                                    <button onclick="exportData('churches')"
+                                            class="w-full bg-purple-600 text-white py-2 rounded hover:bg-purple-700">
+                                        Exportar Iglesias
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-4 right-4 hidden z-50">
+        <div class="bg-white border border-gray-200 rounded-lg shadow-lg p-4 min-w-80">
+            <div class="flex items-center">
+                <div id="toastIcon" class="mr-3"></div>
+                <div>
+                    <div id="toastTitle" class="font-semibold"></div>
+                    <div id="toastMessage" class="text-sm text-gray-600"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_BASE = window.location.origin + '/api';
+        let authToken = localStorage.getItem('authToken');
+        let currentUser = null;
+
+        // Utility functions
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('es-PY', {
+                style: 'currency',
+                currency: 'PYG',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(amount || 0);
+        }
+
+        function showToast(title, message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toastIcon');
+            const titleEl = document.getElementById('toastTitle');
+            const messageEl = document.getElementById('toastMessage');
+
+            const icons = {
+                success: '✅',
+                error: '❌',
+                warning: '⚠️',
+                info: 'ℹ️'
+            };
+
+            icon.textContent = icons[type] || icons.info;
+            titleEl.textContent = title;
+            messageEl.textContent = message;
+
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 5000);
+        }
+
+        function showLoading(element, show = true) {
+            const loading = element.querySelector('.loading');
+            const text = element.querySelector('span');
+
+            if (show) {
+                if (loading) loading.classList.remove('hidden');
+                if (text) text.style.opacity = '0.7';
+            } else {
+                if (loading) loading.classList.add('hidden');
+                if (text) text.style.opacity = '1';
+            }
+        }
+
+        // Authentication
+        async function login(event) {
+            event.preventDefault();
+
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const submitBtn = event.target.querySelector('button[type="submit"]');
+
+            showLoading(submitBtn);
+
+            try {
+                const response = await axios.post(`${API_BASE}/auth?action=login`, {
+                    email,
+                    password
+                });
+
+                authToken = response.data.token;
+                currentUser = response.data.user;
+                localStorage.setItem('authToken', authToken);
+
+                showMainApp();
+                showToast('¡Bienvenido!', 'Sesión iniciada correctamente', 'success');
+
+            } catch (error) {
+                showToast('Error', error.response?.data?.error || 'Error al iniciar sesión', 'error');
+            } finally {
+                showLoading(submitBtn, false);
+            }
+        }
+
+        async function logout() {
+            localStorage.removeItem('authToken');
+            authToken = null;
+            currentUser = null;
+            showLoginScreen();
+            showToast('Sesión cerrada', 'Has cerrado sesión correctamente', 'info');
+        }
+
+        async function verifyAuth() {
+            if (!authToken) return false;
+
+            try {
+                const response = await axios.get(`${API_BASE}/auth?action=verify`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                currentUser = response.data.user;
+                return true;
+            } catch (error) {
+                localStorage.removeItem('authToken');
+                authToken = null;
+                return false;
+            }
+        }
+
+        function showInitForm() {
+            document.getElementById('initForm').classList.toggle('hidden');
+        }
+
+        async function initSystem() {
+            const email = document.getElementById('initEmail').value;
+            const password = document.getElementById('initPassword').value;
+
+            if (!email || !password) {
+                showToast('Error', 'Email y contraseña requeridos', 'error');
+                return;
+            }
+
+            try {
+                await axios.post(`${API_BASE}/auth?action=init`, { email, password });
+                showToast('Sistema Inicializado', 'Ya puedes iniciar sesión', 'success');
+                document.getElementById('initForm').classList.add('hidden');
+                document.getElementById('loginEmail').value = email;
+            } catch (error) {
+                showToast('Error', error.response?.data?.error || 'Error al inicializar', 'error');
+            }
+        }
+
+        // UI Navigation
+        function showLoginScreen() {
+            document.getElementById('loginScreen').classList.remove('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+        }
+
+        function showMainApp() {
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            document.getElementById('userEmail').textContent = currentUser?.email || '';
+            document.getElementById('userInfo').classList.remove('hidden');
+
+            loadDashboard();
+        }
+
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+
+            // Remove active class from all buttons
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active', 'bg-blue-600', 'text-white');
+                btn.classList.add('text-gray-600');
+            });
+
+            // Show selected tab
+            document.getElementById(tabName + 'Tab').classList.remove('hidden');
+
+            // Add active class to clicked button
+            const activeBtn = document.querySelector(`[data-tab="${tabName}"]`);
+            activeBtn.classList.add('active', 'bg-blue-600', 'text-white');
+            activeBtn.classList.remove('text-gray-600');
+
+            // Load content based on tab
+            switch(tabName) {
+                case 'dashboard':
+                    loadDashboard();
+                    break;
+                case 'reports':
+                    loadReports();
+                    break;
+                case 'churches':
+                    loadChurches();
+                    break;
+            }
+        }
+
+        // Dashboard
+        async function loadDashboard() {
+            try {
+                const response = await axios.get(`${API_BASE}/dashboard`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                const data = response.data;
+
+                document.getElementById('totalChurches').textContent = data.totalChurches;
+                document.getElementById('reportedChurches').textContent = data.reportedChurches;
+                document.getElementById('monthTotal').textContent = formatCurrency(data.monthTotal);
+                document.getElementById('nationalFund').textContent = formatCurrency(data.nationalFund);
+
+                // Recent reports
+                const recentReportsEl = document.getElementById('recentReports');
+                if (data.recentReports && data.recentReports.length > 0) {
+                    recentReportsEl.innerHTML = data.recentReports.map(report => `
+                        <div class="flex justify-between items-center py-3 border-b last:border-b-0">
+                            <div>
+                                <div class="font-medium">${report.churchName}</div>
+                                <div class="text-sm text-gray-500">${report.city}</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="font-semibold">${formatCurrency(report.totalEntradas)}</div>
+                                <div class="text-sm text-gray-500">${new Date(report.createdAt).toLocaleDateString()}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    recentReportsEl.innerHTML = '<p class="text-gray-500 text-center py-8">No hay informes recientes</p>';
+                }
+
+            } catch (error) {
+                showToast('Error', 'Error al cargar dashboard', 'error');
+            }
+        }
+
+        // Reports
+        async function loadReports() {
+            try {
+                const response = await axios.get(`${API_BASE}/reports`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                const reports = response.data;
+                const reportsListEl = document.getElementById('reportsList');
+
+                if (reports.length > 0) {
+                    reportsListEl.innerHTML = reports.map(report => `
+                        <div class="border rounded-lg p-4">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h4 class="font-semibold">${report.church_name}</h4>
+                                    <p class="text-sm text-gray-600">${report.city} - ${report.pastor}</p>
+                                    <p class="text-sm text-gray-500">${report.month}/${report.year}</p>
+                                </div>
+                                <div class="text-right">
+                                    <div class="font-semibold text-lg">${formatCurrency(report.total_entradas)}</div>
+                                    <div class="text-sm text-gray-500">Fondo Nacional: ${formatCurrency(report.fondo_nacional)}</div>
+                                    <span class="inline-block px-2 py-1 text-xs rounded-full ${
+                                        report.estado === 'recibido' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                    }">${report.estado}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    reportsListEl.innerHTML = '<p class="text-gray-500 text-center py-8">No hay informes disponibles</p>';
+                }
+
+            } catch (error) {
+                showToast('Error', 'Error al cargar informes', 'error');
+            }
+        }
+
+        async function filterReports() {
+            const year = document.getElementById('filterYear').value;
+            const month = document.getElementById('filterMonth').value;
+
+            let url = `${API_BASE}/reports`;
+            const params = new URLSearchParams();
+
+            if (year) params.append('year', year);
+            if (month) params.append('month', month);
+
+            if (params.toString()) {
+                url += '?' + params.toString();
+            }
+
+            try {
+                const response = await axios.get(url, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                const reports = response.data;
+                const reportsListEl = document.getElementById('reportsList');
+
+                if (reports.length > 0) {
+                    reportsListEl.innerHTML = reports.map(report => `
+                        <div class="border rounded-lg p-4">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h4 class="font-semibold">${report.church_name}</h4>
+                                    <p class="text-sm text-gray-600">${report.city} - ${report.pastor}</p>
+                                    <p class="text-sm text-gray-500">${report.month}/${report.year}</p>
+                                </div>
+                                <div class="text-right">
+                                    <div class="font-semibold text-lg">${formatCurrency(report.total_entradas)}</div>
+                                    <div class="text-sm text-gray-500">Fondo Nacional: ${formatCurrency(report.fondo_nacional)}</div>
+                                    <span class="inline-block px-2 py-1 text-xs rounded-full ${
+                                        report.estado === 'recibido' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                    }">${report.estado}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    reportsListEl.innerHTML = '<p class="text-gray-500 text-center py-8">No se encontraron informes con los filtros aplicados</p>';
+                }
+
+            } catch (error) {
+                showToast('Error', 'Error al filtrar informes', 'error');
+            }
+        }
+
+        // Churches
+        async function loadChurches() {
+            try {
+                const response = await axios.get(`${API_BASE}/churches`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                const churches = response.data;
+                const churchesListEl = document.getElementById('churchesList');
+
+                if (churches.length > 0) {
+                    churchesListEl.innerHTML = `
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Iglesia</th>
+                                        <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Ciudad</th>
+                                        <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Pastor</th>
+                                        <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Grado</th>
+                                        <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Posición</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200">
+                                    ${churches.map(church => `
+                                        <tr>
+                                            <td class="px-4 py-3 font-medium">${church.name}</td>
+                                            <td class="px-4 py-3">${church.city}</td>
+                                            <td class="px-4 py-3">${church.pastor}</td>
+                                            <td class="px-4 py-3">${church.grado || '-'}</td>
+                                            <td class="px-4 py-3">${church.posicion || '-'}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                } else {
+                    churchesListEl.innerHTML = '<p class="text-gray-500 text-center py-8">No hay iglesias registradas</p>';
+                }
+
+            } catch (error) {
+                showToast('Error', 'Error al cargar iglesias', 'error');
+            }
+        }
+
+        // Import
+        document.getElementById('importForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const fileInput = document.getElementById('importFile');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showToast('Error', 'Selecciona un archivo Excel', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('excelFile', file);
+            formData.append('type', document.getElementById('importType').value);
+            formData.append('year', document.getElementById('importYear').value);
+            formData.append('month', document.getElementById('importMonth').value);
+            formData.append('overwrite', document.getElementById('overwrite').checked);
+
+            const progressEl = document.getElementById('importProgress');
+            const resultsEl = document.getElementById('importResults');
+
+            progressEl.classList.remove('hidden');
+            resultsEl.classList.add('hidden');
+
+            try {
+                const response = await axios.post(`${API_BASE}/import`, formData, {
+                    headers: {
+                        Authorization: `Bearer ${authToken}`,
+                        'Content-Type': 'multipart/form-data'
+                    }
+                });
+
+                const result = response.data;
+
+                resultsEl.innerHTML = `
+                    <div class="border rounded-lg p-4 ${result.errors.length > 0 ? 'bg-yellow-50' : 'bg-green-50'}">
+                        <h4 class="font-semibold mb-2">${result.message}</h4>
+                        <div class="text-sm space-y-1">
+                            <p><strong>Total procesados:</strong> ${result.totalProcessed}</p>
+                            <p><strong>Importados:</strong> ${result.imported}</p>
+                            <p><strong>Omitidos:</strong> ${result.skipped}</p>
+                            <p><strong>Errores:</strong> ${result.errors.length}</p>
+                        </div>
+
+                        ${result.details.length > 0 ? `
+                            <div class="mt-3">
+                                <h5 class="font-medium mb-1">Detalles:</h5>
+                                <ul class="text-sm space-y-1">
+                                    ${result.details.map(detail => `<li>• ${detail}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+
+                        ${result.errors.length > 0 ? `
+                            <div class="mt-3">
+                                <h5 class="font-medium mb-1 text-red-600">Errores:</h5>
+                                <ul class="text-sm space-y-1 text-red-600">
+                                    ${result.errors.map(error => `<li>• ${error}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+
+                resultsEl.classList.remove('hidden');
+
+                if (result.imported > 0) {
+                    showToast('Importación Exitosa', `${result.imported} registros importados`, 'success');
+                }
+
+            } catch (error) {
+                showToast('Error', error.response?.data?.error || 'Error al importar datos', 'error');
+                resultsEl.innerHTML = `
+                    <div class="border border-red-200 rounded-lg p-4 bg-red-50">
+                        <h4 class="font-semibold text-red-800 mb-2">Error en la importación</h4>
+                        <p class="text-sm text-red-600">${error.response?.data?.error || 'Error desconocido'}</p>
+                    </div>
+                `;
+                resultsEl.classList.remove('hidden');
+            } finally {
+                progressEl.classList.add('hidden');
+            }
+        });
+
+        // Export
+        async function exportData(type) {
+            let url = `${API_BASE}/export?type=${type}`;
+
+            if (type === 'monthly') {
+                const year = document.getElementById('exportYear').value;
+                const month = document.getElementById('exportMonth').value;
+                url += `&year=${year}&month=${month}`;
+            } else if (type === 'yearly') {
+                const year = document.getElementById('exportYearlyYear').value;
+                url += `&year=${year}`;
+            } else if (type === 'churches') {
+                url += `&year=${new Date().getFullYear()}`;
+            }
+
+            try {
+                const response = await axios.get(url, {
+                    headers: { Authorization: `Bearer ${authToken}` },
+                    responseType: 'blob'
+                });
+
+                // Create download link
+                const blob = new Blob([response.data]);
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+
+                // Get filename from response headers or generate one
+                const contentDisposition = response.headers['content-disposition'];
+                let filename = 'export.xlsx';
+
+                if (contentDisposition) {
+                    const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+                    if (filenameMatch) {
+                        filename = filenameMatch[1];
+                    }
+                }
+
+                link.download = filename;
+                link.click();
+
+                window.URL.revokeObjectURL(downloadUrl);
+                showToast('Exportación Exitosa', 'Archivo descargado correctamente', 'success');
+
+            } catch (error) {
+                showToast('Error', error.response?.data?.error || 'Error al exportar datos', 'error');
+            }
+        }
+
+        // Initialize app
+        async function init() {
+            // Setup axios defaults
+            axios.defaults.headers.common['Content-Type'] = 'application/json';
+
+            // Setup event listeners
+            document.getElementById('loginForm').addEventListener('submit', login);
+
+            // Setup tab styles
+            const style = document.createElement('style');
+            style.textContent = `
+                .tab-button {
+                    padding: 0.75rem 1.5rem;
+                    border-radius: 0.5rem;
+                    font-weight: 500;
+                    transition: all 0.2s;
+                    color: #6b7280;
+                    white-space: nowrap;
+                }
+                .tab-button:hover {
+                    background-color: #f3f4f6;
+                }
+                .tab-button.active {
+                    background-color: #2563eb !important;
+                    color: white !important;
+                }
+            `;
+            document.head.appendChild(style);
+
+            // Check if user is already authenticated
+            if (authToken) {
+                const isValid = await verifyAuth();
+                if (isValid) {
+                    showMainApp();
+                } else {
+                    showLoginScreen();
+                }
+            } else {
+                showLoginScreen();
+            }
+
+            // Set current month/year in forms
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const currentMonth = now.getMonth() + 1;
+
+            document.getElementById('importYear').value = currentYear;
+            document.getElementById('importMonth').value = currentMonth;
+            document.getElementById('exportMonth').value = currentMonth;
+            document.getElementById('filterYear').innerHTML = `
+                <option value="">Todos los años</option>
+                <option value="${currentYear}">${currentYear}</option>
+                <option value="${currentYear - 1}">${currentYear - 1}</option>
+            `;
+        }
+
+        // Start the application
+        init();
+    </script>
+</body>
+</html>
