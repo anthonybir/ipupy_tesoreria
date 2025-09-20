@@ -1422,7 +1422,7 @@
             resultsEl.classList.add('hidden');
 
             try {
-                const response = await axios.post(`${API_BASE}/import`, formData, {
+                const response = await axios.post(`${API_BASE}/data?action=import`, formData, {
                     headers: {
                         Authorization: `Bearer ${authToken}`,
                         'Content-Type': 'multipart/form-data'
@@ -1483,7 +1483,7 @@
 
         // Export
         async function exportData(type) {
-            let url = `${API_BASE}/export?type=${type}`;
+            let url = `${API_BASE}/data?action=export&type=${type}`;
 
             if (type === 'monthly') {
                 const year = document.getElementById('exportYear').value;
@@ -1715,7 +1715,7 @@
 
         async function loadFundsForTransaction() {
             try {
-                const response = await axios.get(`${API_BASE}/funds`, {
+                const response = await axios.get(`${API_BASE}/financial?type=funds`, {
                     headers: { Authorization: `Bearer ${authToken}` }
                 });
 
@@ -1792,7 +1792,7 @@
             await loadChurchesForTransaction();
 
             try {
-                const response = await axios.get(`${API_BASE}/transactions`, {
+                const response = await axios.get(`${API_BASE}/financial?type=transactions`, {
                     headers: { Authorization: `Bearer ${authToken}` }
                 });
 
@@ -1864,7 +1864,7 @@
                 if (churchId) params.append('church_id', churchId);
                 if (dateFrom) params.append('date_from', dateFrom);
 
-                const url = `${API_BASE}/transactions` + (params.toString() ? '?' + params.toString() : '');
+                const url = `${API_BASE}/financial?type=transactions` + (params.toString() ? '&' + params.toString() : '');
 
                 const response = await axios.get(url, {
                     headers: { Authorization: `Bearer ${authToken}` }
@@ -1932,7 +1932,7 @@
             const newConcept = prompt('Nuevo concepto:');
             if (newConcept && newConcept.trim()) {
                 try {
-                    await axios.put(`${API_BASE}/transactions/${id}`, {
+                    await axios.put(`${API_BASE}/financial?type=transactions`, {
                         concept: newConcept.trim()
                     }, {
                         headers: { Authorization: `Bearer ${authToken}` }
@@ -1949,7 +1949,7 @@
         async function deleteTransaction(id) {
             if (confirm('¿Está seguro de que desea eliminar esta transacción? Esta acción no se puede deshacer.')) {
                 try {
-                    await axios.delete(`${API_BASE}/transactions/${id}`, {
+                    await axios.delete(`${API_BASE}/financial?type=transactions`, {
                         headers: { Authorization: `Bearer ${authToken}` }
                     });
 
@@ -1977,7 +1977,7 @@
             };
 
             try {
-                await axios.post(`${API_BASE}/transactions`, formData, {
+                await axios.post(`${API_BASE}/financial?type=transactions`, formData, {
                     headers: { Authorization: `Bearer ${authToken}` }
                 });
 
@@ -2001,7 +2001,7 @@
         // Fund Management Functions
         async function loadFunds() {
             try {
-                const response = await axios.get(`${API_BASE}/funds`, {
+                const response = await axios.get(`${API_BASE}/financial?type=funds`, {
                     headers: { Authorization: `Bearer ${authToken}` }
                 });
 
@@ -2158,7 +2158,7 @@
             };
 
             try {
-                await axios.post(`${API_BASE}/funds`, formData, {
+                await axios.post(`${API_BASE}/financial?type=funds`, formData, {
                     headers: { Authorization: `Bearer ${authToken}` }
                 });
 
@@ -2183,7 +2183,7 @@
 
         async function toggleFundStatus(fundId) {
             try {
-                await axios.put(`${API_BASE}/funds/${fundId}/toggle`, {}, {
+                await axios.put(`${API_BASE}/financial?type=funds&id=${fundId}`, {}, {
                     headers: { Authorization: `Bearer ${authToken}` }
                 });
 
