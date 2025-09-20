@@ -1729,7 +1729,7 @@
                         const placeholder = select.id === 'transactionFund' ? 'Seleccionar fondo...' : 'Todos los fondos';
                         select.innerHTML = `<option value="">${placeholder}</option>`;
 
-                        response.data.forEach(fund => {
+                        (response.data.data || response.data).forEach(fund => {
                             const option = document.createElement('option');
                             option.value = fund.id;
                             option.textContent = `${fund.name} (${formatCurrency(fund.current_balance)})`;
@@ -2005,7 +2005,7 @@
                     headers: { Authorization: `Bearer ${authToken}` }
                 });
 
-                const funds = response.data;
+                const funds = response.data.data || response.data;
                 updateFundDashboard(funds);
                 populateFundTable(funds);
                 populateFundFilters(funds);
