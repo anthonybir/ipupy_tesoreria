@@ -1,7 +1,7 @@
 const { setCORSHeaders } = require('../lib/cors');
 
 module.exports = async (req, res) => {
-  setCORSHeaders(res);
+  setCORSHeaders(req, res);
 
   try {
     // Test environment variables
