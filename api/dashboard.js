@@ -22,9 +22,9 @@ module.exports = async function handler(req, res) {
       execute(`
         SELECT
           COUNT(*) as total,
-          COALESCE(SUM(tithes), 0) as total_tithes,
-          COALESCE(SUM(offerings), 0) as total_offerings,
-          COALESCE(SUM(national_fund), 0) as total_national_fund
+          COALESCE(SUM(diezmos), 0) as total_tithes,
+          COALESCE(SUM(ofrendas), 0) as total_offerings,
+          COALESCE(SUM(fondo_nacional), 0) as total_national_fund
         FROM reports
       `),
       execute(`
@@ -46,9 +46,9 @@ module.exports = async function handler(req, res) {
     const currentMonthStats = await execute(`
       SELECT
         COUNT(*) as reports_this_month,
-        COALESCE(SUM(tithes), 0) as tithes_this_month,
-        COALESCE(SUM(offerings), 0) as offerings_this_month,
-        COALESCE(SUM(national_fund), 0) as national_fund_this_month
+        COALESCE(SUM(diezmos), 0) as tithes_this_month,
+        COALESCE(SUM(ofrendas), 0) as offerings_this_month,
+        COALESCE(SUM(fondo_nacional), 0) as national_fund_this_month
       FROM reports
       WHERE month = $1 AND year = $2
     `, [currentMonth, currentYear]);
