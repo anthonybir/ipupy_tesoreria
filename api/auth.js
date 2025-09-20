@@ -349,6 +349,25 @@ async function handleGoogleAuth(req, res) {
     const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ||
       '44786170581-apr8ukthgnp6dku7rkjh90kfruc2sf8t.apps.googleusercontent.com';
 
+    console.log('Google OAuth Debug:', {
+      envClientId: process.env.GOOGLE_CLIENT_ID,
+      usingClientId: GOOGLE_CLIENT_ID,
+      credentialLength: credential?.length
+    });
+
+    // Decode token to see actual audience (without verification)
+    const tokenParts = credential.split('.');
+    if (tokenParts.length === 3) {
+      try {
+        const payload = JSON.parse(Buffer.from(tokenParts[1], 'base64url').toString());
+        console.log('Token audience (aud):', payload.aud);
+        console.log('Expected audience:', GOOGLE_CLIENT_ID);
+        console.log('Audience match:', payload.aud === GOOGLE_CLIENT_ID);
+      } catch (decodeError) {
+        console.log('Failed to decode token for debugging:', decodeError.message);
+      }
+    }
+
     const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
     // Verify Google token
