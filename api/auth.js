@@ -18,8 +18,7 @@ function getJWTSecret() {
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-// Initialize Google OAuth client
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+// Initialize Google OAuth client (moved to function level for serverless compatibility)
 
 // Helper function to identify system owner
 function isSystemOwner(email) {
@@ -345,6 +344,9 @@ async function handleGoogleAuth(req, res) {
   }
 
   try {
+    // Initialize Google OAuth client (for serverless compatibility)
+    const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
     // Verify Google token
     const ticket = await client.verifyIdToken({
       idToken: credential,
