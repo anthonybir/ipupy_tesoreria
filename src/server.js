@@ -41,7 +41,7 @@ registerApiRoute('/api/db-test', '../tests/api/db-test.js');
 registerApiRoute('/api/funds', './api/funds.js');
 registerApiRoute('/api/churches', './api/churches.js');
 registerApiRoute('/api/dashboard', './api/dashboard.js');
-registerApiRoute('/api/auth', './api/auth.js');
+registerApiRoute('/api/auth', '../api/auth.js');
 registerApiRoute('/api/reports/recent', './api/reports-recent.js');
 registerApiRoute('/api/reports', './api/reports.js');
 registerApiRoute('/api/reports-enhanced', './api/reports-enhanced.js');

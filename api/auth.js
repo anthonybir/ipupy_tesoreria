@@ -346,8 +346,9 @@ async function handleGoogleAuth(req, res) {
   try {
     // Initialize Google OAuth client (for serverless compatibility)
     // Use hardcoded Client ID to avoid env var issues in serverless cold starts
-    const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ||
-      '44786170581-apr8ukthgnp6dku7rkjh90kfruc2sf8t.apps.googleusercontent.com';
+    // IMPORTANT: Trim environment variables to remove newlines/whitespace
+    const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID ||
+      '44786170581-apr8ukthgnp6dku7rkjh90kfruc2sf8t.apps.googleusercontent.com').trim();
 
     console.log('Google OAuth Debug:', {
       envClientId: process.env.GOOGLE_CLIENT_ID,
@@ -377,7 +378,7 @@ async function handleGoogleAuth(req, res) {
     const possibleAudiences = [
       GOOGLE_CLIENT_ID,
       '44786170581-apr8ukthgnp6dku7rkjh90kfruc2sf8t.apps.googleusercontent.com',
-      process.env.GOOGLE_CLIENT_ID
+      process.env.GOOGLE_CLIENT_ID?.trim()
     ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i); // Remove duplicates
 
     console.log('Trying verification with audiences:', possibleAudiences);
