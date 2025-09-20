@@ -1,5 +1,6 @@
 const { execute } = require('../lib/db');
 const { setCORSHeaders, handlePreflight } = require('../lib/cors');
+const { OAuth2Client } = require('google-auth-library');
 
 // Función segura para obtener JWT_SECRET
 function getJWTSecret() {
@@ -16,6 +17,14 @@ function getJWTSecret() {
 }
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+
+// Initialize Google OAuth client
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+
+// Helper function to identify system owner
+function isSystemOwner(email) {
+  return email.toLowerCase() === 'administracion@ipupy.org.py';
+}
 
 module.exports = async function handler(req, res) {
   // Configurar CORS seguro
@@ -63,6 +72,13 @@ module.exports = async function handler(req, res) {
         return res.status(405).json({ error: 'Método no permitido' });
       }
       await handleInit(req, res);
+      break;
+
+    case 'google':
+      if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Método no permitido' });
+      }
+      await handleGoogleAuth(req, res);
       break;
 
     default:
@@ -319,5 +335,126 @@ const verifyAuth = async (req) => {
 
   return result.rows[0];
 };
+
+// Google OAuth authentication handler
+async function handleGoogleAuth(req, res) {
+  const { credential } = req.body;
+
+  if (!credential) {
+    return res.status(400).json({ error: 'Token de Google requerido' });
+  }
+
+  try {
+    // Verify Google token
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID
+    });
+
+    const payload = ticket.getPayload();
+    const { email, name, hd, sub: googleId, picture } = payload;
+
+    // Check if user has allowed domain
+    const allowedDomains = ['ipupy.org.py', 'ipupy.org'];
+    const emailDomain = email.split('@')[1];
+
+    if (!allowedDomains.includes(emailDomain)) {
+      return res.status(403).json({
+        error: `Solo usuarios de dominios autorizados pueden acceder al sistema`,
+        domain: emailDomain,
+        allowedDomains: allowedDomains
+      });
+    }
+
+    // Look for existing user
+    let userResult = await execute(
+      'SELECT * FROM users WHERE email = $1 AND active = true',
+      [email.toLowerCase()]
+    );
+
+    let user;
+
+    if (userResult.rows.length === 0) {
+      // Create new user automatically for IPU PY domain
+      const userRole = isSystemOwner(email) ? 'admin' : 'church';
+      const createResult = await execute(
+        `INSERT INTO users (email, password_hash, role, google_id, active)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [email.toLowerCase(), 'google_oauth', userRole, googleId, true]
+      );
+      user = createResult.rows[0];
+    } else {
+      user = userResult.rows[0];
+
+      // Update Google ID if not present
+      if (!user.google_id && googleId) {
+        await execute(
+          'UPDATE users SET google_id = $1 WHERE id = $2',
+          [googleId, user.id]
+        );
+        user.google_id = googleId;
+      }
+
+      // Upgrade to admin if this is the system owner
+      if (isSystemOwner(email) && user.role !== 'admin') {
+        await execute(
+          'UPDATE users SET role = $1, church_id = NULL WHERE id = $2',
+          ['admin', user.id]
+        );
+        user.role = 'admin';
+        user.church_id = null;
+      }
+    }
+
+    // Get church information if user has church_id
+    let churchName = null;
+    if (user.church_id) {
+      const churchResult = await execute(
+        'SELECT name FROM churches WHERE id = $1 AND active = true',
+        [user.church_id]
+      );
+      if (churchResult.rows.length > 0) {
+        churchName = churchResult.rows[0].name;
+      }
+    }
+
+    // Generate JWT token
+    const token = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        churchId: user.church_id,
+        isSystemOwner: isSystemOwner(email)
+      },
+      getJWTSecret(),
+      { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+    );
+
+    res.json({
+      message: 'Login exitoso con Google',
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        churchId: user.church_id,
+        churchName: churchName,
+        name: name,
+        picture: picture,
+        provider: 'google',
+        isSystemOwner: isSystemOwner(email)
+      }
+    });
+
+  } catch (error) {
+    console.error('Error en Google OAuth:', error);
+    res.status(500).json({
+      error: 'Error interno en autenticación',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+}
 
 module.exports.verifyAuth = verifyAuth;
