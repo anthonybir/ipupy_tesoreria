@@ -25,9 +25,8 @@ const requiredFiles = [
   'src/lib/db.js',
   'api/auth.js',
   'api/churches.js',
-  'api/dashboard.js',
-  'api/export.js',
-  'api/import.js',
+  'api/financial.js',  // Consolidated: funds + transactions + church-transactions
+  'api/data.js',       // Consolidated: import + export
   'api/reports.js',
   'public/index.html'
 ];

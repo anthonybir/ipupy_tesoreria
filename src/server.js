@@ -38,18 +38,20 @@ const registerApiRoute = (route, filePath) => {
 };
 
 registerApiRoute('/api/db-test', '../tests/api/db-test.js');
-registerApiRoute('/api/funds', './api/funds.js');
+// Consolidated endpoints
+registerApiRoute('/api/financial', '../api/financial.js');
+registerApiRoute('/api/data', '../api/data.js');
+
+// Regular endpoints
 registerApiRoute('/api/churches', './api/churches.js');
 registerApiRoute('/api/dashboard', './api/dashboard.js');
 registerApiRoute('/api/auth', '../api/auth.js');
 registerApiRoute('/api/reports/recent', './api/reports-recent.js');
 registerApiRoute('/api/reports', './api/reports.js');
 registerApiRoute('/api/reports-enhanced', './api/reports-enhanced.js');
-registerApiRoute('/api/transactions', './api/transactions.js');
 registerApiRoute('/api/worship-records', './api/worship-records.js');
 registerApiRoute('/api/expense-records', './api/expense-records.js');
 registerApiRoute('/api/church-accounts', './api/church-accounts.js');
-registerApiRoute('/api/church-transactions', './api/church-transactions.js');
 registerApiRoute('/api/church-transaction-categories', './api/church-transaction-categories.js');
 registerApiRoute('/api/fund-movements', './api/fund-movements.js');
 registerApiRoute('/api/national-treasury-overview', './api/national-treasury-overview.js');

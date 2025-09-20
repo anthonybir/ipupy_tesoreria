@@ -694,7 +694,7 @@ ABSD.OfflineStorage = {
    */
   api: {
     async getFunds(options = {}) {
-      const result = await ABSD.OfflineStorage.fetchWithCache('/api/funds', {
+      const result = await ABSD.OfflineStorage.fetchWithCache('/api/financial?type=funds', {
         maxAge: 2 * 60 * 1000, // 2 minutes for funds
         ...options
       });

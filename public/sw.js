@@ -290,7 +290,8 @@ async function backgroundRevalidate(request, cache) {
  * Get cache TTL based on API endpoint
  */
 function getApiCacheTTL(pathname) {
-  if (pathname.includes('/api/funds')) {return 2 * 60 * 1000;}      // 2 minutes
+  if (pathname.includes('/api/financial')) {return 2 * 60 * 1000;}  // 2 minutes
+  if (pathname.includes('/api/data')) {return 1 * 60 * 1000;}       // 1 minute
   if (pathname.includes('/api/churches')) {return 10 * 60 * 1000;}  // 10 minutes
   if (pathname.includes('/api/dashboard')) {return 1 * 60 * 1000;}  // 1 minute
   if (pathname.includes('/api/db-test')) {return 30 * 1000;}        // 30 seconds
