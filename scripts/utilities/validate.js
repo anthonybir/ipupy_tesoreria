@@ -22,7 +22,7 @@ const requiredFiles = [
   'vercel.json',
   '.env.example',
   'README.md',
-  'src/lib/db.js',
+  'lib/db.js',
   'api/auth.js',
   'api/churches.js',
   'api/financial.js',  // Consolidated: funds + transactions + church-transactions
@@ -128,8 +128,8 @@ apiFiles.forEach(file => {
 // 5. Verificar configuración de base de datos
 console.log('\n🗄️  Verificando configuración de base de datos...');
 try {
-  const dbContent = fs.readFileSync(path.join(PROJECT_ROOT, 'src', 'lib', 'db.js'), 'utf8');
-  const dbSupabaseContent = fs.readFileSync(path.join(PROJECT_ROOT, 'src', 'lib', 'db-supabase.js'), 'utf8');
+  const dbContent = fs.readFileSync(path.join(PROJECT_ROOT, 'lib', 'db.js'), 'utf8');
+  const dbSupabaseContent = fs.readFileSync(path.join(PROJECT_ROOT, 'lib', 'db-supabase.js'), 'utf8');
 
   if (dbContent.includes('const { Pool } = require(\'pg\')') || dbContent.includes('require(\'./db-supabase\')')) {
     console.log('  ✅ PostgreSQL configurado');
