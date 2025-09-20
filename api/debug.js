@@ -1,16 +1,21 @@
 const { setCORSHeaders } = require('../lib/cors');
+const { validateAndTrimEnvVars } = require('../lib/env-validator');
 
 module.exports = async (req, res) => {
   setCORSHeaders(req, res);
 
   try {
+    // Validate and trim environment variables
+    const validation = validateAndTrimEnvVars();
+
     // Test environment variables
     const envTest = {
       hasGoogleClientId: !!process.env.GOOGLE_CLIENT_ID,
       hasGoogleClientSecret: !!process.env.GOOGLE_CLIENT_SECRET,
       hasDatabaseUrl: !!process.env.DATABASE_URL,
       hasSupabaseUrl: !!process.env.SUPABASE_DB_URL,
-      nodeEnv: process.env.NODE_ENV
+      nodeEnv: process.env.NODE_ENV,
+      validation: validation
     };
 
     // Test database connection
