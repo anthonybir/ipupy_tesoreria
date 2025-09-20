@@ -42,7 +42,6 @@ registerApiRoute('/api/funds', './api/funds.js');
 registerApiRoute('/api/churches', './api/churches.js');
 registerApiRoute('/api/dashboard', './api/dashboard.js');
 registerApiRoute('/api/auth', './api/auth.js');
-registerApiRoute('/api/auth-google', './api/auth-google.js');
 registerApiRoute('/api/reports/recent', './api/reports-recent.js');
 registerApiRoute('/api/reports', './api/reports.js');
 registerApiRoute('/api/reports-enhanced', './api/reports-enhanced.js');
