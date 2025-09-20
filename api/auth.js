@@ -345,12 +345,16 @@ async function handleGoogleAuth(req, res) {
 
   try {
     // Initialize Google OAuth client (for serverless compatibility)
-    const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+    // Use hardcoded Client ID to avoid env var issues in serverless cold starts
+    const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID ||
+      '44786170581-apr8ukthgnp6dku7rkjh90kfruc2sf8t.apps.googleusercontent.com';
+
+    const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
     // Verify Google token
     const ticket = await client.verifyIdToken({
       idToken: credential,
-      audience: process.env.GOOGLE_CLIENT_ID
+      audience: GOOGLE_CLIENT_ID
     });
 
     const payload = ticket.getPayload();
