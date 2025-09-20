@@ -23,13 +23,13 @@ const requiredFiles = [
   '.env.example',
   'README.md',
   'src/lib/db.js',
-  'src/api/auth.js',
-  'src/api/churches.js',
-  'src/api/dashboard.js',
-  'src/api/export.js',
-  'src/api/import.js',
-  'src/api/reports.js',
-  'public/app.html'
+  'api/auth.js',
+  'api/churches.js',
+  'api/dashboard.js',
+  'api/export.js',
+  'api/import.js',
+  'api/reports.js',
+  'public/index.html'
 ];
 
 console.log('📁 Verificando estructura de archivos...');
@@ -81,11 +81,11 @@ try {
     errors.push('vercel.json debe usar version: 2');
   }
 
-  if (vercelConfig.builds && vercelConfig.routes) {
-    console.log('  ✅ Configuración de builds y routes presente');
+  if (vercelConfig.functions && (vercelConfig.rewrites || vercelConfig.routes)) {
+    console.log('  ✅ Configuración de functions y rewrites presente');
   } else {
-    console.log('  ❌ Configuración de builds o routes faltante');
-    errors.push('vercel.json debe incluir builds y routes');
+    console.log('  ❌ Configuración de functions o rewrites faltante');
+    errors.push('vercel.json debe incluir functions y rewrites para serverless');
   }
 
 } catch (error) {
@@ -98,7 +98,7 @@ console.log('\n🔌 Verificando endpoints API...');
 const apiFiles = ['auth.js', 'churches.js', 'dashboard.js', 'export.js', 'import.js', 'reports.js'];
 
 apiFiles.forEach(file => {
-  const filePath = path.join(PROJECT_ROOT, 'src', 'api', file);
+  const filePath = path.join(PROJECT_ROOT, 'api', file);
   if (fs.existsSync(filePath)) {
     try {
       const content = fs.readFileSync(filePath, 'utf8');
@@ -154,7 +154,7 @@ try {
 // 6. Verificar frontend
 console.log('\n🎨 Verificando frontend...');
 try {
-  const appContent = fs.readFileSync(path.join(PROJECT_ROOT, 'public', 'app.html'), 'utf8');
+  const appContent = fs.readFileSync(path.join(PROJECT_ROOT, 'public', 'index.html'), 'utf8');
 
   if (appContent.includes('tailwindcss.com') || appContent.includes('tailwind')) {
     console.log('  ✅ Tailwind CSS incluido');
@@ -178,7 +178,7 @@ try {
   }
 
 } catch (error) {
-  console.log(`  ❌ Error al verificar app.html: ${error.message}`);
+  console.log(`  ❌ Error al verificar index.html: ${error.message}`);
   errors.push('Error al verificar frontend');
 }
 
