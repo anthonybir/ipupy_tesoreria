@@ -1,9 +1,4 @@
-const { Pool } = require('pg');
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || process.env.SUPABASE_DB_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
+const { execute } = require('../lib/db');
 
 module.exports = async function handler(req, res) {
   // Enable CORS
@@ -55,7 +50,7 @@ module.exports = async function handler(req, res) {
     query += ' ORDER BY fm.movement_date DESC';
 
     // Check if the fund_movements table exists
-    const tableCheck = await pool.query(`
+    const tableCheck = await execute(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables
         WHERE table_name = 'fund_movements'
@@ -71,7 +66,7 @@ module.exports = async function handler(req, res) {
       });
     }
 
-    const result = await pool.query(query, params);
+    const result = await execute(query, params);
 
     return res.status(200).json({
       success: true,

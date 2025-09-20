@@ -1,9 +1,4 @@
-const { Pool } = require('pg');
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || process.env.SUPABASE_DB_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-});
+const { execute } = require('../lib/db');
 
 module.exports = async function handler(req, res) {
   // Enable CORS
@@ -23,8 +18,8 @@ module.exports = async function handler(req, res) {
   try {
     // Get summary statistics
     const [churches, reports, recentReports] = await Promise.all([
-      pool.query('SELECT COUNT(*) as count FROM churches'),
-      pool.query(`
+      execute('SELECT COUNT(*) as count FROM churches'),
+      execute(`
         SELECT
           COUNT(*) as total,
           COALESCE(SUM(tithes), 0) as total_tithes,
@@ -32,7 +27,7 @@ module.exports = async function handler(req, res) {
           COALESCE(SUM(national_fund), 0) as total_national_fund
         FROM reports
       `),
-      pool.query(`
+      execute(`
         SELECT
           r.*,
           c.name as church_name,
@@ -48,7 +43,7 @@ module.exports = async function handler(req, res) {
     const currentMonth = new Date().getMonth() + 1;
     const currentYear = new Date().getFullYear();
 
-    const currentMonthStats = await pool.query(`
+    const currentMonthStats = await execute(`
       SELECT
         COUNT(*) as reports_this_month,
         COALESCE(SUM(tithes), 0) as tithes_this_month,

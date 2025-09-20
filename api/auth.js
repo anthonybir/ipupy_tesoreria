@@ -85,11 +85,11 @@ module.exports = async function handler(req, res) {
       break;
 
     default:
-      res.status(400).json({ error: 'Acción no válida' });
+      return res.status(400).json({ error: 'Acción no válida' });
     }
   } catch (error) {
     console.error('Error en API auth:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Error interno del servidor',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
@@ -135,7 +135,7 @@ async function handleLogin(req, res) {
     { expiresIn: '7d' }
   );
 
-  res.json({
+  return res.json({
     message: 'Login exitoso',
     token,
     user: {
@@ -190,7 +190,7 @@ async function handleRegister(req, res) {
 
     const user = result.rows[0];
 
-    res.status(201).json({
+    return res.status(201).json({
       message: 'Usuario creado exitosamente',
       user: {
         id: user.id,
@@ -233,7 +233,7 @@ async function handleVerify(req, res) {
 
     const user = result.rows[0];
 
-    res.json({
+    return res.json({
       valid: true,
       user: {
         id: user.id,
@@ -309,14 +309,14 @@ async function handleInit(req, res) {
       VALUES ($1, $2, 'admin')
     `, [email.toLowerCase(), passwordHash]);
 
-    res.json({
+    return res.json({
       message: 'Sistema inicializado exitosamente',
       email: email.toLowerCase()
     });
 
   } catch (error) {
     console.error('Error inicializando sistema:', error);
-    res.status(500).json({ error: 'No se pudo inicializar el sistema' });
+    return res.status(500).json({ error: 'No se pudo inicializar el sistema' });
   }
 }
 
@@ -485,7 +485,7 @@ async function handleGoogleAuth(req, res) {
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
 
-    res.json({
+    return res.json({
       message: 'Login exitoso con Google',
       token,
       user: {
@@ -503,7 +503,7 @@ async function handleGoogleAuth(req, res) {
 
   } catch (error) {
     console.error('Error en Google OAuth:', error);
-    res.status(500).json({
+    return res.status(500).json({
       error: 'Error interno en autenticación',
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });

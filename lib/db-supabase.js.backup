@@ -3,10 +3,18 @@ const { Pool } = require('pg');
 let pool;
 
 const getConnectionString = () => {
-  const connectionString = process.env.SUPABASE_DB_URL || process.env.DATABASE_URL;
+  // IMPORTANT: Trim environment variables to remove newlines/whitespace
+  const connectionString = (process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || '').trim();
   if (!connectionString) {
     throw new Error('SUPABASE_DB_URL (or DATABASE_URL) environment variable is required');
   }
+
+  // Validate the connection string format
+  if (!connectionString.startsWith('postgresql://') && !connectionString.startsWith('postgres://')) {
+    console.error('Invalid connection string format:', connectionString);
+    throw new Error('Database connection string must start with postgresql:// or postgres://');
+  }
+
   return connectionString;
 };
 
@@ -17,7 +25,11 @@ const createConnection = () => {
 
     pool = new Pool({
       connectionString,
-      ssl: sslRequired ? { rejectUnauthorized: false } : false
+      ssl: sslRequired ? { rejectUnauthorized: false } : false,
+      // Add connection timeout for Vercel
+      connectionTimeoutMillis: 10000,
+      // Pooler handles connection management
+      max: 20 // Max pool size
     });
   }
   return pool;

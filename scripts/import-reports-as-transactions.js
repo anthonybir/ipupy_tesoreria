@@ -1,5 +1,5 @@
 require('dotenv').config({ path: '.env.local' });
-const db = require('../src/lib/db-supabase');
+const db = require('../lib/db-supabase');
 
 // Income categories mapping
 const INCOME_CATEGORIES = {
