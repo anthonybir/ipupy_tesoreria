@@ -42,23 +42,14 @@ registerApiRoute('/api/db-test', '../tests/api/db-test.js');
 registerApiRoute('/api/financial', '../api/financial.js');
 registerApiRoute('/api/data', '../api/data.js');
 
-// Regular endpoints
-registerApiRoute('/api/churches', './api/churches.js');
+// Core endpoints
+registerApiRoute('/api/churches', '../api/churches.js');
 registerApiRoute('/api/auth', '../api/auth.js');
-registerApiRoute('/api/reports/recent', './api/reports-recent.js');
-registerApiRoute('/api/reports', './api/reports.js');
-registerApiRoute('/api/reports-enhanced', './api/reports-enhanced.js');
-registerApiRoute('/api/worship-records', './api/worship-records.js');
-registerApiRoute('/api/expense-records', './api/expense-records.js');
-registerApiRoute('/api/church-accounts', './api/church-accounts.js');
-registerApiRoute('/api/church-transaction-categories', './api/church-transaction-categories.js');
-registerApiRoute('/api/fund-movements', './api/fund-movements.js');
-registerApiRoute('/api/national-treasury-overview', './api/national-treasury-overview.js');
-registerApiRoute('/api/analytics', './api/analytics.js');
-registerApiRoute('/api/families', './api/families.js');
-app.all('/api/families/:id/members', createApiHandler('./api/families/members.js'));
-registerApiRoute('/api/members', './api/members.js');
-app.all('/api/members/:id', createApiHandler('./api/members/[id].js'));
+registerApiRoute('/api/dashboard', '../api/dashboard.js');
+registerApiRoute('/api/reports', '../api/reports.js');
+registerApiRoute('/api/fund-movements', '../api/fund-movements.js');
+registerApiRoute('/api/families', '../api/families.js');
+registerApiRoute('/api/members', '../api/members.js');
 
 app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, '../public', 'index.html'));

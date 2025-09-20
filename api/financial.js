@@ -31,10 +31,15 @@ const toNumber = (value, fallback = 0) => {
 const verifyToken = (req) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
-    throw new Error('Token no proporcionado');
+    return null; // No token provided - allow for public GET requests
   }
   const token = authHeader.split(' ')[1];
-  return jwt.verify(token, process.env.JWT_SECRET);
+  try {
+    return jwt.verify(token, process.env.JWT_SECRET);
+  } catch (error) {
+    console.warn('Invalid token:', error.message);
+    return null;
+  }
 };
 
 module.exports = async (req, res) => {
@@ -46,7 +51,14 @@ module.exports = async (req, res) => {
   }
 
   try {
+    // For GET requests, authentication is optional
+    // For POST/PUT/DELETE, authentication is required
     const decoded = verifyToken(req);
+
+    if (req.method !== 'GET' && !decoded) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
     const { type } = req.query;
 
     // Route to appropriate handler based on type parameter
