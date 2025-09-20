@@ -44,7 +44,6 @@ registerApiRoute('/api/data', '../api/data.js');
 
 // Regular endpoints
 registerApiRoute('/api/churches', './api/churches.js');
-registerApiRoute('/api/dashboard', './api/dashboard.js');
 registerApiRoute('/api/auth', '../api/auth.js');
 registerApiRoute('/api/reports/recent', './api/reports-recent.js');
 registerApiRoute('/api/reports', './api/reports.js');
