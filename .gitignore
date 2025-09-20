@@ -46,3 +46,4 @@ tests/tmp/
 # OS
 Thumbs.db
 
+.vercel
