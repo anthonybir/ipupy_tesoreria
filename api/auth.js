@@ -1,6 +1,10 @@
 const { execute } = require('../lib/db');
 const { setCORSHeaders, handlePreflight } = require('../lib/cors');
 const { OAuth2Client } = require('google-auth-library');
+const { validateAndTrimEnvVars } = require('../lib/env-validator');
+
+// Validate environment variables on module load
+validateAndTrimEnvVars();
 
 // Función segura para obtener JWT_SECRET
 function getJWTSecret() {
