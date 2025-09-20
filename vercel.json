@@ -40,11 +40,11 @@
   },
   "functions": {
     "src/api/**/*.js": {
-      "runtime": "nodejs20.x",
+      "runtime": "@vercel/node@3.0.0",
       "maxDuration": 10
     },
     "scripts/migrate.js": {
-      "runtime": "nodejs20.x",
+      "runtime": "@vercel/node@3.0.0",
       "maxDuration": 30
     }
   },
