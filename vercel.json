@@ -33,10 +33,6 @@
   "functions": {
     "api/**/*.js": {
       "maxDuration": 10
-    },
-    "scripts/migrate.js": {
-      "runtime": "@vercel/node@3.0.0",
-      "maxDuration": 30
     }
   },
   "regions": ["iad1"]
