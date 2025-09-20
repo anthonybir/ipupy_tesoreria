@@ -3,10 +3,6 @@
   "name": "ipupy-tesoreria",
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/src/api/$1"
-    },
-    {
       "source": "/(.*)",
       "destination": "/public/$1"
     }
@@ -34,13 +30,8 @@
       ]
     }
   ],
-  "env": {
-    "NODE_ENV": "production",
-    "VERCEL": "1"
-  },
   "functions": {
-    "src/api/**/*.js": {
-      "runtime": "@vercel/node@3.0.0",
+    "api/**/*.js": {
       "maxDuration": 10
     },
     "scripts/migrate.js": {
@@ -48,6 +39,5 @@
       "maxDuration": 30
     }
   },
-  "regions": ["iad1"],
-  "framework": null
+  "regions": ["iad1"]
 }
