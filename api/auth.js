@@ -363,6 +363,8 @@ async function handleGoogleAuth(req, res) {
         console.log('Token audience (aud):', payload.aud);
         console.log('Expected audience:', GOOGLE_CLIENT_ID);
         console.log('Audience match:', payload.aud === GOOGLE_CLIENT_ID);
+        console.log('Token issuer (iss):', payload.iss);
+        console.log('Token azp (authorized party):', payload.azp);
       } catch (decodeError) {
         console.log('Failed to decode token for debugging:', decodeError.message);
       }
@@ -370,11 +372,32 @@ async function handleGoogleAuth(req, res) {
 
     const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
-    // Verify Google token
-    const ticket = await client.verifyIdToken({
-      idToken: credential,
-      audience: GOOGLE_CLIENT_ID
-    });
+    // Try verification with multiple possible audience values
+    let ticket;
+    const possibleAudiences = [
+      GOOGLE_CLIENT_ID,
+      '44786170581-apr8ukthgnp6dku7rkjh90kfruc2sf8t.apps.googleusercontent.com',
+      process.env.GOOGLE_CLIENT_ID
+    ].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i); // Remove duplicates
+
+    console.log('Trying verification with audiences:', possibleAudiences);
+
+    for (const audience of possibleAudiences) {
+      try {
+        ticket = await client.verifyIdToken({
+          idToken: credential,
+          audience: audience
+        });
+        console.log('Verification successful with audience:', audience);
+        break;
+      } catch (verifyError) {
+        console.log(`Verification failed with audience ${audience}:`, verifyError.message);
+      }
+    }
+
+    if (!ticket) {
+      throw new Error('Token verification failed with all possible audiences');
+    }
 
     const payload = ticket.getPayload();
     const { email, name, hd, sub: googleId, picture } = payload;
