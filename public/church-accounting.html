@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPU PY - Contabilidad de Iglesia</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .glassmorphism {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .sidebar-active {
+            transform: translateX(0);
+        }
+
+        .sidebar-hidden {
+            transform: translateX(-100%);
+        }
+
+        @media (min-width: 768px) {
+            .sidebar-hidden {
+                transform: translateX(0);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="gradient-bg text-white shadow-lg relative z-50">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center">
+                    <button id="sidebarToggle" class="md:hidden mr-4 p-2 rounded hover:bg-white/20">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+                        </svg>
+                    </button>
+                    <div>
+                        <h1 class="text-xl md:text-2xl font-bold">Contabilidad de Iglesia</h1>
+                        <p class="text-blue-100 text-sm" id="churchName">IPU Paraguay</p>
+                    </div>
+                </div>
+                <div id="userInfo" class="flex items-center space-x-4">
+                    <span id="userEmail" class="text-sm hidden md:block"></span>
+                    <button onclick="logout()" class="bg-white/20 px-3 py-1 rounded hover:bg-white/30 transition text-sm">
+                        Salir
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Login Screen -->
+    <div id="loginScreen" class="min-h-screen flex items-center justify-center gradient-bg">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+            <h2 class="text-2xl font-bold text-center mb-6 text-gray-800">Acceso a Contabilidad</h2>
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input type="email" id="loginEmail" required
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+                    <input type="password" id="loginPassword" required
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition flex items-center justify-center">
+                    <span id="loginText">Iniciar Sesión</span>
+                    <div id="loginLoading" class="loading hidden ml-2"></div>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="mainApp" class="hidden">
+        <div class="flex">
+            <!-- Sidebar -->
+            <aside id="sidebar" class="sidebar-hidden md:sidebar-active fixed md:static inset-y-0 left-0 z-40 w-64 bg-white shadow-lg transition-transform duration-300 ease-in-out">
+                <div class="p-6 h-full overflow-y-auto">
+                    <nav class="space-y-2">
+                        <a href="#" onclick="showSection('dashboard')" class="nav-link flex items-center space-x-3 text-gray-600 p-3 rounded-lg hover:bg-gray-100 transition">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
+                            </svg>
+                            <span>Panel Principal</span>
+                        </a>
+                        <a href="#" onclick="showSection('accounts')" class="nav-link flex items-center space-x-3 text-gray-600 p-3 rounded-lg hover:bg-gray-100 transition">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                            </svg>
+                            <span>Cuentas Bancarias</span>
+                        </a>
+                        <a href="#" onclick="showSection('transactions')" class="nav-link flex items-center space-x-3 text-gray-600 p-3 rounded-lg hover:bg-gray-100 transition">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+                            </svg>
+                            <span>Transacciones</span>
+                        </a>
+                        <a href="#" onclick="showSection('categories')" class="nav-link flex items-center space-x-3 text-gray-600 p-3 rounded-lg hover:bg-gray-100 transition">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path>
+                            </svg>
+                            <span>Categorías</span>
+                        </a>
+                        <a href="#" onclick="showSection('budget')" class="nav-link flex items-center space-x-3 text-gray-600 p-3 rounded-lg hover:bg-gray-100 transition">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                            <span>Presupuesto</span>
+                        </a>
+                        <a href="#" onclick="showSection('reports')" class="nav-link flex items-center space-x-3 text-gray-600 p-3 rounded-lg hover:bg-gray-100 transition">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            <span>Informes</span>
+                        </a>
+                    </nav>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="flex-1 p-6 md:ml-0">
+                <!-- Dashboard Section -->
+                <div id="dashboardSection" class="section">
+                    <div class="mb-6">
+                        <h2 class="text-2xl font-bold text-gray-800 mb-2">Panel Principal</h2>
+                        <p class="text-gray-600">Resumen financiero de la iglesia</p>
+                    </div>
+
+                    <!-- Summary Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                        <div class="bg-white p-6 rounded-lg shadow-md border-l-4 border-green-500">
+                            <div class="flex items-center">
+                                <div class="flex-1">
+                                    <p class="text-sm font-medium text-gray-600 uppercase tracking-wide">Total en Cuentas</p>
+                                    <p class="text-2xl font-bold text-gray-900" id="totalBalance">₲ 0</p>
+                                </div>
+                                <div class="p-3 bg-green-100 rounded-full">
+                                    <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-lg shadow-md border-l-4 border-blue-500">
+                            <div class="flex items-center">
+                                <div class="flex-1">
+                                    <p class="text-sm font-medium text-gray-600 uppercase tracking-wide">Ingresos del Mes</p>
+                                    <p class="text-2xl font-bold text-gray-900" id="monthlyIncome">₲ 0</p>
+                                </div>
+                                <div class="p-3 bg-blue-100 rounded-full">
+                                    <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 11l5-5m0 0l5 5m-5-5v12"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-lg shadow-md border-l-4 border-red-500">
+                            <div class="flex items-center">
+                                <div class="flex-1">
+                                    <p class="text-sm font-medium text-gray-600 uppercase tracking-wide">Gastos del Mes</p>
+                                    <p class="text-2xl font-bold text-gray-900" id="monthlyExpenses">₲ 0</p>
+                                </div>
+                                <div class="p-3 bg-red-100 rounded-full">
+                                    <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 13l-5 5m0 0l-5-5m5 5V6"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-6 rounded-lg shadow-md border-l-4 border-purple-500">
+                            <div class="flex items-center">
+                                <div class="flex-1">
+                                    <p class="text-sm font-medium text-gray-600 uppercase tracking-wide">Balance del Mes</p>
+                                    <p class="text-2xl font-bold text-gray-900" id="monthlyBalance">₲ 0</p>
+                                </div>
+                                <div class="p-3 bg-purple-100 rounded-full">
+                                    <svg class="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts Row -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                        <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">Flujo de Caja (Últimos 6 Meses)</h3>
+                            <canvas id="cashFlowChart" height="200"></canvas>
+                        </div>
+                        <div class="bg-white p-6 rounded-lg shadow-md">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">Gastos por Categoría</h3>
+                            <canvas id="expensesChart" height="200"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Recent Transactions -->
+                    <div class="bg-white rounded-lg shadow-md">
+                        <div class="p-6 border-b border-gray-200">
+                            <div class="flex justify-between items-center">
+                                <h3 class="text-lg font-semibold text-gray-800">Transacciones Recientes</h3>
+                                <button onclick="showSection('transactions')" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                    Ver todas →
+                                </button>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descripción</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoría</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monto</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="recentTransactions" class="bg-white divide-y divide-gray-200">
+                                    <!-- Dynamic content -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Accounts Section -->
+                <div id="accountsSection" class="section hidden">
+                    <div class="mb-6">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h2 class="text-2xl font-bold text-gray-800 mb-2">Cuentas Bancarias</h2>
+                                <p class="text-gray-600">Gestión de cuentas de la iglesia</p>
+                            </div>
+                            <button onclick="showNewAccountForm()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+                                + Nueva Cuenta
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Accounts Grid -->
+                    <div id="accountsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <!-- Dynamic content -->
+                    </div>
+                </div>
+
+                <!-- Transactions Section -->
+                <div id="transactionsSection" class="section hidden">
+                    <div class="mb-6">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h2 class="text-2xl font-bold text-gray-800 mb-2">Transacciones</h2>
+                                <p class="text-gray-600">Registro detallado de ingresos y gastos</p>
+                            </div>
+                            <button onclick="showNewTransactionForm()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+                                + Nueva Transacción
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Filters -->
+                    <div class="bg-white p-4 rounded-lg shadow-md mb-6">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <select id="filterAccount" class="border border-gray-300 rounded px-3 py-2">
+                                <option value="">Todas las cuentas</option>
+                            </select>
+                            <select id="filterType" class="border border-gray-300 rounded px-3 py-2">
+                                <option value="">Todos los tipos</option>
+                                <option value="income">Ingresos</option>
+                                <option value="expense">Gastos</option>
+                                <option value="transfer">Transferencias</option>
+                            </select>
+                            <input type="date" id="filterStartDate" class="border border-gray-300 rounded px-3 py-2">
+                            <input type="date" id="filterEndDate" class="border border-gray-300 rounded px-3 py-2">
+                        </div>
+                        <div class="mt-4">
+                            <button onclick="loadTransactions()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+                                Filtrar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Transactions Table -->
+                    <div class="bg-white rounded-lg shadow-md">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Descripción</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cuenta</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Categoría</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Monto</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="transactionsTable" class="bg-white divide-y divide-gray-200">
+                                    <!-- Dynamic content -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Other sections would be added here... -->
+                <div id="categoriesSection" class="section hidden">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Categorías de Transacciones</h2>
+                    <p class="text-gray-600 mb-4">Aquí se mostrarían las categorías...</p>
+                </div>
+
+                <div id="budgetSection" class="section hidden">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Presupuesto</h2>
+                    <p class="text-gray-600 mb-4">Aquí se mostraría la gestión de presupuesto...</p>
+                </div>
+
+                <div id="reportsSection" class="section hidden">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Informes</h2>
+                    <p class="text-gray-600 mb-4">Aquí se mostrarían los informes...</p>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modals would be added here... -->
+
+    <script>
+        // Global variables
+        let currentUser = null;
+        let currentChurch = null;
+        let accounts = [];
+        let transactions = [];
+        let categories = [];
+
+        // API Configuration
+        const API_BASE = window.location.origin;
+        const API_ENDPOINTS = {
+            auth: '/api/auth',
+            accounts: '/api/church-accounts',
+            transactions: '/api/church-transactions',
+            categories: '/api/church-transaction-categories'
+        };
+
+        // Authentication
+        function getAuthToken() {
+            return localStorage.getItem('authToken');
+        }
+
+        function setAuthToken(token) {
+            localStorage.setItem('authToken', token);
+        }
+
+        function clearAuthToken() {
+            localStorage.removeItem('authToken');
+        }
+
+        function getAuthHeaders() {
+            const token = getAuthToken();
+            return token ? { 'Authorization': `Bearer ${token}` } : {};
+        }
+
+        // Login functionality
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            document.getElementById('loginText').textContent = 'Iniciando...';
+            document.getElementById('loginLoading').classList.remove('hidden');
+
+            try {
+                const response = await axios.post(`${API_BASE}${API_ENDPOINTS.auth}`, {
+                    email,
+                    password
+                });
+
+                setAuthToken(response.data.token);
+                currentUser = response.data.user;
+                currentChurch = response.data.church;
+
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('mainApp').classList.remove('hidden');
+                document.getElementById('userEmail').textContent = currentUser.email;
+
+                if (currentChurch) {
+                    document.getElementById('churchName').textContent = currentChurch.name;
+                }
+
+                await initializeApp();
+
+            } catch (error) {
+                alert('Error de login: ' + (error.response?.data?.error || error.message));
+            } finally {
+                document.getElementById('loginText').textContent = 'Iniciar Sesión';
+                document.getElementById('loginLoading').classList.add('hidden');
+            }
+        });
+
+        function logout() {
+            clearAuthToken();
+            currentUser = null;
+            currentChurch = null;
+            document.getElementById('loginScreen').classList.remove('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+        }
+
+        // Navigation
+        function showSection(sectionName) {
+            // Hide all sections
+            document.querySelectorAll('.section').forEach(section => {
+                section.classList.add('hidden');
+            });
+
+            // Show selected section
+            document.getElementById(sectionName + 'Section').classList.remove('hidden');
+
+            // Update nav links
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('bg-blue-100', 'text-blue-700');
+                link.classList.add('text-gray-600');
+            });
+
+            // Load section-specific data
+            switch (sectionName) {
+                case 'dashboard':
+                    loadDashboardData();
+                    break;
+                case 'accounts':
+                    loadAccounts();
+                    break;
+                case 'transactions':
+                    loadTransactions();
+                    break;
+                case 'categories':
+                    loadCategories();
+                    break;
+            }
+
+            // Hide sidebar on mobile
+            if (window.innerWidth < 768) {
+                document.getElementById('sidebar').classList.add('sidebar-hidden');
+            }
+        }
+
+        // Sidebar toggle
+        document.getElementById('sidebarToggle').addEventListener('click', () => {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('sidebar-hidden');
+            sidebar.classList.toggle('sidebar-active');
+        });
+
+        // Load dashboard data
+        async function loadDashboardData() {
+            try {
+                // Load summary data
+                await loadAccounts();
+                await loadTransactions();
+                updateDashboardSummary();
+
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+            }
+        }
+
+        function updateDashboardSummary() {
+            // Calculate totals
+            const totalBalance = accounts.reduce((sum, account) => sum + parseFloat(account.current_balance || 0), 0);
+
+            const currentMonth = new Date().toISOString().substr(0, 7);
+            const monthlyTransactions = transactions.filter(t => t.transaction_date.startsWith(currentMonth));
+
+            const monthlyIncome = monthlyTransactions
+                .filter(t => t.transaction_type === 'income')
+                .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+            const monthlyExpenses = monthlyTransactions
+                .filter(t => t.transaction_type === 'expense')
+                .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+            // Update UI
+            document.getElementById('totalBalance').textContent = formatCurrency(totalBalance);
+            document.getElementById('monthlyIncome').textContent = formatCurrency(monthlyIncome);
+            document.getElementById('monthlyExpenses').textContent = formatCurrency(monthlyExpenses);
+            document.getElementById('monthlyBalance').textContent = formatCurrency(monthlyIncome - monthlyExpenses);
+
+            // Update recent transactions
+            const recentTransactions = transactions.slice(0, 5);
+            const tbody = document.getElementById('recentTransactions');
+            tbody.innerHTML = recentTransactions.map(t => `
+                <tr>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatDate(t.transaction_date)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${t.description}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${t.category_name || 'Sin categoría'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium ${getAmountColorClass(t)}">
+                        ${getAmountDisplay(t)}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Load accounts
+        async function loadAccounts() {
+            try {
+                const response = await axios.get(`${API_BASE}${API_ENDPOINTS.accounts}`, {
+                    headers: getAuthHeaders()
+                });
+                accounts = response.data;
+
+                if (document.getElementById('accountsSection').classList.contains('hidden') === false) {
+                    renderAccounts();
+                }
+            } catch (error) {
+                console.error('Error loading accounts:', error);
+            }
+        }
+
+        function renderAccounts() {
+            const grid = document.getElementById('accountsGrid');
+            grid.innerHTML = accounts.map(account => `
+                <div class="bg-white p-6 rounded-lg shadow-md border-l-4 ${getAccountBorderColor(account.account_type)}">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">${account.account_name}</h3>
+                            <p class="text-sm text-gray-500">${getAccountTypeLabel(account.account_type)}</p>
+                            ${account.bank_name ? `<p class="text-sm text-gray-500">${account.bank_name}</p>` : ''}
+                        </div>
+                        <span class="px-2 py-1 text-xs rounded-full ${account.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                            ${account.is_active ? 'Activa' : 'Inactiva'}
+                        </span>
+                    </div>
+                    <div class="text-2xl font-bold text-gray-900 mb-2">
+                        ${formatCurrency(account.current_balance)}
+                    </div>
+                    ${account.account_number ? `<p class="text-sm text-gray-500">Cuenta: ${account.account_number}</p>` : ''}
+                </div>
+            `).join('');
+        }
+
+        // Load transactions
+        async function loadTransactions() {
+            try {
+                const params = new URLSearchParams();
+
+                const filterAccount = document.getElementById('filterAccount')?.value;
+                const filterType = document.getElementById('filterType')?.value;
+                const filterStartDate = document.getElementById('filterStartDate')?.value;
+                const filterEndDate = document.getElementById('filterEndDate')?.value;
+
+                if (filterAccount) params.append('account_id', filterAccount);
+                if (filterType) params.append('transaction_type', filterType);
+                if (filterStartDate) params.append('start_date', filterStartDate);
+                if (filterEndDate) params.append('end_date', filterEndDate);
+
+                const response = await axios.get(`${API_BASE}${API_ENDPOINTS.transactions}?${params}`, {
+                    headers: getAuthHeaders()
+                });
+
+                transactions = response.data.transactions || response.data;
+
+                if (document.getElementById('transactionsSection').classList.contains('hidden') === false) {
+                    renderTransactions();
+                }
+            } catch (error) {
+                console.error('Error loading transactions:', error);
+            }
+        }
+
+        function renderTransactions() {
+            const tbody = document.getElementById('transactionsTable');
+            tbody.innerHTML = transactions.map(t => `
+                <tr>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatDate(t.transaction_date)}</td>
+                    <td class="px-6 py-4 text-sm text-gray-900">${t.description}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${t.account_name}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${t.category_name || 'Sin categoría'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 py-1 text-xs rounded-full ${getTypeColorClass(t.transaction_type)}">
+                            ${getTypeLabel(t.transaction_type)}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium ${getAmountColorClass(t)}">
+                        ${getAmountDisplay(t)}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <button onclick="editTransaction(${t.id})" class="text-blue-600 hover:text-blue-800 mr-2">Editar</button>
+                        <button onclick="deleteTransaction(${t.id})" class="text-red-600 hover:text-red-800">Eliminar</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // Load categories
+        async function loadCategories() {
+            try {
+                const response = await axios.get(`${API_BASE}${API_ENDPOINTS.categories}`, {
+                    headers: getAuthHeaders()
+                });
+                categories = response.data.all_categories || response.data;
+            } catch (error) {
+                console.error('Error loading categories:', error);
+            }
+        }
+
+        // Utility functions
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('es-PY', {
+                style: 'currency',
+                currency: 'PYG',
+                minimumFractionDigits: 0
+            }).format(amount || 0);
+        }
+
+        function formatDate(dateString) {
+            return new Date(dateString).toLocaleDateString('es-PY');
+        }
+
+        function getAccountBorderColor(type) {
+            const colors = {
+                'checking': 'border-blue-500',
+                'savings': 'border-green-500',
+                'petty_cash': 'border-yellow-500',
+                'special_fund': 'border-purple-500'
+            };
+            return colors[type] || 'border-gray-500';
+        }
+
+        function getAccountTypeLabel(type) {
+            const labels = {
+                'checking': 'Cuenta Corriente',
+                'savings': 'Caja de Ahorro',
+                'petty_cash': 'Caja Chica',
+                'special_fund': 'Fondo Especial'
+            };
+            return labels[type] || type;
+        }
+
+        function getTypeColorClass(type) {
+            const colors = {
+                'income': 'bg-green-100 text-green-800',
+                'expense': 'bg-red-100 text-red-800',
+                'transfer': 'bg-blue-100 text-blue-800'
+            };
+            return colors[type] || 'bg-gray-100 text-gray-800';
+        }
+
+        function getTypeLabel(type) {
+            const labels = {
+                'income': 'Ingreso',
+                'expense': 'Gasto',
+                'transfer': 'Transferencia'
+            };
+            return labels[type] || type;
+        }
+
+        function getAmountColorClass(transaction) {
+            return transaction.transaction_type === 'income' ? 'text-green-600' : 'text-red-600';
+        }
+
+        function getAmountDisplay(transaction) {
+            const sign = transaction.transaction_type === 'income' ? '+' : '-';
+            return `${sign} ${formatCurrency(transaction.amount)}`;
+        }
+
+        // Form functions (placeholders)
+        function showNewAccountForm() {
+            alert('Formulario de nueva cuenta (por implementar)');
+        }
+
+        function showNewTransactionForm() {
+            alert('Formulario de nueva transacción (por implementar)');
+        }
+
+        function editTransaction(id) {
+            alert(`Editar transacción ${id} (por implementar)`);
+        }
+
+        function deleteTransaction(id) {
+            if (confirm('¿Está seguro de eliminar esta transacción?')) {
+                alert(`Eliminar transacción ${id} (por implementar)`);
+            }
+        }
+
+        // Initialize app
+        async function initializeApp() {
+            showSection('dashboard');
+        }
+
+        // Check for existing auth on page load
+        window.addEventListener('load', () => {
+            const token = getAuthToken();
+            if (token) {
+                // Validate token and auto-login if valid
+                // For now, just show login screen
+            }
+            document.getElementById('loginScreen').classList.remove('hidden');
+        });
+    </script>
+</body>
+</html>

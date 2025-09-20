@@ -1,0 +1,2336 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IPU PY Tesorería Nacional - Sistema Modernizado</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <!-- Google Sign-In Library -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <style>
+        .glassmorphism {
+            background: rgba(255, 255, 255, 0.25);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="gradient-bg text-white shadow-lg">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl font-bold">IPU Paraguay</h1>
+                    <p class="text-blue-100">Sistema Nacional de Tesorería</p>
+                </div>
+                <div id="userInfo" class="hidden">
+                    <span id="userEmail" class="mr-4"></span>
+                    <button onclick="logout()" class="bg-white/20 px-3 py-1 rounded hover:bg-white/30 transition">
+                        Cerrar Sesión
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Login Screen -->
+    <div id="loginScreen" class="min-h-screen flex items-center justify-center gradient-bg">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
+            <h2 class="text-2xl font-bold text-center mb-6 text-gray-800">Iniciar Sesión</h2>
+
+            <!-- Google Sign-In Button -->
+            <div class="mb-6">
+                <div id="g_id_onload"
+                     data-client_id="44786170581-apr8ukthgnp6dku7rkjh90kfruc2sf8t.apps.googleusercontent.com"
+                     data-callback="handleGoogleLogin"
+                     data-auto_prompt="false"
+                     data-auto_select="false"
+                     data-ux_mode="popup">
+                </div>
+                <div class="g_id_signin"
+                     data-type="standard"
+                     data-size="large"
+                     data-theme="outline"
+                     data-text="signin_with"
+                     data-shape="rectangular"
+                     data-width="400"
+                     data-locale="es">
+                </div>
+
+                <div class="text-center mt-3 text-xs text-gray-500">
+                    Solo para cuentas @ipupy.org
+                </div>
+            </div>
+
+            <!-- Divider -->
+            <div class="relative my-6">
+                <div class="absolute inset-0 flex items-center">
+                    <div class="w-full border-t border-gray-300"></div>
+                </div>
+                <div class="relative flex justify-center text-sm">
+                    <span class="px-2 bg-white text-gray-500">o usa email/contraseña</span>
+                </div>
+            </div>
+
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input type="email" id="loginEmail" required
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+                    <input type="password" id="loginPassword" required
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition flex items-center justify-center">
+                    <span id="loginText">Iniciar Sesión</span>
+                    <div id="loginLoading" class="loading hidden ml-2"></div>
+                </button>
+            </form>
+
+            <div class="mt-6 text-center">
+                <p class="text-sm text-gray-600">¿Primera vez?
+                    <button onclick="showInitForm()" class="text-blue-600 hover:underline">Inicializar Sistema</button>
+                </p>
+            </div>
+
+            <!-- Init Form -->
+            <div id="initForm" class="hidden mt-4 p-4 bg-gray-50 rounded">
+                <h3 class="font-semibold mb-3">Configuración Inicial</h3>
+                <div class="space-y-3">
+                    <input type="email" id="initEmail" placeholder="Email del administrador"
+                           class="w-full px-3 py-2 border rounded">
+                    <input type="password" id="initPassword" placeholder="Contraseña (mín. 6 caracteres)"
+                           class="w-full px-3 py-2 border rounded">
+                    <button onclick="initSystem()" class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">
+                        Inicializar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="mainApp" class="hidden">
+        <!-- Navigation -->
+        <nav class="bg-white shadow-sm border-b">
+            <div class="container mx-auto px-4">
+                <div class="flex space-x-1 overflow-x-auto">
+                    <button onclick="showTab('dashboard')" class="tab-button active" data-tab="dashboard">
+                        📊 Dashboard
+                    </button>
+                    <button onclick="showTab('reports')" class="tab-button" data-tab="reports">
+                        📄 Informes
+                    </button>
+                    <button onclick="showTab('transactions')" class="tab-button" data-tab="transactions">
+                        💳 Transacciones
+                    </button>
+                    <button onclick="showTab('funds')" class="tab-button" data-tab="funds">
+                        💰 Fondos
+                    </button>
+                    <button onclick="showTab('churches')" class="tab-button" data-tab="churches">
+                        ⛪ Iglesias
+                    </button>
+                    <button onclick="showTab('import')" class="tab-button" data-tab="import">
+                        📤 Importar
+                    </button>
+                    <button onclick="showTab('export')" class="tab-button" data-tab="export">
+                        📥 Exportar
+                    </button>
+                    <a href="/dashboard-demo.html" target="_blank" class="tab-button" style="text-decoration: none; color: inherit;">
+                        🚀 Dashboard Demo
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Content -->
+        <main class="container mx-auto px-4 py-6">
+            <!-- Dashboard -->
+            <div id="dashboardTab" class="tab-content">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-white p-6 rounded-lg shadow-sm border">
+                        <div class="text-sm text-gray-500 uppercase tracking-wide">Total Iglesias</div>
+                        <div id="totalChurches" class="text-3xl font-bold text-gray-900">0</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border">
+                        <div class="text-sm text-gray-500 uppercase tracking-wide">Reportadas Este Mes</div>
+                        <div id="reportedChurches" class="text-3xl font-bold text-green-600">0</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border">
+                        <div class="text-sm text-gray-500 uppercase tracking-wide">Total Mes (Gs.)</div>
+                        <div id="monthTotal" class="text-3xl font-bold text-blue-600">0</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border">
+                        <div class="text-sm text-gray-500 uppercase tracking-wide">Fondo Nacional (Gs.)</div>
+                        <div id="nationalFund" class="text-3xl font-bold text-purple-600">0</div>
+                    </div>
+                </div>
+
+                <!-- Recent Reports -->
+                <div class="bg-white rounded-lg shadow-sm border">
+                    <div class="p-6 border-b">
+                        <h3 class="text-lg font-semibold">Informes Recientes</h3>
+                    </div>
+                    <div id="recentReports" class="p-6">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reports Tab -->
+            <div id="reportsTab" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow-sm border">
+                    <div class="p-6 border-b flex justify-between items-center">
+                        <h3 class="text-lg font-semibold">Gestión de Informes</h3>
+                        <button onclick="openManualReportModal()"
+                                class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                            Registrar Informe Manual
+                        </button>
+                    </div>
+                    <div class="p-6">
+                        <!-- Filtros -->
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <select id="filterYear" class="px-3 py-2 border rounded">
+                                <option value="">Todos los años</option>
+                            </select>
+                            <select id="filterMonth" class="px-3 py-2 border rounded">
+                                <option value="">Todos los meses</option>
+                                <option value="1">Enero</option>
+                                <option value="2">Febrero</option>
+                                <option value="3">Marzo</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Mayo</option>
+                                <option value="6">Junio</option>
+                                <option value="7">Julio</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Septiembre</option>
+                                <option value="10">Octubre</option>
+                                <option value="11">Noviembre</option>
+                                <option value="12">Diciembre</option>
+                            </select>
+                            <button onclick="filterReports()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                                Filtrar
+                            </button>
+                        </div>
+
+                        <!-- Lista de informes -->
+                        <div id="reportsList" class="space-y-4">
+                            <!-- Se llena dinámicamente -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transactions Tab -->
+            <div id="transactionsTab" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow-sm border">
+                    <div class="p-6 border-b flex justify-between items-center">
+                        <h3 class="text-lg font-semibold">Registro de Transacciones</h3>
+                        <button onclick="openTransactionModal()"
+                                class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                            Nueva Transacción
+                        </button>
+                    </div>
+                    <div class="p-6">
+                        <!-- Filters -->
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                            <select id="filterTransactionFund" class="px-3 py-2 border rounded">
+                                <option value="">Todos los fondos</option>
+                            </select>
+                            <select id="filterTransactionChurch" class="px-3 py-2 border rounded">
+                                <option value="">Todas las iglesias</option>
+                            </select>
+                            <input type="date" id="filterTransactionDateFrom" class="px-3 py-2 border rounded" placeholder="Fecha desde">
+                            <button onclick="filterTransactions()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                                Filtrar
+                            </button>
+                        </div>
+
+                        <!-- Transaction Table -->
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Iglesia</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fondo</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Concepto</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Proveedor</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Documento</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Entrada</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Salida</th>
+                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Saldo</th>
+                                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="transactionsList" class="bg-white divide-y divide-gray-200">
+                                    <!-- Se llena dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Funds Tab -->
+            <div id="fundsTab" class="tab-content hidden">
+                <!-- Fund Overview Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-white p-6 rounded-lg shadow-sm border">
+                        <div class="text-sm text-gray-500 uppercase tracking-wide">Total Fondos</div>
+                        <div id="totalFunds" class="text-3xl font-bold text-gray-900">0</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border">
+                        <div class="text-sm text-gray-500 uppercase tracking-wide">Saldo Total (Gs.)</div>
+                        <div id="totalBalance" class="text-3xl font-bold text-green-600">0</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border">
+                        <div class="text-sm text-gray-500 uppercase tracking-wide">Fondos Activos</div>
+                        <div id="activeFunds" class="text-3xl font-bold text-blue-600">0</div>
+                    </div>
+                    <div class="bg-white p-6 rounded-lg shadow-sm border">
+                        <div class="text-sm text-gray-500 uppercase tracking-wide">Movimientos Hoy</div>
+                        <div id="todayMovements" class="text-3xl font-bold text-purple-600">0</div>
+                    </div>
+                </div>
+
+                <!-- Fund List -->
+                <div class="bg-white rounded-lg shadow-sm border mb-6">
+                    <div class="p-6 border-b flex justify-between items-center">
+                        <h3 class="text-lg font-semibold">Gestión de Fondos</h3>
+                        <button onclick="openNewFundModal()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                            Nuevo Fondo
+                        </button>
+                    </div>
+                    <div class="p-6">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full">
+                                <thead>
+                                    <tr class="border-b">
+                                        <th class="text-left py-3 px-4">Fondo</th>
+                                        <th class="text-left py-3 px-4">Tipo</th>
+                                        <th class="text-right py-3 px-4">Saldo Actual</th>
+                                        <th class="text-right py-3 px-4">Última Actualización</th>
+                                        <th class="text-center py-3 px-4">Estado</th>
+                                        <th class="text-center py-3 px-4">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="fundsList">
+                                    <!-- Se llena dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fund Movements History -->
+                <div class="bg-white rounded-lg shadow-sm border">
+                    <div class="p-6 border-b">
+                        <h3 class="text-lg font-semibold">Historial de Movimientos</h3>
+                        <div class="mt-4 flex flex-wrap gap-4">
+                            <select id="movementsFundFilter" class="px-3 py-2 border rounded">
+                                <option value="">Todos los fondos</option>
+                            </select>
+                            <input type="date" id="movementsDateFrom" class="px-3 py-2 border rounded" placeholder="Desde">
+                            <input type="date" id="movementsDateTo" class="px-3 py-2 border rounded" placeholder="Hasta">
+                            <button onclick="filterFundMovements()" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">
+                                Filtrar
+                            </button>
+                        </div>
+                    </div>
+                    <div class="p-6">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full">
+                                <thead>
+                                    <tr class="border-b">
+                                        <th class="text-left py-3 px-4">Fecha</th>
+                                        <th class="text-left py-3 px-4">Fondo</th>
+                                        <th class="text-left py-3 px-4">Concepto</th>
+                                        <th class="text-right py-3 px-4">Saldo Anterior</th>
+                                        <th class="text-right py-3 px-4">Movimiento</th>
+                                        <th class="text-right py-3 px-4">Saldo Nuevo</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="fundMovementsList">
+                                    <!-- Se llena dinámicamente -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Churches Tab -->
+            <div id="churchesTab" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow-sm border">
+                    <div class="p-6 border-b">
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-lg font-semibold">Gestión de Iglesias</h3>
+                            <button onclick="openNewChurchModal()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                                Nueva Iglesia
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Search and Filter -->
+                    <div class="p-6 border-b bg-gray-50">
+                        <div class="flex gap-4">
+                            <input type="text" id="churchSearch" class="flex-1 px-3 py-2 border rounded"
+                                   placeholder="Buscar iglesia, pastor o ciudad...">
+                            <select id="churchStatusFilter" class="px-3 py-2 border rounded">
+                                <option value="">Todos los estados</option>
+                                <option value="true">Activas</option>
+                                <option value="false">Inactivas</option>
+                            </select>
+                            <button onclick="filterChurches()" class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">
+                                Filtrar
+                            </button>
+                        </div>
+                    </div>
+                    <div id="churchesList" class="p-6">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Import Tab -->
+            <div id="importTab" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow-sm border">
+                    <div class="p-6 border-b">
+                        <h3 class="text-lg font-semibold">Importar Datos desde Excel</h3>
+                    </div>
+                    <div class="p-6">
+                        <form id="importForm" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Tipo de Importación</label>
+                                <select id="importType" class="w-full px-3 py-2 border rounded">
+                                    <option value="reports">Informes Mensuales</option>
+                                    <option value="churches">Lista de Iglesias</option>
+                                </select>
+                            </div>
+
+                            <div id="importReportsFields" class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Año</label>
+                                    <input type="number" id="importYear" value="2024" min="2020" max="2030"
+                                           class="w-full px-3 py-2 border rounded">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">Mes</label>
+                                    <select id="importMonth" class="w-full px-3 py-2 border rounded">
+                                        <option value="1">Enero</option>
+                                        <option value="2">Febrero</option>
+                                        <option value="3">Marzo</option>
+                                        <option value="4">Abril</option>
+                                        <option value="5">Mayo</option>
+                                        <option value="6">Junio</option>
+                                        <option value="7">Julio</option>
+                                        <option value="8">Agosto</option>
+                                        <option value="9">Septiembre</option>
+                                        <option value="10">Octubre</option>
+                                        <option value="11">Noviembre</option>
+                                        <option value="12">Diciembre</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Archivo Excel</label>
+                                <input type="file" id="importFile" accept=".xlsx,.xls"
+                                       class="w-full px-3 py-2 border rounded">
+                            </div>
+
+                            <div class="flex items-center">
+                                <input type="checkbox" id="overwrite" class="mr-2">
+                                <label for="overwrite" class="text-sm">Sobrescribir datos existentes</label>
+                            </div>
+
+                            <button type="submit" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700">
+                                Importar Datos
+                            </button>
+                        </form>
+
+                        <div id="importProgress" class="hidden mt-4 p-4 bg-blue-50 rounded">
+                            <div class="flex items-center">
+                                <div class="loading mr-2"></div>
+                                <span>Procesando archivo...</span>
+                            </div>
+                        </div>
+
+                        <div id="importResults" class="hidden mt-4"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export Tab -->
+            <div id="exportTab" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow-sm border">
+                    <div class="p-6 border-b">
+                        <h3 class="text-lg font-semibold">Exportar Datos a Excel</h3>
+                    </div>
+                    <div class="p-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <!-- Exportar Informe Mensual -->
+                            <div class="border rounded-lg p-4">
+                                <h4 class="font-semibold mb-3">Informe Mensual</h4>
+                                <div class="space-y-3">
+                                    <select id="exportYear" class="w-full px-3 py-2 border rounded">
+                                        <option value="2024">2024</option>
+                                        <option value="2023">2023</option>
+                                    </select>
+                                    <select id="exportMonth" class="w-full px-3 py-2 border rounded">
+                                        <option value="1">Enero</option>
+                                        <option value="2">Febrero</option>
+                                        <option value="3">Marzo</option>
+                                        <option value="4">Abril</option>
+                                        <option value="5">Mayo</option>
+                                        <option value="6">Junio</option>
+                                        <option value="7">Julio</option>
+                                        <option value="8">Agosto</option>
+                                        <option value="9">Septiembre</option>
+                                        <option value="10">Octubre</option>
+                                        <option value="11">Noviembre</option>
+                                        <option value="12">Diciembre</option>
+                                    </select>
+                                    <button onclick="exportData('monthly')"
+                                            class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+                                        Exportar Mes
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Exportar Resumen Anual -->
+                            <div class="border rounded-lg p-4">
+                                <h4 class="font-semibold mb-3">Resumen Anual</h4>
+                                <div class="space-y-3">
+                                    <select id="exportYearlyYear" class="w-full px-3 py-2 border rounded">
+                                        <option value="2024">2024</option>
+                                        <option value="2023">2023</option>
+                                    </select>
+                                    <button onclick="exportData('yearly')"
+                                            class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700">
+                                        Exportar Año
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Exportar Lista de Iglesias -->
+                            <div class="border rounded-lg p-4">
+                                <h4 class="font-semibold mb-3">Lista de Iglesias</h4>
+                                <div class="space-y-3">
+                                    <p class="text-sm text-gray-600">Exportar lista completa de iglesias con información de pastores.</p>
+                                    <button onclick="exportData('churches')"
+                                            class="w-full bg-purple-600 text-white py-2 rounded hover:bg-purple-700">
+                                        Exportar Iglesias
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Manual Report Entry Modal -->
+    <div id="manualReportModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="p-6 border-b flex justify-between items-center">
+                    <h3 class="text-lg font-semibold">Registrar Informe Manual</h3>
+                    <button onclick="closeManualReportModal()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <form id="manualReportForm" class="p-6">
+                    <!-- Basic Info -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Iglesia</label>
+                            <select id="manualChurchId" class="w-full px-3 py-2 border rounded" required>
+                                <option value="">Seleccionar iglesia...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Año</label>
+                            <input type="number" id="manualYear" class="w-full px-3 py-2 border rounded"
+                                   min="2020" max="2030" value="2025" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Mes</label>
+                            <select id="manualMonth" class="w-full px-3 py-2 border rounded" required>
+                                <option value="">Seleccionar mes...</option>
+                                <option value="1">Enero</option>
+                                <option value="2">Febrero</option>
+                                <option value="3">Marzo</option>
+                                <option value="4">Abril</option>
+                                <option value="5">Mayo</option>
+                                <option value="6">Junio</option>
+                                <option value="7">Julio</option>
+                                <option value="8">Agosto</option>
+                                <option value="9">Septiembre</option>
+                                <option value="10">Octubre</option>
+                                <option value="11">Noviembre</option>
+                                <option value="12">Diciembre</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- ENTRADAS DEL MES -->
+                    <div class="mb-6">
+                        <h4 class="font-semibold text-lg mb-3 text-blue-800">ENTRADAS DEL MES</h4>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Diezmos (Gs.)</label>
+                                <input type="number" id="manualDiezmos" class="w-full px-3 py-2 border rounded" step="0.01">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Ofrendas (Gs.)</label>
+                                <input type="number" id="manualOfrendas" class="w-full px-3 py-2 border rounded" step="0.01">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Anexos (Gs.)</label>
+                                <input type="number" id="manualAnexos" class="w-full px-3 py-2 border rounded" step="0.01">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Caballeros (Gs.)</label>
+                                <input type="number" id="manualCaballeros" class="w-full px-3 py-2 border rounded" step="0.01">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Damas (Gs.)</label>
+                                <input type="number" id="manualDamas" class="w-full px-3 py-2 border rounded" step="0.01">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Jóvenes (Gs.)</label>
+                                <input type="number" id="manualJovenes" class="w-full px-3 py-2 border rounded" step="0.01">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Niños (Gs.)</label>
+                                <input type="number" id="manualNinos" class="w-full px-3 py-2 border rounded" step="0.01">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Otros (Gs.)</label>
+                                <input type="number" id="manualOtros" class="w-full px-3 py-2 border rounded" step="0.01">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- OFRENDAS DIRECTAS - FONDO NACIONAL -->
+                    <div class="mb-6">
+                        <h4 class="font-semibold text-lg mb-3 text-green-800">OFRENDAS DIRECTAS - FONDO NACIONAL</h4>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Ofrenda de Misiones (Gs.)</label>
+                                <input type="number" id="manualOfrendaDirectasMisiones" class="w-full px-3 py-2 border rounded" step="0.01">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Lazos de Amor (Gs.)</label>
+                                <input type="number" id="manualLazosAmor" class="w-full px-3 py-2 border rounded" step="0.01">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Misión Posible (Gs.)</label>
+                                <input type="number" id="manualMisionPosible" class="w-full px-3 py-2 border rounded" step="0.01">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Aporte Caballeros (Gs.)</label>
+                                <input type="number" id="manualAporteCaballeros" class="w-full px-3 py-2 border rounded" step="0.01">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">APY (Gs.)</label>
+                                <input type="number" id="manualApy" class="w-full px-3 py-2 border rounded" step="0.01">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Instituto Bíblico (Gs.)</label>
+                                <input type="number" id="manualInstitutoBiblico" class="w-full px-3 py-2 border rounded" step="0.01">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Diezmo Pastoral (Gs.)</label>
+                                <input type="number" id="manualDiezmoPastoral" class="w-full px-3 py-2 border rounded" step="0.01">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- DEPOSIT INFO -->
+                    <div class="mb-6">
+                        <h4 class="font-semibold text-lg mb-3 text-purple-800">INFORMACIÓN DE DEPÓSITO</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Fecha de Depósito</label>
+                                <input type="date" id="manualFechaDeposito" class="w-full px-3 py-2 border rounded">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Número de Boleta</label>
+                                <input type="text" id="manualNumeroDeposito" class="w-full px-3 py-2 border rounded">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Monto Depositado (Gs.)</label>
+                                <input type="number" id="manualMontoDepositado" class="w-full px-3 py-2 border rounded" step="0.01">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ATTENDANCE & BAPTISMS -->
+                    <div class="mb-6">
+                        <h4 class="font-semibold text-lg mb-3 text-orange-800">ASISTENCIAS Y BAUTISMOS</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Asistencia de Visitas</label>
+                                <input type="number" id="manualAsistenciaVisitas" class="w-full px-3 py-2 border rounded">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Bautismos en Agua</label>
+                                <input type="number" id="manualBautismosAgua" class="w-full px-3 py-2 border rounded">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Bautismos Espíritu Santo</label>
+                                <input type="number" id="manualBautismosEspiritu" class="w-full px-3 py-2 border rounded">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- OBSERVACIONES -->
+                    <div class="mb-6">
+                        <label class="block text-sm font-medium mb-2">Observaciones</label>
+                        <textarea id="manualObservaciones" class="w-full px-3 py-2 border rounded" rows="3"
+                                  placeholder="Observaciones adicionales..."></textarea>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex justify-end gap-3">
+                        <button type="button" onclick="closeManualReportModal()"
+                                class="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50">
+                            Cancelar
+                        </button>
+                        <button type="submit"
+                                class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                            Guardar Informe
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transaction Modal -->
+    <div id="transactionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full">
+                <div class="p-6 border-b flex justify-between items-center">
+                    <h3 class="text-lg font-semibold">Nueva Transacción</h3>
+                    <button onclick="closeTransactionModal()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <form id="transactionForm" class="p-6">
+                    <!-- Basic Info -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Fecha *</label>
+                            <input type="date" id="transactionDate" class="w-full px-3 py-2 border rounded" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Fondo *</label>
+                            <select id="transactionFund" class="w-full px-3 py-2 border rounded" required>
+                                <option value="">Seleccionar fondo...</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Iglesia (opcional)</label>
+                            <select id="transactionChurch" class="w-full px-3 py-2 border rounded">
+                                <option value="">Seleccionar iglesia...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Concepto *</label>
+                            <input type="text" id="transactionConcept" class="w-full px-3 py-2 border rounded"
+                                   placeholder="Descripción de la transacción" required>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Proveedor</label>
+                            <input type="text" id="transactionProvider" class="w-full px-3 py-2 border rounded"
+                                   placeholder="Nombre del proveedor">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Número de Documento</label>
+                            <input type="text" id="transactionDocument" class="w-full px-3 py-2 border rounded"
+                                   placeholder="Factura, recibo, etc.">
+                        </div>
+                    </div>
+
+                    <!-- Amount (Either In or Out) -->
+                    <div class="mb-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Entrada (Gs.)</label>
+                                <input type="number" id="transactionAmountIn" class="w-full px-3 py-2 border rounded"
+                                       step="0.01" placeholder="0.00" onchange="handleAmountChange('in')">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-2">Salida (Gs.)</label>
+                                <input type="number" id="transactionAmountOut" class="w-full px-3 py-2 border rounded"
+                                       step="0.01" placeholder="0.00" onchange="handleAmountChange('out')">
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-500 mt-1">Especifique SOLO entrada O salida, no ambos</p>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex justify-end gap-3">
+                        <button type="button" onclick="closeTransactionModal()"
+                                class="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50">
+                            Cancelar
+                        </button>
+                        <button type="submit"
+                                class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                            Guardar Transacción
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-4 right-4 hidden z-50">
+        <div class="bg-white border border-gray-200 rounded-lg shadow-lg p-4 min-w-80">
+            <div class="flex items-center">
+                <div id="toastIcon" class="mr-3"></div>
+                <div>
+                    <div id="toastTitle" class="font-semibold"></div>
+                    <div id="toastMessage" class="text-sm text-gray-600"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Fund Modal -->
+    <div id="fundModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-lg w-full">
+                <div class="p-6 border-b flex justify-between items-center">
+                    <h3 class="text-lg font-semibold">Nuevo Fondo</h3>
+                    <button onclick="closeFundModal()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <form id="fundForm" class="p-6">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Nombre del Fondo *</label>
+                            <input type="text" id="fundName" class="w-full px-3 py-2 border rounded"
+                                   placeholder="Ej: Fondo Nacional, Construcción Templo, etc." required>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Tipo de Fondo *</label>
+                            <select id="fundType" class="w-full px-3 py-2 border rounded" required>
+                                <option value="">Seleccionar tipo...</option>
+                                <option value="national">Nacional</option>
+                                <option value="restricted">Restringido/Especial</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Descripción</label>
+                            <textarea id="fundDescription" class="w-full px-3 py-2 border rounded" rows="3"
+                                      placeholder="Descripción opcional del propósito del fondo"></textarea>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Saldo Inicial (Gs.)</label>
+                            <input type="number" id="fundInitialBalance" class="w-full px-3 py-2 border rounded"
+                                   value="0" min="0" step="1">
+                        </div>
+
+                        <div class="flex items-center">
+                            <input type="checkbox" id="fundActive" class="mr-2" checked>
+                            <label for="fundActive" class="text-sm">Fondo activo</label>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-end gap-4 pt-6 mt-6 border-t">
+                        <button type="button" onclick="closeFundModal()"
+                                class="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50">
+                            Cancelar
+                        </button>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                            Crear Fondo
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- New Church Modal -->
+    <div id="churchModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full">
+                <div class="p-6 border-b flex justify-between items-center">
+                    <h3 id="churchModalTitle" class="text-lg font-semibold">Nueva Iglesia</h3>
+                    <button onclick="closeChurchModal()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                <form id="churchForm" class="p-6">
+                    <input type="hidden" id="churchId" value="">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Nombre de la Iglesia *</label>
+                            <input type="text" id="churchName" class="w-full px-3 py-2 border rounded"
+                                   placeholder="Ej: IPU ASUNCIÓN" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Ciudad *</label>
+                            <input type="text" id="churchCity" class="w-full px-3 py-2 border rounded"
+                                   placeholder="Ej: Asunción" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Pastor *</label>
+                            <input type="text" id="churchPastor" class="w-full px-3 py-2 border rounded"
+                                   placeholder="Nombre completo del pastor" required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Teléfono</label>
+                            <input type="text" id="churchPhone" class="w-full px-3 py-2 border rounded"
+                                   placeholder="Número de teléfono">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Cédula</label>
+                            <input type="text" id="churchCedula" class="w-full px-3 py-2 border rounded"
+                                   placeholder="Cédula del pastor">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">RUC</label>
+                            <input type="text" id="churchRuc" class="w-full px-3 py-2 border rounded"
+                                   placeholder="RUC del pastor">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Grado Ministerial</label>
+                            <input type="text" id="churchGrado" class="w-full px-3 py-2 border rounded"
+                                   placeholder="Ej: Reverendo, Pastor, etc.">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Posición</label>
+                            <input type="text" id="churchPosicion" class="w-full px-3 py-2 border rounded"
+                                   placeholder="Ej: Pastor Principal, Asistente, etc.">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" id="churchActive" class="mr-2" checked>
+                                <span class="text-sm">Iglesia activa</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="button" onclick="closeChurchModal()"
+                                class="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50">
+                            Cancelar
+                        </button>
+                        <button type="submit"
+                                class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                            Crear Iglesia
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_BASE = window.location.origin + '/api';
+        let authToken = localStorage.getItem('authToken');
+        let currentUser = null;
+
+        // Utility functions
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('es-PY', {
+                style: 'currency',
+                currency: 'PYG',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(amount || 0);
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            const date = new Date(dateString);
+            return new Intl.DateTimeFormat('es-PY', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }).format(date);
+        }
+
+        function showToast(title, message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toastIcon');
+            const titleEl = document.getElementById('toastTitle');
+            const messageEl = document.getElementById('toastMessage');
+
+            const icons = {
+                success: '✅',
+                error: '❌',
+                warning: '⚠️',
+                info: 'ℹ️'
+            };
+
+            icon.textContent = icons[type] || icons.info;
+            titleEl.textContent = title;
+            messageEl.textContent = message;
+
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 5000);
+        }
+
+        function showLoading(element, show = true) {
+            const loading = element.querySelector('.loading');
+            const text = element.querySelector('span');
+
+            if (show) {
+                if (loading) loading.classList.remove('hidden');
+                if (text) text.style.opacity = '0.7';
+            } else {
+                if (loading) loading.classList.add('hidden');
+                if (text) text.style.opacity = '1';
+            }
+        }
+
+        // Authentication
+        async function login(event) {
+            event.preventDefault();
+
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const submitBtn = event.target.querySelector('button[type="submit"]');
+
+            showLoading(submitBtn);
+
+            try {
+                const response = await axios.post(`${API_BASE}/auth?action=login`, {
+                    email,
+                    password
+                });
+
+                authToken = response.data.token;
+                currentUser = response.data.user;
+                localStorage.setItem('authToken', authToken);
+
+                showMainApp();
+                showToast('¡Bienvenido!', 'Sesión iniciada correctamente', 'success');
+
+            } catch (error) {
+                showToast('Error', error.response?.data?.error || 'Error al iniciar sesión', 'error');
+            } finally {
+                showLoading(submitBtn, false);
+            }
+        }
+
+        // Google OAuth Login Handler
+        async function handleGoogleLogin(response) {
+            console.log('Google login response:', response);
+
+            try {
+                const result = await axios.post(`${API_BASE}/auth-google`, {
+                    credential: response.credential
+                });
+
+                console.log('Backend response:', result.data);
+
+                authToken = result.data.token;
+                currentUser = result.data.user;
+                localStorage.setItem('authToken', authToken);
+
+                showMainApp();
+                showToast(
+                    '¡Bienvenido!',
+                    `Sesión iniciada con Google como ${currentUser.name || currentUser.email}`,
+                    'success'
+                );
+
+            } catch (error) {
+                console.error('Google login error:', error);
+                const errorMessage = error.response?.data?.error || 'Error al iniciar sesión con Google';
+                showToast('Error de Autenticación', errorMessage, 'error');
+            }
+        }
+
+        async function logout() {
+            localStorage.removeItem('authToken');
+            authToken = null;
+            currentUser = null;
+            showLoginScreen();
+            showToast('Sesión cerrada', 'Has cerrado sesión correctamente', 'info');
+        }
+
+        async function verifyAuth() {
+            if (!authToken) return false;
+
+            try {
+                const response = await axios.get(`${API_BASE}/auth?action=verify`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                currentUser = response.data.user;
+                return true;
+            } catch (error) {
+                localStorage.removeItem('authToken');
+                authToken = null;
+                return false;
+            }
+        }
+
+        function showInitForm() {
+            document.getElementById('initForm').classList.toggle('hidden');
+        }
+
+        async function initSystem() {
+            const email = document.getElementById('initEmail').value;
+            const password = document.getElementById('initPassword').value;
+
+            if (!email || !password) {
+                showToast('Error', 'Email y contraseña requeridos', 'error');
+                return;
+            }
+
+            try {
+                await axios.post(`${API_BASE}/auth?action=init`, { email, password });
+                showToast('Sistema Inicializado', 'Ya puedes iniciar sesión', 'success');
+                document.getElementById('initForm').classList.add('hidden');
+                document.getElementById('loginEmail').value = email;
+            } catch (error) {
+                showToast('Error', error.response?.data?.error || 'Error al inicializar', 'error');
+            }
+        }
+
+        // UI Navigation
+        function showLoginScreen() {
+            document.getElementById('loginScreen').classList.remove('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+        }
+
+        function showMainApp() {
+            document.getElementById('loginScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            document.getElementById('userEmail').textContent = currentUser?.email || '';
+            document.getElementById('userInfo').classList.remove('hidden');
+
+            loadDashboard();
+        }
+
+        function showTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+
+            // Remove active class from all buttons
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active', 'bg-blue-600', 'text-white');
+                btn.classList.add('text-gray-600');
+            });
+
+            // Show selected tab
+            document.getElementById(tabName + 'Tab').classList.remove('hidden');
+
+            // Add active class to clicked button
+            const activeBtn = document.querySelector(`[data-tab="${tabName}"]`);
+            activeBtn.classList.add('active', 'bg-blue-600', 'text-white');
+            activeBtn.classList.remove('text-gray-600');
+
+            // Load content based on tab
+            switch(tabName) {
+                case 'dashboard':
+                    loadDashboard();
+                    break;
+                case 'reports':
+                    loadReports();
+                    break;
+                case 'transactions':
+                    loadTransactions();
+                    break;
+                case 'funds':
+                    loadFunds();
+                    break;
+                case 'churches':
+                    loadChurches();
+                    break;
+            }
+        }
+
+        // Dashboard
+        async function loadDashboard() {
+            try {
+                const response = await axios.get(`${API_BASE}/dashboard`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                const data = response.data;
+
+                document.getElementById('totalChurches').textContent = data.totalChurches;
+                document.getElementById('reportedChurches').textContent = data.reportedChurches;
+                document.getElementById('monthTotal').textContent = formatCurrency(data.monthTotal);
+                document.getElementById('nationalFund').textContent = formatCurrency(data.nationalFund);
+
+                // Recent reports
+                const recentReportsEl = document.getElementById('recentReports');
+                if (data.recentReports && data.recentReports.length > 0) {
+                    recentReportsEl.innerHTML = data.recentReports.map(report => `
+                        <div class="flex justify-between items-center py-3 border-b last:border-b-0">
+                            <div>
+                                <div class="font-medium">${report.churchName}</div>
+                                <div class="text-sm text-gray-500">${report.city}</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="font-semibold">${formatCurrency(report.totalEntradas)}</div>
+                                <div class="text-sm text-gray-500">${new Date(report.createdAt).toLocaleDateString()}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    recentReportsEl.innerHTML = '<p class="text-gray-500 text-center py-8">No hay informes recientes</p>';
+                }
+
+            } catch (error) {
+                showToast('Error', 'Error al cargar dashboard', 'error');
+            }
+        }
+
+        // Reports
+        async function loadReports() {
+            try {
+                const response = await axios.get(`${API_BASE}/reports`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                const reports = response.data;
+                const reportsListEl = document.getElementById('reportsList');
+
+                if (reports.length > 0) {
+                    reportsListEl.innerHTML = reports.map(report => `
+                        <div class="border rounded-lg p-4">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h4 class="font-semibold">${report.church_name}</h4>
+                                    <p class="text-sm text-gray-600">${report.city} - ${report.pastor}</p>
+                                    <p class="text-sm text-gray-500">${report.month}/${report.year}</p>
+                                </div>
+                                <div class="text-right">
+                                    <div class="font-semibold text-lg">${formatCurrency(report.total_entradas)}</div>
+                                    <div class="text-sm text-gray-500">Fondo Nacional: ${formatCurrency(report.fondo_nacional)}</div>
+                                    <span class="inline-block px-2 py-1 text-xs rounded-full ${
+                                        report.estado === 'recibido' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                    }">${report.estado}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    reportsListEl.innerHTML = '<p class="text-gray-500 text-center py-8">No hay informes disponibles</p>';
+                }
+
+            } catch (error) {
+                showToast('Error', 'Error al cargar informes', 'error');
+            }
+        }
+
+        async function filterReports() {
+            const year = document.getElementById('filterYear').value;
+            const month = document.getElementById('filterMonth').value;
+
+            let url = `${API_BASE}/reports`;
+            const params = new URLSearchParams();
+
+            if (year) params.append('year', year);
+            if (month) params.append('month', month);
+
+            if (params.toString()) {
+                url += '?' + params.toString();
+            }
+
+            try {
+                const response = await axios.get(url, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                const reports = response.data;
+                const reportsListEl = document.getElementById('reportsList');
+
+                if (reports.length > 0) {
+                    reportsListEl.innerHTML = reports.map(report => `
+                        <div class="border rounded-lg p-4">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h4 class="font-semibold">${report.church_name}</h4>
+                                    <p class="text-sm text-gray-600">${report.city} - ${report.pastor}</p>
+                                    <p class="text-sm text-gray-500">${report.month}/${report.year}</p>
+                                </div>
+                                <div class="text-right">
+                                    <div class="font-semibold text-lg">${formatCurrency(report.total_entradas)}</div>
+                                    <div class="text-sm text-gray-500">Fondo Nacional: ${formatCurrency(report.fondo_nacional)}</div>
+                                    <span class="inline-block px-2 py-1 text-xs rounded-full ${
+                                        report.estado === 'recibido' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                    }">${report.estado}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    reportsListEl.innerHTML = '<p class="text-gray-500 text-center py-8">No se encontraron informes con los filtros aplicados</p>';
+                }
+
+            } catch (error) {
+                showToast('Error', 'Error al filtrar informes', 'error');
+            }
+        }
+
+        // Churches
+        async function loadChurches() {
+            try {
+                const response = await axios.get(`${API_BASE}/churches`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                const churches = response.data;
+                const churchesListEl = document.getElementById('churchesList');
+
+                if (churches.length > 0) {
+                    churchesListEl.innerHTML = `
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Iglesia</th>
+                                        <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Ciudad</th>
+                                        <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Pastor</th>
+                                        <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Grado</th>
+                                        <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Estado</th>
+                                        <th class="px-4 py-3 text-left text-sm font-medium text-gray-500">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200">
+                                    ${churches.map(church => `
+                                        <tr>
+                                            <td class="px-4 py-3 font-medium">${church.name}</td>
+                                            <td class="px-4 py-3">${church.city}</td>
+                                            <td class="px-4 py-3">${church.pastor}</td>
+                                            <td class="px-4 py-3">${church.pastor_grado || '-'}</td>
+                                            <td class="px-4 py-3">
+                                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                                    church.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                                                }">
+                                                    ${church.active ? 'Activa' : 'Inactiva'}
+                                                </span>
+                                            </td>
+                                            <td class="px-4 py-3">
+                                                <div class="flex space-x-2">
+                                                    <button onclick="editChurch(${church.id})" class="text-blue-600 hover:text-blue-800 text-sm">
+                                                        Editar
+                                                    </button>
+                                                    <button onclick="toggleChurchStatus(${church.id})" class="text-gray-600 hover:text-gray-800 text-sm">
+                                                        ${church.active ? 'Desactivar' : 'Activar'}
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                } else {
+                    churchesListEl.innerHTML = '<p class="text-gray-500 text-center py-8">No hay iglesias registradas</p>';
+                }
+
+            } catch (error) {
+                showToast('Error', 'Error al cargar iglesias', 'error');
+            }
+        }
+
+        // Import
+        document.getElementById('importForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const fileInput = document.getElementById('importFile');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                showToast('Error', 'Selecciona un archivo Excel', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('excelFile', file);
+            formData.append('type', document.getElementById('importType').value);
+            formData.append('year', document.getElementById('importYear').value);
+            formData.append('month', document.getElementById('importMonth').value);
+            formData.append('overwrite', document.getElementById('overwrite').checked);
+
+            const progressEl = document.getElementById('importProgress');
+            const resultsEl = document.getElementById('importResults');
+
+            progressEl.classList.remove('hidden');
+            resultsEl.classList.add('hidden');
+
+            try {
+                const response = await axios.post(`${API_BASE}/import`, formData, {
+                    headers: {
+                        Authorization: `Bearer ${authToken}`,
+                        'Content-Type': 'multipart/form-data'
+                    }
+                });
+
+                const result = response.data;
+
+                resultsEl.innerHTML = `
+                    <div class="border rounded-lg p-4 ${result.errors.length > 0 ? 'bg-yellow-50' : 'bg-green-50'}">
+                        <h4 class="font-semibold mb-2">${result.message}</h4>
+                        <div class="text-sm space-y-1">
+                            <p><strong>Total procesados:</strong> ${result.totalProcessed}</p>
+                            <p><strong>Importados:</strong> ${result.imported}</p>
+                            <p><strong>Omitidos:</strong> ${result.skipped}</p>
+                            <p><strong>Errores:</strong> ${result.errors.length}</p>
+                        </div>
+
+                        ${result.details.length > 0 ? `
+                            <div class="mt-3">
+                                <h5 class="font-medium mb-1">Detalles:</h5>
+                                <ul class="text-sm space-y-1">
+                                    ${result.details.map(detail => `<li>• ${detail}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+
+                        ${result.errors.length > 0 ? `
+                            <div class="mt-3">
+                                <h5 class="font-medium mb-1 text-red-600">Errores:</h5>
+                                <ul class="text-sm space-y-1 text-red-600">
+                                    ${result.errors.map(error => `<li>• ${error}</li>`).join('')}
+                                </ul>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+
+                resultsEl.classList.remove('hidden');
+
+                if (result.imported > 0) {
+                    showToast('Importación Exitosa', `${result.imported} registros importados`, 'success');
+                }
+
+            } catch (error) {
+                showToast('Error', error.response?.data?.error || 'Error al importar datos', 'error');
+                resultsEl.innerHTML = `
+                    <div class="border border-red-200 rounded-lg p-4 bg-red-50">
+                        <h4 class="font-semibold text-red-800 mb-2">Error en la importación</h4>
+                        <p class="text-sm text-red-600">${error.response?.data?.error || 'Error desconocido'}</p>
+                    </div>
+                `;
+                resultsEl.classList.remove('hidden');
+            } finally {
+                progressEl.classList.add('hidden');
+            }
+        });
+
+        // Export
+        async function exportData(type) {
+            let url = `${API_BASE}/export?type=${type}`;
+
+            if (type === 'monthly') {
+                const year = document.getElementById('exportYear').value;
+                const month = document.getElementById('exportMonth').value;
+                url += `&year=${year}&month=${month}`;
+            } else if (type === 'yearly') {
+                const year = document.getElementById('exportYearlyYear').value;
+                url += `&year=${year}`;
+            } else if (type === 'churches') {
+                url += `&year=${new Date().getFullYear()}`;
+            }
+
+            try {
+                const response = await axios.get(url, {
+                    headers: { Authorization: `Bearer ${authToken}` },
+                    responseType: 'blob'
+                });
+
+                // Create download link
+                const blob = new Blob([response.data]);
+                const downloadUrl = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = downloadUrl;
+
+                // Get filename from response headers or generate one
+                const contentDisposition = response.headers['content-disposition'];
+                let filename = 'export.xlsx';
+
+                if (contentDisposition) {
+                    const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+                    if (filenameMatch) {
+                        filename = filenameMatch[1];
+                    }
+                }
+
+                link.download = filename;
+                link.click();
+
+                window.URL.revokeObjectURL(downloadUrl);
+                showToast('Exportación Exitosa', 'Archivo descargado correctamente', 'success');
+
+            } catch (error) {
+                showToast('Error', error.response?.data?.error || 'Error al exportar datos', 'error');
+            }
+        }
+
+        // Initialize app
+        async function init() {
+            // Setup axios defaults
+            axios.defaults.headers.common['Content-Type'] = 'application/json';
+
+            // Setup event listeners
+            document.getElementById('loginForm').addEventListener('submit', login);
+
+            // Setup tab styles
+            const style = document.createElement('style');
+            style.textContent = `
+                .tab-button {
+                    padding: 0.75rem 1.5rem;
+                    border-radius: 0.5rem;
+                    font-weight: 500;
+                    transition: all 0.2s;
+                    color: #6b7280;
+                    white-space: nowrap;
+                }
+                .tab-button:hover {
+                    background-color: #f3f4f6;
+                }
+                .tab-button.active {
+                    background-color: #2563eb !important;
+                    color: white !important;
+                }
+            `;
+            document.head.appendChild(style);
+
+            // Check if user is already authenticated
+            if (authToken) {
+                const isValid = await verifyAuth();
+                if (isValid) {
+                    showMainApp();
+                } else {
+                    showLoginScreen();
+                }
+            } else {
+                showLoginScreen();
+            }
+
+            // Set current month/year in forms
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            const currentMonth = now.getMonth() + 1;
+
+            document.getElementById('importYear').value = currentYear;
+            document.getElementById('importMonth').value = currentMonth;
+            document.getElementById('exportMonth').value = currentMonth;
+            document.getElementById('filterYear').innerHTML = `
+                <option value="">Todos los años</option>
+                <option value="${currentYear}">${currentYear}</option>
+                <option value="${currentYear - 1}">${currentYear - 1}</option>
+            `;
+        }
+
+        // Manual Report Functions
+        async function openManualReportModal() {
+            // Load churches into dropdown
+            await loadChurchesForManualEntry();
+
+            // Reset form
+            document.getElementById('manualReportForm').reset();
+
+            // Set current year
+            const currentYear = new Date().getFullYear();
+            document.getElementById('manualYear').value = currentYear;
+
+            // Show modal
+            document.getElementById('manualReportModal').classList.remove('hidden');
+        }
+
+        function closeManualReportModal() {
+            document.getElementById('manualReportModal').classList.add('hidden');
+        }
+
+        async function loadChurchesForManualEntry() {
+            try {
+                const response = await axios.get(`${API_BASE}/churches`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                const churchSelect = document.getElementById('manualChurchId');
+                churchSelect.innerHTML = '<option value="">Seleccionar iglesia...</option>';
+
+                response.data.forEach(church => {
+                    const option = document.createElement('option');
+                    option.value = church.id;
+                    option.textContent = `${church.name} - ${church.city}`;
+                    churchSelect.appendChild(option);
+                });
+            } catch (error) {
+                showToast('Error', 'Error al cargar iglesias', 'error');
+            }
+        }
+
+        // Handle manual report form submission
+        document.getElementById('manualReportForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = {
+                church_id: document.getElementById('manualChurchId').value,
+                year: parseInt(document.getElementById('manualYear').value),
+                month: parseInt(document.getElementById('manualMonth').value),
+                submission_type: 'manual',
+                submitted_by: 'admin', // Current user
+
+                // Entradas del mes
+                diezmos: parseFloat(document.getElementById('manualDiezmos').value) || 0,
+                ofrendas: parseFloat(document.getElementById('manualOfrendas').value) || 0,
+                anexos: parseFloat(document.getElementById('manualAnexos').value) || 0,
+                caballeros: parseFloat(document.getElementById('manualCaballeros').value) || 0,
+                damas: parseFloat(document.getElementById('manualDamas').value) || 0,
+                jovenes: parseFloat(document.getElementById('manualJovenes').value) || 0,
+                ninos: parseFloat(document.getElementById('manualNinos').value) || 0,
+                otros: parseFloat(document.getElementById('manualOtros').value) || 0,
+
+                // Ofrendas directas - fondo nacional
+                ofrendas_directas_misiones: parseFloat(document.getElementById('manualOfrendaDirectasMisiones').value) || 0,
+                lazos_amor: parseFloat(document.getElementById('manualLazosAmor').value) || 0,
+                mision_posible: parseFloat(document.getElementById('manualMisionPosible').value) || 0,
+                aporte_caballeros: parseFloat(document.getElementById('manualAporteCaballeros').value) || 0,
+                apy: parseFloat(document.getElementById('manualApy').value) || 0,
+                instituto_biblico: parseFloat(document.getElementById('manualInstitutoBiblico').value) || 0,
+                diezmo_pastoral: parseFloat(document.getElementById('manualDiezmoPastoral').value) || 0,
+
+                // Información de depósito
+                fecha_deposito: document.getElementById('manualFechaDeposito').value || null,
+                numero_deposito: document.getElementById('manualNumeroDeposito').value || '',
+                monto_depositado: parseFloat(document.getElementById('manualMontoDepositado').value) || 0,
+
+                // Asistencias y bautismos
+                asistencia_visitas: parseInt(document.getElementById('manualAsistenciaVisitas').value) || 0,
+                bautismos_agua: parseInt(document.getElementById('manualBautismosAgua').value) || 0,
+                bautismos_espiritu: parseInt(document.getElementById('manualBautismosEspiritu').value) || 0,
+
+                // Observaciones
+                observaciones: document.getElementById('manualObservaciones').value || ''
+            };
+
+            try {
+                const response = await axios.post(`${API_BASE}/reports`, formData, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                showToast('Éxito', 'Informe registrado correctamente', 'success');
+                closeManualReportModal();
+
+                // Refresh reports list if we're on the reports tab
+                if (document.getElementById('reportsTab').classList.contains('active')) {
+                    loadReports();
+                }
+
+                // Refresh dashboard
+                loadDashboard();
+
+            } catch (error) {
+                console.error('Error saving manual report:', error);
+                showToast('Error', error.response?.data?.error || 'Error al guardar el informe', 'error');
+            }
+        });
+
+        // Transaction Functions
+        async function openTransactionModal() {
+            // Load funds and churches into dropdowns
+            await loadFundsForTransaction();
+            await loadChurchesForTransaction();
+
+            // Reset form
+            document.getElementById('transactionForm').reset();
+
+            // Set current date
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('transactionDate').value = today;
+
+            // Show modal
+            document.getElementById('transactionModal').classList.remove('hidden');
+        }
+
+        function closeTransactionModal() {
+            document.getElementById('transactionModal').classList.add('hidden');
+        }
+
+        async function loadFundsForTransaction() {
+            try {
+                const response = await axios.get(`${API_BASE}/funds`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                const fundSelects = [
+                    document.getElementById('transactionFund'),
+                    document.getElementById('filterTransactionFund')
+                ];
+
+                fundSelects.forEach(select => {
+                    if (select) {
+                        const placeholder = select.id === 'transactionFund' ? 'Seleccionar fondo...' : 'Todos los fondos';
+                        select.innerHTML = `<option value="">${placeholder}</option>`;
+
+                        response.data.forEach(fund => {
+                            const option = document.createElement('option');
+                            option.value = fund.id;
+                            option.textContent = `${fund.name} (${formatCurrency(fund.current_balance)})`;
+                            select.appendChild(option);
+                        });
+                    }
+                });
+            } catch (error) {
+                showToast('Error', 'Error al cargar fondos', 'error');
+            }
+        }
+
+        async function loadChurchesForTransaction() {
+            try {
+                const response = await axios.get(`${API_BASE}/churches`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                const churchSelects = [
+                    document.getElementById('transactionChurch'),
+                    document.getElementById('filterTransactionChurch')
+                ];
+
+                churchSelects.forEach(select => {
+                    if (select) {
+                        const placeholder = select.id === 'transactionChurch' ? 'Seleccionar iglesia...' : 'Todas las iglesias';
+                        select.innerHTML = `<option value="">${placeholder}</option>`;
+
+                        response.data.forEach(church => {
+                            const option = document.createElement('option');
+                            option.value = church.id;
+                            option.textContent = `${church.name} - ${church.city}`;
+                            select.appendChild(option);
+                        });
+                    }
+                });
+            } catch (error) {
+                showToast('Error', 'Error al cargar iglesias', 'error');
+            }
+        }
+
+        function handleAmountChange(type) {
+            // Ensure only one amount is filled (entry OR exit, not both)
+            if (type === 'in') {
+                const amountIn = document.getElementById('transactionAmountIn').value;
+                if (amountIn && parseFloat(amountIn) > 0) {
+                    document.getElementById('transactionAmountOut').value = '';
+                }
+            } else if (type === 'out') {
+                const amountOut = document.getElementById('transactionAmountOut').value;
+                if (amountOut && parseFloat(amountOut) > 0) {
+                    document.getElementById('transactionAmountIn').value = '';
+                }
+            }
+        }
+
+        async function loadTransactions() {
+            // Load dropdown options first
+            await loadFundsForTransaction();
+            await loadChurchesForTransaction();
+
+            try {
+                const response = await axios.get(`${API_BASE}/transactions`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                const transactionsList = document.getElementById('transactionsList');
+
+                if (response.data.length > 0) {
+                    transactionsList.innerHTML = response.data.map(transaction => `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${new Date(transaction.date).toLocaleDateString()}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${transaction.church_name || '-'}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <span class="px-2 py-1 text-xs rounded-full ${
+                                    transaction.fund_type === 'national' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                                }">
+                                    ${transaction.fund_name}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-sm text-gray-900">${transaction.concept}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.provider || '-'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.document_number || '-'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                                ${transaction.amount_in > 0 ? formatCurrency(transaction.amount_in) : '-'}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                                ${transaction.amount_out > 0 ? formatCurrency(transaction.amount_out) : '-'}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
+                                ${formatCurrency(transaction.balance)}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                <button onclick="editTransaction(${transaction.id})"
+                                        class="text-blue-600 hover:text-blue-900 mr-3">
+                                    Editar
+                                </button>
+                                <button onclick="deleteTransaction(${transaction.id})"
+                                        class="text-red-600 hover:text-red-900">
+                                    Eliminar
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('');
+                } else {
+                    transactionsList.innerHTML = `
+                        <tr>
+                            <td colspan="10" class="px-6 py-4 text-center text-gray-500">
+                                No hay transacciones registradas
+                            </td>
+                        </tr>
+                    `;
+                }
+            } catch (error) {
+                showToast('Error', 'Error al cargar transacciones', 'error');
+            }
+        }
+
+        async function filterTransactions() {
+            try {
+                const params = new URLSearchParams();
+
+                const fundId = document.getElementById('filterTransactionFund').value;
+                const churchId = document.getElementById('filterTransactionChurch').value;
+                const dateFrom = document.getElementById('filterTransactionDateFrom').value;
+
+                if (fundId) params.append('fund_id', fundId);
+                if (churchId) params.append('church_id', churchId);
+                if (dateFrom) params.append('date_from', dateFrom);
+
+                const url = `${API_BASE}/transactions` + (params.toString() ? '?' + params.toString() : '');
+
+                const response = await axios.get(url, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                // Update the transaction list with filtered results
+                const transactionsList = document.getElementById('transactionsList');
+
+                if (response.data.length > 0) {
+                    transactionsList.innerHTML = response.data.map(transaction => `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${new Date(transaction.date).toLocaleDateString()}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${transaction.church_name || '-'}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <span class="px-2 py-1 text-xs rounded-full ${
+                                    transaction.fund_type === 'national' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                                }">
+                                    ${transaction.fund_name}
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-sm text-gray-900">${transaction.concept}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.provider || '-'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.document_number || '-'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                                ${transaction.amount_in > 0 ? formatCurrency(transaction.amount_in) : '-'}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
+                                ${transaction.amount_out > 0 ? formatCurrency(transaction.amount_out) : '-'}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
+                                ${formatCurrency(transaction.balance)}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
+                                <button onclick="editTransaction(${transaction.id})"
+                                        class="text-blue-600 hover:text-blue-900 mr-3">
+                                    Editar
+                                </button>
+                                <button onclick="deleteTransaction(${transaction.id})"
+                                        class="text-red-600 hover:text-red-900">
+                                    Eliminar
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('');
+                } else {
+                    transactionsList.innerHTML = `
+                        <tr>
+                            <td colspan="10" class="px-6 py-4 text-center text-gray-500">
+                                No se encontraron transacciones con los filtros aplicados
+                            </td>
+                        </tr>
+                    `;
+                }
+            } catch (error) {
+                showToast('Error', 'Error al filtrar transacciones', 'error');
+            }
+        }
+
+        async function editTransaction(id) {
+            // For now, just show a simple prompt for concept editing
+            const newConcept = prompt('Nuevo concepto:');
+            if (newConcept && newConcept.trim()) {
+                try {
+                    await axios.put(`${API_BASE}/transactions/${id}`, {
+                        concept: newConcept.trim()
+                    }, {
+                        headers: { Authorization: `Bearer ${authToken}` }
+                    });
+
+                    showToast('Éxito', 'Transacción actualizada', 'success');
+                    loadTransactions(); // Reload the list
+                } catch (error) {
+                    showToast('Error', error.response?.data?.error || 'Error al actualizar transacción', 'error');
+                }
+            }
+        }
+
+        async function deleteTransaction(id) {
+            if (confirm('¿Está seguro de que desea eliminar esta transacción? Esta acción no se puede deshacer.')) {
+                try {
+                    await axios.delete(`${API_BASE}/transactions/${id}`, {
+                        headers: { Authorization: `Bearer ${authToken}` }
+                    });
+
+                    showToast('Éxito', 'Transacción eliminada', 'success');
+                    loadTransactions(); // Reload the list
+                } catch (error) {
+                    showToast('Error', error.response?.data?.error || 'Error al eliminar transacción', 'error');
+                }
+            }
+        }
+
+        // Handle transaction form submission
+        document.getElementById('transactionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = {
+                date: document.getElementById('transactionDate').value,
+                fund_id: document.getElementById('transactionFund').value,
+                church_id: document.getElementById('transactionChurch').value || null,
+                concept: document.getElementById('transactionConcept').value,
+                provider: document.getElementById('transactionProvider').value,
+                document_number: document.getElementById('transactionDocument').value,
+                amount_in: parseFloat(document.getElementById('transactionAmountIn').value) || 0,
+                amount_out: parseFloat(document.getElementById('transactionAmountOut').value) || 0
+            };
+
+            try {
+                await axios.post(`${API_BASE}/transactions`, formData, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                showToast('Éxito', 'Transacción registrada correctamente', 'success');
+                closeTransactionModal();
+
+                // Refresh transaction list if we're on the transactions tab
+                if (document.getElementById('transactionsTab').classList.contains('active')) {
+                    loadTransactions();
+                }
+
+                // Refresh dashboard to update fund balances
+                loadDashboard();
+
+            } catch (error) {
+                console.error('Error saving transaction:', error);
+                showToast('Error', error.response?.data?.error || 'Error al guardar la transacción', 'error');
+            }
+        });
+
+        // Fund Management Functions
+        async function loadFunds() {
+            try {
+                const response = await axios.get(`${API_BASE}/funds`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                const funds = response.data;
+                updateFundDashboard(funds);
+                populateFundTable(funds);
+                populateFundFilters(funds);
+
+            } catch (error) {
+                console.error('Error loading funds:', error);
+                showToast('Error', 'Error al cargar fondos', 'error');
+            }
+        }
+
+        function updateFundDashboard(funds) {
+            const totalFunds = funds.length;
+            const totalBalance = funds.reduce((sum, fund) => sum + (parseFloat(fund.current_balance) || 0), 0);
+            const activeFunds = funds.filter(fund => fund.is_active).length;
+
+            document.getElementById('totalFunds').textContent = totalFunds;
+            document.getElementById('totalBalance').textContent = formatCurrency(totalBalance);
+            document.getElementById('activeFunds').textContent = activeFunds;
+
+            // TODO: Add today's movements count
+            document.getElementById('todayMovements').textContent = '0';
+        }
+
+        function populateFundTable(funds) {
+            const tbody = document.getElementById('fundsList');
+            tbody.innerHTML = '';
+
+            funds.forEach(fund => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="py-3 px-4">${fund.name}</td>
+                    <td class="py-3 px-4">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-${getFundTypeColor(fund.type)}-100 text-${getFundTypeColor(fund.type)}-800">
+                            ${getFundTypeName(fund.type)}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-right font-mono">${formatCurrency(fund.current_balance)}</td>
+                    <td class="py-3 px-4 text-right text-sm text-gray-500">${formatDate(fund.updated_at)}</td>
+                    <td class="py-3 px-4 text-center">
+                        ${fund.is_active ?
+                            '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Activo</span>' :
+                            '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Inactivo</span>'
+                        }
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="editFund(${fund.id})" class="text-blue-600 hover:text-blue-800 mr-2">Editar</button>
+                        <button onclick="toggleFundStatus(${fund.id})" class="text-gray-600 hover:text-gray-800">
+                            ${fund.is_active ? 'Desactivar' : 'Activar'}
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function populateFundFilters(funds) {
+            const select = document.getElementById('movementsFundFilter');
+            select.innerHTML = '<option value="">Todos los fondos</option>';
+
+            funds.forEach(fund => {
+                const option = document.createElement('option');
+                option.value = fund.id;
+                option.textContent = fund.name;
+                select.appendChild(option);
+            });
+        }
+
+        function getFundTypeColor(type) {
+            const colors = {
+                'national': 'blue',
+                'restricted': 'green'
+            };
+            return colors[type] || 'gray';
+        }
+
+        function getFundTypeName(type) {
+            const names = {
+                'national': 'Nacional',
+                'restricted': 'Restringido/Especial'
+            };
+            return names[type] || 'Desconocido';
+        }
+
+        function openNewFundModal() {
+            document.getElementById('fundForm').reset();
+            document.getElementById('fundModal').classList.remove('hidden');
+        }
+
+        function closeFundModal() {
+            document.getElementById('fundModal').classList.add('hidden');
+        }
+
+        async function filterFundMovements() {
+            const fundId = document.getElementById('movementsFundFilter').value;
+            const dateFrom = document.getElementById('movementsDateFrom').value;
+            const dateTo = document.getElementById('movementsDateTo').value;
+
+            try {
+                let url = `${API_BASE}/fund-movements?`;
+                const params = new URLSearchParams();
+
+                if (fundId) params.append('fund_id', fundId);
+                if (dateFrom) params.append('date_from', dateFrom);
+                if (dateTo) params.append('date_to', dateTo);
+
+                const response = await axios.get(`${API_BASE}/fund-movements?${params}`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                populateFundMovementsTable(response.data);
+
+            } catch (error) {
+                console.error('Error loading fund movements:', error);
+                showToast('Error', 'Error al cargar movimientos', 'error');
+            }
+        }
+
+        function populateFundMovementsTable(movements) {
+            const tbody = document.getElementById('fundMovementsList');
+            tbody.innerHTML = '';
+
+            movements.forEach(movement => {
+                const row = document.createElement('tr');
+                const movementAmount = parseFloat(movement.movement) || 0;
+                const movementClass = movementAmount >= 0 ? 'text-green-600' : 'text-red-600';
+                const movementSymbol = movementAmount >= 0 ? '+' : '';
+
+                row.innerHTML = `
+                    <td class="py-3 px-4">${formatDate(movement.created_at)}</td>
+                    <td class="py-3 px-4">${movement.fund_name || 'N/A'}</td>
+                    <td class="py-3 px-4">${movement.concept || 'N/A'}</td>
+                    <td class="py-3 px-4 text-right font-mono">${formatCurrency(movement.previous_balance)}</td>
+                    <td class="py-3 px-4 text-right font-mono ${movementClass}">${movementSymbol}${formatCurrency(Math.abs(movementAmount))}</td>
+                    <td class="py-3 px-4 text-right font-mono font-semibold">${formatCurrency(movement.new_balance)}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // Handle fund form submission
+        document.getElementById('fundForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = {
+                name: document.getElementById('fundName').value,
+                type: document.getElementById('fundType').value,
+                description: document.getElementById('fundDescription').value,
+                current_balance: parseFloat(document.getElementById('fundInitialBalance').value) || 0,
+                is_active: document.getElementById('fundActive').checked
+            };
+
+            try {
+                await axios.post(`${API_BASE}/funds`, formData, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                showToast('Éxito', 'Fondo creado correctamente', 'success');
+                closeFundModal();
+
+                // Refresh fund list if we're on the funds tab
+                if (document.getElementById('fundsTab').classList.contains('active')) {
+                    loadFunds();
+                }
+
+            } catch (error) {
+                console.error('Error creating fund:', error);
+                showToast('Error', error.response?.data?.error || 'Error al crear el fondo', 'error');
+            }
+        });
+
+        async function editFund(fundId) {
+            // TODO: Implement fund editing
+            showToast('Info', 'Función de edición en desarrollo', 'info');
+        }
+
+        async function toggleFundStatus(fundId) {
+            try {
+                await axios.put(`${API_BASE}/funds/${fundId}/toggle`, {}, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                showToast('Éxito', 'Estado del fondo actualizado', 'success');
+                loadFunds();
+
+            } catch (error) {
+                console.error('Error toggling fund status:', error);
+                showToast('Error', 'Error al actualizar el estado del fondo', 'error');
+            }
+        }
+
+        // Church Management Functions
+        function openNewChurchModal() {
+            document.getElementById('churchModalTitle').textContent = 'Nueva Iglesia';
+            document.getElementById('churchForm').reset();
+            document.getElementById('churchId').value = '';
+            document.getElementById('churchModal').classList.remove('hidden');
+        }
+
+        function closeChurchModal() {
+            document.getElementById('churchModal').classList.add('hidden');
+        }
+
+        function filterChurches() {
+            const searchTerm = document.getElementById('churchSearch').value.toLowerCase();
+            const statusFilter = document.getElementById('churchStatusFilter').value;
+
+            const rows = document.querySelectorAll('#churchesList tr');
+            rows.forEach(row => {
+                const name = row.cells[0]?.textContent.toLowerCase() || '';
+                const city = row.cells[1]?.textContent.toLowerCase() || '';
+                const pastor = row.cells[2]?.textContent.toLowerCase() || '';
+                const status = row.querySelector('.status-badge')?.textContent.toLowerCase() || '';
+
+                const matchesSearch = name.includes(searchTerm) ||
+                                    city.includes(searchTerm) ||
+                                    pastor.includes(searchTerm);
+                const matchesStatus = statusFilter === '' || status.includes(statusFilter);
+
+                row.style.display = matchesSearch && matchesStatus ? '' : 'none';
+            });
+        }
+
+        async function editChurch(churchId) {
+            try {
+                const response = await axios.get(`${API_BASE}/churches`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                const church = response.data.find(c => c.id === churchId);
+                if (!church) {
+                    showToast('Error', 'Iglesia no encontrada', 'error');
+                    return;
+                }
+
+                document.getElementById('churchModalTitle').textContent = 'Editar Iglesia';
+                document.getElementById('churchId').value = church.id;
+                document.getElementById('churchName').value = church.name || '';
+                document.getElementById('churchCity').value = church.city || '';
+                document.getElementById('churchPastor').value = church.pastor || '';
+                document.getElementById('churchPhone').value = church.phone || '';
+                document.getElementById('churchRuc').value = church.pastor_ruc || '';
+                document.getElementById('churchCedula').value = church.pastor_cedula || '';
+                document.getElementById('churchGrado').value = church.pastor_grado || '';
+                document.getElementById('churchPosicion').value = church.pastor_posicion || '';
+                document.getElementById('churchActive').checked = church.active !== false;
+
+                document.getElementById('churchModal').classList.remove('hidden');
+
+            } catch (error) {
+                console.error('Error loading church data:', error);
+                showToast('Error', 'Error al cargar datos de la iglesia', 'error');
+            }
+        }
+
+        async function toggleChurchStatus(churchId) {
+            try {
+                const response = await axios.get(`${API_BASE}/churches`, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                const church = response.data.find(c => c.id === churchId);
+                if (!church) {
+                    showToast('Error', 'Iglesia no encontrada', 'error');
+                    return;
+                }
+
+                await axios.put(`${API_BASE}/churches?id=${churchId}`, {
+                    ...church,
+                    active: !church.active
+                }, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                showToast('Éxito', 'Estado de la iglesia actualizado', 'success');
+                loadChurches();
+
+            } catch (error) {
+                console.error('Error toggling church status:', error);
+                showToast('Error', 'Error al actualizar el estado de la iglesia', 'error');
+            }
+        }
+
+        // Handle church form submission
+        document.getElementById('churchForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const churchId = document.getElementById('churchId').value;
+            const formData = {
+                name: document.getElementById('churchName').value,
+                city: document.getElementById('churchCity').value,
+                pastor: document.getElementById('churchPastor').value,
+                phone: document.getElementById('churchPhone').value,
+                ruc: document.getElementById('churchRuc').value,
+                cedula: document.getElementById('churchCedula').value,
+                grado: document.getElementById('churchGrado').value,
+                posicion: document.getElementById('churchPosicion').value,
+                active: document.getElementById('churchActive').checked
+            };
+
+            try {
+                if (churchId) {
+                    // Update existing church
+                    await axios.put(`${API_BASE}/churches?id=${churchId}`, formData, {
+                        headers: { Authorization: `Bearer ${authToken}` }
+                    });
+                    showToast('Éxito', 'Iglesia actualizada correctamente', 'success');
+                } else {
+                    // Create new church
+                    await axios.post(`${API_BASE}/churches`, formData, {
+                        headers: { Authorization: `Bearer ${authToken}` }
+                    });
+                    showToast('Éxito', 'Iglesia creada correctamente', 'success');
+                }
+
+                closeChurchModal();
+                loadChurches();
+
+            } catch (error) {
+                console.error('Error saving church:', error);
+                showToast('Error', error.response?.data?.error || 'Error al guardar la iglesia', 'error');
+            }
+        });
+
+        // Start the application
+        init();
+    </script>
+</body>
+</html>

@@ -1,116 +1,157 @@
-# IPU PY - Sistema Simplificado de Tesorería
+# IPU PY Tesorería - Cloud Gateway para Vercel
 
-<p align="left">
-  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT-blue.svg"></a>
-  <a href="https://github.com/anthonybir/ipupy_tesoreria/issues"><img alt="Issues" src="https://img.shields.io/github/issues/anthonybir/ipupy_tesoreria"></a>
-  <a href="https://github.com/anthonybir/ipupy_tesoreria/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/anthonybir/ipupy_tesoreria?style=social"></a>
-  <img alt="Platform" src="https://img.shields.io/badge/Platform-Vercel-black?logo=vercel"/>
-  <img alt="Tech" src="https://img.shields.io/badge/Stack-HTML%2FJS%20%2B%20Python-ffb000"/>
-</p>
+## 🚀 Despliegue en Vercel
 
-
-> Consulta el documento [`AGENTS.md`](AGENTS.md) para lineamientos de contribución y desarrollo.
-
-## 🚀 Versión Ultra-Simplificada
-
-Ya no más Next.js ni complejidades. Ahora es **una sola página HTML** que funciona directamente en el navegador.
-
-## ✨ Características
-
-### Para el Tesorero:
-- **Dashboard**: Ve todo de un vistazo - iglesias activas, recaudación mensual, fondo nacional
-- **Registro rápido**: Entrada manual o por foto de informes
-- **Cálculo automático**: El 10% del fondo nacional se calcula solo
-- **Exportación**: Descarga todo a Excel con un clic
-- **Sin instalación**: Abre el archivo HTML y listo
-
-### Para las Iglesias:
-- **App móvil simple**: Una página web optimizada para celulares
-- **Entrada rápida**: Botones de montos frecuentes
-- **Foto del comprobante**: Toma foto directo desde el celular
-- **Confirmación instantánea**: Feedback inmediato al enviar
-
-## 📁 Estructura Super Simple
-
-```
-ipupy_treasurer/
-├── index.html     # Sistema completo del tesorero
-├── mobile.html    # App para iglesias (celulares)
-└── server.py      # Servidor opcional (Python)
+### Paso 1: Preparar el repositorio
+```bash
+# Clonar o crear repositorio
+git init
+git add .
+git commit -m "Initial commit - IPU PY Tesorería System"
+git branch -M main
+git remote add origin https://github.com/tu-usuario/ipupy-tesoreria.git
+git push -u origin main
 ```
 
-## 🏃 Cómo Usar - Opción 1: Sin Servidor (Más Simple)
+### Paso 2: Configurar base de datos PostgreSQL
 
-1. **Abre el archivo** `index.html` en Chrome o Firefox
-2. **Listo!** Ya puedes:
-   - Registrar iglesias
-   - Ingresar informes mensuales
-   - Ver dashboard con totales
-   - Exportar a Excel
+#### Opción A: Vercel Postgres (Recomendado)
+1. Ve a tu proyecto en Vercel
+2. Pestaña "Storage" → "Create Database" → "Postgres"
+3. Copia la `DATABASE_URL` generada
 
-Los datos se guardan en el navegador (localStorage).
+#### Opción B: Supabase
+1. Crear proyecto en [supabase.com](https://supabase.com)
+2. Ve a Settings → Database
+3. Copia la connection string (modo de transacción)
 
-## 🖥️ Cómo Usar - Opción 2: Con Servidor (Para múltiples usuarios)
+### Paso 3: Variables de entorno en Vercel
+En tu proyecto de Vercel, ve a Settings → Environment Variables y agrega:
+
+```
+SUPABASE_DB_URL=tu_database_url_aqui
+SUPABASE_URL=https://tu_proyecto.supabase.co
+SUPABASE_SERVICE_KEY=tu_service_role_key_seguro
+JWT_SECRET=tu_jwt_secret_muy_seguro_aqui
+ADMIN_EMAIL=admin@ipupy.org
+ADMIN_PASSWORD=password_inicial_seguro
+NODE_ENV=production
+```
+
+### Paso 4: Desplegar
+1. Conecta tu repositorio GitHub a Vercel
+2. Vercel detectará automáticamente la configuración
+3. El despliegue se iniciará automáticamente
+
+## 🔧 Estructura del proyecto
+
+```
+cloud-gateway/
+├── api/                  # Serverless functions
+│   ├── auth.js          # Autenticación
+│   ├── churches.js      # Gestión de iglesias
+│   ├── dashboard.js     # Dashboard principal
+│   ├── export.js        # Exportación a Excel
+│   ├── import.js        # Importación desde Excel
+│   └── reports.js       # Gestión de informes
+├── lib/
+│   └── db.js           # Configuración PostgreSQL
+├── public/
+│   ├── index.html      # App original (legacy)
+│   └── app.html        # App modernizada
+├── .env.example        # Variables de entorno ejemplo
+├── package.json        # Dependencias
+├── vercel.json         # Configuración Vercel
+└── README.md          # Este archivo
+```
+
+## 📱 Uso del sistema
+
+### Primera vez (Inicialización)
+1. Accede a `/app.html` en tu dominio
+2. Click en "Inicializar Sistema"
+3. Configura email y contraseña del administrador
+4. ¡Listo para usar!
+
+### Funcionalidades principales
+
+#### 📊 Dashboard
+- Resumen de iglesias activas
+- Total de entradas del mes
+- Fondo nacional acumulado
+- Informes recientes
+
+#### 📄 Gestión de Informes
+- Visualizar informes por mes/año
+- Filtros avanzados
+- Cálculos automáticos del 10% fondo nacional
+
+#### ⛪ Gestión de Iglesias
+- Lista completa de iglesias
+- Información de pastores
+- Grados ministeriales y posiciones
+
+#### 📤 Importación
+- Importar desde Excel existente
+- Validación automática de datos
+- Reporte de errores detallado
+
+#### 📥 Exportación
+- Exportar informe mensual
+- Resumen anual
+- Lista de iglesias
+- Formato Excel optimizado
+
+## 🔐 Seguridad
+
+- Autenticación JWT
+- Roles de usuario (admin/church)
+- Validación de datos
+- Conexión SSL a base de datos
+- Variables de entorno seguras
+
+## 📊 Base de datos
+
+### Tablas principales:
+- `churches`: Información de iglesias
+- `reports`: Informes mensuales
+- `users`: Sistema de usuarios
+
+### Datos pre-cargados:
+- 22 iglesias de IPU Paraguay
+- Información completa de pastores
+- Estructura de informes financieros
+
+## 🛠️ Desarrollo local
 
 ```bash
-# En la terminal:
-cd ipupy_treasurer
-python3 server.py
+# Instalar dependencias
+npm install
 
-# Se abre automáticamente en http://localhost:8000
+# Configurar variables de entorno
+cp .env.example .env.local
+# Editar .env.local con tus datos
+
+# Ejecutar en desarrollo
+npm run dev
 ```
 
-## 📱 Para las Iglesias
+## 📞 Soporte
 
-Comparte el link `http://tuservidor:8000/mobile.html` con cada iglesia.
-Ellos pueden:
-1. Abrir en el celular
-2. Llenar los montos (con botones rápidos)
-3. Tomar foto del comprobante
-4. Enviar
+Para reportar problemas o solicitar funcionalidades:
+1. Crear issue en GitHub
+2. Contactar al administrador del sistema
+3. Documentar pasos para reproducir errores
 
-## 💡 Ventajas de Esta Versión
+## 🎯 Próximas mejoras
 
-- **Sin dependencias**: No necesita Node.js, npm, ni nada
-- **Un solo archivo**: Todo el sistema en `index.html`
-- **Funciona offline**: Los datos se guardan localmente
-- **Exporta a Excel**: Compatible con Google Sheets
-- **Mobile-first**: La versión móvil es perfecta para celulares
-- **Gratis para siempre**: Sin costos de hosting ni mantenimiento
-
-## 🔧 Personalización Fácil
-
-Todo está en HTML puro. Para cambiar algo:
-1. Abre `index.html` en cualquier editor de texto
-2. Busca la sección que quieres cambiar
-3. Modifica y guarda
-4. Recarga la página
-
-## 📊 Flujo de Trabajo Simplificado
-
-```
-Mes nuevo → Iglesias reportan → Tesorero verifica → Exporta a Excel → Listo
-```
-
-Sin complicaciones. Sin bugs. Sin mantenimiento.
-
-## 🎯 Datos que Trackea
-
-- **Iglesias**: Nombre, Ciudad, Pastor, Teléfono
-- **Informes Mensuales**:
-  - Total Diezmos
-  - Total Ofrendas
-  - 10% Fondo Nacional (calculado automático)
-  - Número de comprobante bancario
-  - Fecha de depósito
-
-## 🚨 Backup de Datos
-
-Los datos se guardan en el navegador. Para hacer backup:
-1. Click en "Exportar a Excel" cada mes
-2. Guarda el archivo en Google Drive
-3. Listo, tienes respaldo
+- [ ] App móvil para iglesias
+- [ ] Notificaciones automáticas
+- [ ] Reportes gráficos avanzados
+- [ ] Integración con sistemas bancarios
+- [ ] Backup automático
 
 ---
 
-**Creado con ❤️ para simplificar la vida del tesorero IPU PY**
+**Desarrollado para la Iglesia Pentecostal Unida del Paraguay**
+Sistema de Tesorería Nacional - Versión Vercel 2024

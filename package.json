@@ -1,0 +1,43 @@
+{
+  "name": "ipupy-tesoreria",
+  "version": "1.0.0",
+  "description": "Sistema de Tesorería IPU PY - Simplificado para Vercel",
+  "scripts": {
+    "dev": "node src/server.js",
+    "build": "echo 'No build needed'",
+    "start": "node src/server.js",
+    "lint": "eslint . --ext .js --config config/eslint.config.js",
+    "lint:fix": "eslint . --ext .js --fix --config config/eslint.config.js",
+    "check": "node --check src/server.js",
+    "check:all": "find . -name '*.js' -not -path './node_modules/*' -exec node --check {} \\;",
+    "migrate": "node scripts/migrate.js",
+    "setup:admin": "node scripts/setup-admin.js",
+    "setup:admin:quick": "node scripts/setup-admin.js --quick",
+    "validate": "node scripts/utilities/validate.js",
+    "health": "node scripts/health-check.js",
+    "health:json": "JSON_OUTPUT=true node scripts/health-check.js",
+    "deploy:check": "npm run validate && npm run health",
+    "prebuild": "npm run validate",
+    "test:connection": "node tests/integration/test-connection.js",
+    "test:db": "node tests/integration/test-db.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.48.0",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^5.1.0",
+    "google-auth-library": "^10.3.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "pg": "^8.12.0",
+    "xlsx": "^0.18.5"
+  },
+  "engines": {
+    "node": "20.x"
+  },
+  "devDependencies": {
+    "eslint": "^9.35.0",
+    "globals": "^15.12.0"
+  }
+}

@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 IPU PY Tesorería is a treasury management system for the Iglesia Pentecostal Unida del Paraguay (United Pentecostal Church of Paraguay). The project exists in **two distinct versions**:
 
 1. **Simplified HTML Version** (Root directory): Ultra-simple, single-page HTML application
-2. **Modern Vercel Version** (`vercel-app/`): Full-featured Node.js application with PostgreSQL
+2. **Modern Vercel Version** (`cloud-gateway/`): Full-featured Node.js application with PostgreSQL
 
 ## Development Commands
 
@@ -24,9 +24,9 @@ python3 server.py  # Starts server on port 8000
 ./start.sh
 ```
 
-### Vercel App Directory
+### Cloud Gateway Directory
 ```bash
-cd vercel-app
+cd cloud-gateway
 
 # Development server
 npm run dev
@@ -49,7 +49,7 @@ npm run build  # Just echoes "No build needed"
 └── ipupy_treasurer.db  # SQLite database (created when needed)
 ```
 
-### Vercel App Structure (`vercel-app/`)
+### Cloud Gateway Structure (`cloud-gateway/`)
 ```
 ├── api/                # Serverless API functions
 │   ├── auth.js         # JWT authentication
@@ -155,7 +155,7 @@ npm run build  # Just echoes "No build needed"
 ## File Upload Handling
 
 - **Simplified**: Python server saves to `uploads/` directory
-- **Vercel**: Uses `multer` middleware, 10MB limit
+- **Vercel**: Uses `multer` middleware, 4MB limit (compatible with Vercel's 4.5MB body limit)
 - Supports receipt photos and financial documentation
 
 ## Development Notes

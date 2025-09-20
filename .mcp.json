@@ -1,12 +1,15 @@
 {
   "mcpServers": {
-    "filesystem": {
-      "command": "/Users/anthonybir/Desktop/IPUPY_Tesoreria/filesystem-mcp.sh",
-      "args": []
-    },
-    "sqlite": {
-      "command": "/Users/anthonybir/Desktop/IPUPY_Tesoreria/sqlite-mcp.sh",
-      "args": []
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--project-ref=vnxghlfrmmzvlhzhontk"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "sbp_9e93d5fbcb195f4f92e1140f748de2727c2d2196"
+      }
     }
   }
 }

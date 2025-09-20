@@ -3,12 +3,12 @@
 ## Project Structure & Module Organization
 - Root offline build: `index.html` hosts the tesorero dashboard, `mobile.html` handles congregational input, and optional `server.py` + `ipupy_treasurer.db` persist shared data while timestamped uploads land in `uploads/`.
 - Helper scripts: `start.sh` (workflow menu) and `test_codex.sh` (environment check) live at the top level for quick onboarding.
-- Cloud deployment lives in `vercel-app/`: `api/` for serverless endpoints, `server.js` for the Node 18 Express gateway, `lib/db.js` for Postgres wiring, and `public/` for static assets including the legacy HTML.
+- Cloud deployment lives in `cloud-gateway/`: `api/` for serverless endpoints, `server.js` for the Node 18 Express gateway, `lib/db.js` for Postgres wiring, and `public/` for static assets including the legacy HTML.
 
 ## Build, Test, and Development Commands
 - `bash start.sh`: guided launcher; option 1 opens the offline HTML in the default browser, option 2 boots the Python server.
 - `python3 server.py`: initialize SQLite schema and serve `index.html` at `http://localhost:8000`.
-- `npm install && npm run dev` (inside `vercel-app/`): install dependencies and run the Express gateway for API iteration.
+- `npm install && npm run dev` (inside `cloud-gateway/`): install dependencies and run the Express gateway for API iteration.
 - `npm start`: mimic production entry on Vercel using the same `server.js`.
 - `bash test_codex.sh`: sanity-check Codex config, local SQLite artefacts, and the `mcp-sqlite` CLI.
 

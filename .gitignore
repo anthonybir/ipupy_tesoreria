@@ -13,7 +13,7 @@
 # Databases & local data
 *.db
 *.sqlite
-ipupy_treasurer.db
+data/databases/*.db
 mydatabase.db
 uploads/
 
@@ -28,9 +28,13 @@ pytest_cache/
 
 # Node / JavaScript
 node_modules/
-vercel-app/node_modules/
-vercel-app/.env
-vercel-app/.env.*
+cloud-gateway/node_modules/
+cloud-gateway/.env
+cloud-gateway/.env.*
+
+# Development artifacts
+tests/fixtures/
+tests/tmp/
 
 # Build/Cache (if any)
 .vscode/

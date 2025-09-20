@@ -1,0 +1,1111 @@
+/**
+ * ABSD Design Tokens - IPU PY Treasury System
+ * Anthony Bir System Designs (ABSD) Studio
+ * "Build like you're serving 10,000, design like you're serving family."
+ */
+
+:root {
+  /* ============================================
+     ULTRA-REFINED FIVE-COLOR SYSTEM ($100K Quality)
+     ============================================ */
+  --ultra-black: #0A0A0A;         /* Softer than pure black - Text, primary actions */
+  --ultra-gray: #6B7280;          /* Warmer gray - Secondary information */
+  --ultra-white: #FAFAFA;         /* Softer than pure white - Backgrounds, space */
+  --ultra-blue: #0066CC;          /* Vibrant focus - Active states, links */
+  --ultra-green: #00AA00;         /* Success green - Positive values, confirmations */
+
+  /* Micro-Gradients for Visual Depth */
+  --micro-gradient: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(0,0,0,0.02) 100%);
+  --micro-surface: linear-gradient(180deg, rgba(250,250,250,1) 0%, rgba(245,245,245,1) 100%);
+  --micro-focus: radial-gradient(circle, rgba(0,102,204,0.08) 0%, rgba(0,102,204,0.02) 50%, transparent 100%);
+  --micro-success: radial-gradient(circle, rgba(0,170,0,0.08) 0%, rgba(0,170,0,0.02) 50%, transparent 100%);
+
+  /* Golden Ratio Typography Scale */
+  --type-micro: 0.618rem;          /* 9.888px - Metadata, timestamps */
+  --type-small: 0.75rem;           /* 12px - Captions, labels */
+  --type-base: 1rem;               /* 16px - Body text */
+  --type-scale: 1.618rem;          /* 25.888px - Subheadings */
+  --type-large: 2.618rem;          /* 41.888px - Major headings */
+  --type-display: 4.236rem;        /* 67.776px - Display text */
+
+  /* Variable Font Weights for Emotional Impact */
+  --weight-light: 300;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  /* Ultra-Refined Letter Spacing */
+  --tracking-tight: -0.02em;       /* Headers */
+  --tracking-normal: 0em;          /* Body text */
+  --tracking-wide: 0.02em;         /* Captions */
+
+  /* Animation Timing Functions for Natural Motion */
+  --ease-gentle: cubic-bezier(0.25, 0.8, 0.25, 1);      /* Gentle ease */
+  --ease-spring: cubic-bezier(0.68, -0.55, 0.265, 1.55); /* Spring bounce */
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);          /* Material design */
+  --ease-swift: cubic-bezier(0.4, 0, 1, 1);             /* Swift out */
+
+  /* Micro-Interaction Durations */
+  --duration-instant: 50ms;        /* Immediate feedback */
+  --duration-quick: 100ms;         /* Hover states */
+  --duration-normal: 200ms;        /* Standard transitions */
+  --duration-slow: 300ms;          /* Complex animations */
+
+  /* Legacy Five-Color System (For Backward Compatibility) */
+  --minimalist-black: var(--ultra-black);
+  --minimalist-gray: var(--ultra-gray);
+  --minimalist-white: var(--ultra-white);
+  --minimalist-blue: var(--ultra-blue);
+  --minimalist-green: var(--ultra-green);
+
+  /* ============================================
+     CORE BRAND COLORS - Authority & Prosperity (Legacy)
+     ============================================ */
+  --absd-authority: #002556;      /* Deep navy - institutional trust */
+  --absd-prosperity: #FFC93B;     /* Golden yellow - financial success */
+  --absd-wisdom: #6E6A7A;         /* Sage gray - experience */
+
+  /* Enhanced Gradients for Modern Beauty */
+  --absd-authority-gradient: linear-gradient(135deg, #002556 0%, #003875 100%);
+  --absd-prosperity-gradient: linear-gradient(135deg, #FFC93B 0%, #FFD700 100%);
+  --absd-wisdom-gradient: linear-gradient(135deg, #6E6A7A 0%, #8B7D9B 100%);
+
+  /* Glass Morphism Effects */
+  --absd-glass-light: rgba(255, 255, 255, 0.8);
+  --absd-glass-medium: rgba(255, 255, 255, 0.6);
+  --absd-glass-subtle: rgba(255, 255, 255, 0.3);
+
+  /* ============================================
+     SEMANTIC COLORS - User Experience
+     ============================================ */
+  --absd-success: #059669;        /* Forest green - positive actions */
+  --absd-warning: #F59E0B;        /* Amber - attention needed */
+  --absd-error: #EF4444;          /* Coral red - critical issues */
+  --absd-info: #0EA5E9;           /* Sky blue - informational */
+
+  /* ============================================
+     SURFACE & BACKGROUND COLORS
+     ============================================ */
+  --absd-surface: #FFFFFF;        /* Primary surface */
+  --absd-muted: #F9FAFB;          /* Subtle background */
+  --absd-subtle: #F3F4F6;         /* Input backgrounds */
+  --absd-border: #E5E7EB;         /* Border default */
+  --absd-border-focus: #CBD5E0;   /* Border on focus */
+
+  /* Enhanced Surface Colors for Professional Depth */
+  --absd-surface-elevated: #FAFBFC;      /* Elevated cards */
+  --absd-surface-overlay: rgba(255, 255, 255, 0.95);  /* Modal overlays */
+  --absd-surface-glass: rgba(255, 255, 255, 0.8);     /* Glass cards */
+  --absd-surface-highlight: rgba(0, 37, 86, 0.02);    /* Subtle highlights */
+
+  /* Soft Semantic Variations */
+  --absd-success-soft: #D1FAE5;    /* Success background */
+  --absd-warning-soft: #FEF3C7;    /* Warning background */
+  --absd-error-soft: #FEE2E2;      /* Error background */
+  --absd-info-soft: #DBEAFE;       /* Info background */
+
+  /* ============================================
+     TEXT HIERARCHY
+     ============================================ */
+  --absd-text: #1F2933;           /* Body text */
+  --absd-text-muted: #616E7C;     /* Secondary text */
+  --absd-heading: #0F172A;        /* Headlines */
+  --absd-heading-secondary: #334155; /* Subheadings */
+
+  /* ============================================
+     FUND CATEGORY COLORS (9 Official Funds)
+     ============================================ */
+  --fund-general: var(--absd-authority);     /* General - Navy */
+  --fund-caballeros: #1E40AF;                /* Caballeros - Royal Blue */
+  --fund-misiones: #059669;                  /* Misiones - Forest Green */
+  --fund-apy: #8B5CF6;                       /* APY - Purple */
+  --fund-lazos: #EC4899;                     /* Lazos de Amor - Pink */
+  --fund-mision-posible: #F59E0B;            /* Misión Posible - Orange */
+  --fund-ninos: #10B981;                     /* Niños - Emerald */
+  --fund-iba: #6366F1;                       /* IBA - Indigo */
+  --fund-damas: #F43F5E;                     /* Damas - Rose */
+
+  /* Fund color variants for UI states */
+  --fund-general-light: rgba(0, 37, 86, 0.1);
+  --fund-caballeros-light: rgba(30, 64, 175, 0.1);
+  --fund-misiones-light: rgba(5, 150, 105, 0.1);
+  --fund-apy-light: rgba(139, 92, 246, 0.1);
+  --fund-lazos-light: rgba(236, 72, 153, 0.1);
+  --fund-mision-posible-light: rgba(245, 158, 11, 0.1);
+  --fund-ninos-light: rgba(16, 185, 129, 0.1);
+  --fund-iba-light: rgba(99, 102, 241, 0.1);
+  --fund-damas-light: rgba(244, 63, 94, 0.1);
+
+  /* ============================================
+     ELEVATION SYSTEM (Box Shadows)
+     ============================================ */
+  --elevation-0: none;                                   /* Flat */
+  --elevation-1: 0 1px 2px rgba(0, 37, 86, 0.05);      /* Subtle lift */
+  --elevation-2: 0 4px 8px rgba(0, 37, 86, 0.08);      /* Card hover */
+  --elevation-3: 0 8px 16px rgba(0, 37, 86, 0.12);     /* Modal/dropdown */
+  --elevation-4: 0 16px 32px rgba(0, 37, 86, 0.16);    /* Floating action */
+  --elevation-5: 0 24px 48px rgba(0, 37, 86, 0.20);    /* Maximum depth */
+
+  /* Soft shadows for financial data cards */
+  --shadow-soft: 0 10px 30px rgba(0, 37, 86, 0.08);
+  --shadow-card: 0 15px 35px rgba(0, 37, 86, 0.12);
+  --shadow-modal: 0 25px 50px rgba(0, 37, 86, 0.25);
+
+  /* ============================================
+     SPACING SCALE (Consistent Rhythm)
+     ============================================ */
+  --space-0: 0px;          /* None */
+  --space-1: 2px;          /* Micro */
+  --space-2: 4px;          /* Tiny */
+  --space-3: 8px;          /* Small */
+  --space-4: 12px;         /* Default */
+  --space-5: 16px;         /* Medium */
+  --space-6: 20px;         /* Large */
+  --space-7: 24px;         /* XL */
+  --space-8: 32px;         /* 2XL */
+  --space-9: 40px;         /* 3XL */
+  --space-10: 48px;        /* 4XL */
+  --space-12: 64px;        /* 5XL */
+  --space-16: 80px;        /* 6XL */
+  --space-20: 96px;        /* 7XL */
+
+  /* Semantic spacing */
+  --space-xs: var(--space-2);    /* 4px */
+  --space-sm: var(--space-3);    /* 8px */
+  --space-md: var(--space-5);    /* 16px */
+  --space-lg: var(--space-7);    /* 24px */
+  --space-xl: var(--space-8);    /* 32px */
+  --space-2xl: var(--space-10);  /* 48px */
+  --space-3xl: var(--space-12);  /* 64px */
+
+  /* ============================================
+     BORDER RADIUS SCALE
+     ============================================ */
+  --radius-none: 0px;      /* Sharp corners */
+  --radius-xs: 2px;        /* Micro radius */
+  --radius-sm: 4px;        /* Small radius */
+  --radius-md: 8px;        /* Default radius */
+  --radius-lg: 12px;       /* Large radius */
+  --radius-xl: 16px;       /* XL radius */
+  --radius-2xl: 20px;      /* 2XL radius */
+  --radius-3xl: 24px;      /* 3XL radius */
+  --radius-full: 9999px;   /* Pill shape */
+
+  /* ABSD semantic radius */
+  --absd-radius-sm: var(--radius-md);   /* 8px - Standard ABSD */
+  --absd-radius-md: var(--radius-lg);   /* 12px - Cards */
+  --absd-radius-lg: var(--radius-2xl);  /* 20px - Major elements */
+
+  /* ============================================
+     TYPOGRAPHY SCALE
+     ============================================ */
+  --font-body: 'Inter', 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-heading: 'Plus Jakarta Sans', 'Inter', 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
+
+  /* Font sizes */
+  --text-xs: 12px;         /* Small labels */
+  --text-sm: 14px;         /* Default body */
+  --text-base: 16px;       /* Base size */
+  --text-lg: 18px;         /* Large body */
+  --text-xl: 20px;         /* Small headings */
+  --text-2xl: 24px;        /* Medium headings */
+  --text-3xl: 30px;        /* Large headings */
+  --text-4xl: 36px;        /* Extra large */
+  --text-5xl: 48px;        /* Display */
+
+  /* Enhanced Typography Scale for Financial Data */
+  --text-display: 56px;    /* Hero numbers/amounts */
+  --text-title: 32px;      /* Section titles */
+  --text-subtitle: 20px;   /* Card titles */
+  --text-caption: 12px;    /* Fine print, legal text */
+  --text-micro: 10px;      /* Very small annotations */
+
+  /* Font weights */
+  --font-light: 300;
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+  --font-extrabold: 800;
+
+  /* Line heights */
+  --leading-tight: 1.25;
+  --leading-snug: 1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+  --leading-loose: 2;
+
+  /* ============================================
+     OPACITY SCALE
+     ============================================ */
+  --opacity-0: 0;
+  --opacity-5: 0.05;
+  --opacity-10: 0.1;
+  --opacity-20: 0.2;
+  --opacity-25: 0.25;
+  --opacity-30: 0.3;
+  --opacity-40: 0.4;
+  --opacity-50: 0.5;
+  --opacity-60: 0.6;
+  --opacity-70: 0.7;
+  --opacity-75: 0.75;
+  --opacity-80: 0.8;
+  --opacity-90: 0.9;
+  --opacity-95: 0.95;
+  --opacity-100: 1;
+
+  /* ============================================
+     TRANSITION & ANIMATION
+     ============================================ */
+  --transition-fast: 150ms ease;
+  --transition-normal: 200ms ease;
+  --transition-slow: 300ms ease;
+  --transition-slower: 500ms ease;
+
+  /* Easing curves */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+  /* ============================================
+     Z-INDEX SCALE
+     ============================================ */
+  --z-0: 0;
+  --z-10: 10;
+  --z-20: 20;
+  --z-30: 30;
+  --z-40: 40;
+  --z-50: 50;       /* Dropdowns */
+  --z-modal: 1000;  /* Modals */
+  --z-toast: 1100;  /* Notifications */
+  --z-tooltip: 1200; /* Tooltips */
+  --z-overlay: 1300; /* Overlays */
+  --z-max: 9999;    /* Always on top */
+
+  /* ============================================
+     PARAGUAY-SPECIFIC TOKENS
+     ============================================ */
+  --currency-symbol: '₲';
+  --decimal-separator: ',';
+  --thousands-separator: '.';
+
+  /* ============================================
+     IVA (TAX) CALCULATION COLORS
+     ============================================ */
+  --tax-iva-10: #F59E0B;     /* 10% IVA - Amber */
+  --tax-iva-5: #84CC16;      /* 5% IVA - Lime */
+  --tax-exenta: #6B7280;     /* Exempt - Gray */
+
+  /* ============================================
+     FUND CATEGORY MAPPING
+     (For JavaScript access)
+     ============================================ */
+  --fund-count: 9;
+}
+
+/* ============================================
+   ABSD UTILITIES - Common Patterns
+   ============================================ */
+
+/* Paraguayan Pragmatism - Handle low-bandwidth gracefully */
+.absd-reduced-motion {
+  --transition-fast: 0ms;
+  --transition-normal: 0ms;
+  --transition-slow: 0ms;
+  --transition-slower: 0ms;
+}
+
+/* Visible Complexity - Progressive disclosure states */
+.absd-disclosure-basic {
+  --visible-funds: 1; /* Show only General */
+}
+
+.absd-disclosure-intermediate {
+  --visible-funds: 5; /* Show 5 main funds */
+}
+
+.absd-disclosure-advanced {
+  --visible-funds: 9; /* Show all funds */
+}
+
+/* Data Dignity - Financial data emphasis */
+.absd-financial-emphasis {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-semibold);
+  color: var(--absd-authority);
+}
+
+/* Cultural Code-Switching - Bilingual support */
+.absd-lang-es {
+  font-family: var(--font-body);
+}
+
+.absd-lang-gn {
+  font-family: var(--font-body);
+  letter-spacing: 0.01em; /* Slightly more spacing for Guaraní */
+}
+
+/* Defensive Optimism - Error states */
+.absd-error-state {
+  border-color: var(--absd-error);
+  background-color: rgba(239, 68, 68, 0.05);
+}
+
+.absd-success-state {
+  border-color: var(--absd-success);
+  background-color: rgba(5, 150, 105, 0.05);
+}
+
+/* Typography as Hierarchy - Consistent spacing */
+.absd-text-hierarchy h1 {
+  margin-bottom: var(--space-lg);
+  font-family: var(--font-heading);
+  font-weight: var(--font-bold);
+  color: var(--absd-heading);
+}
+
+.absd-text-hierarchy h2 {
+  margin-bottom: var(--space-md);
+  font-family: var(--font-heading);
+  font-weight: var(--font-semibold);
+  color: var(--absd-heading-secondary);
+}
+
+.absd-text-hierarchy h3 {
+  margin-bottom: var(--space-sm);
+  font-family: var(--font-heading);
+  font-weight: var(--font-medium);
+  color: var(--absd-heading-secondary);
+}
+
+/* Respectful Rebellion - No unnecessary abstractions */
+.absd-simple-button {
+  padding: var(--space-4) var(--space-6);
+  background: var(--absd-authority);
+  color: var(--absd-surface);
+  border: none;
+  border-radius: var(--absd-radius-sm);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+}
+
+.absd-simple-button:hover {
+  background: rgba(0, 37, 86, 0.9);
+  transform: translateY(-1px);
+  box-shadow: var(--elevation-2);
+}
+
+/* Dark mode support (for future implementation) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --absd-surface: #1A1A1A;
+    --absd-text: #E5E5E5;
+    --absd-heading: #FFFFFF;
+    --absd-muted: #2D2D2D;
+    --absd-subtle: #404040;
+    --absd-border: #525252;
+  }
+}
+
+/* Reduce motion for accessibility */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --transition-fast: 0ms;
+    --transition-normal: 0ms;
+    --transition-slow: 0ms;
+    --transition-slower: 0ms;
+  }
+
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Print styles - Typography as Hierarchy principle */
+@media print {
+  :root {
+    --absd-surface: white;
+    --absd-text: black;
+    --absd-heading: black;
+    --elevation-1: none;
+    --elevation-2: none;
+    --elevation-3: none;
+    --shadow-soft: none;
+    --shadow-card: none;
+  }
+
+  .absd-no-print {
+    display: none !important;
+  }
+}
+
+/* ============================================
+   ENHANCED COMPONENT STYLES - Beautiful Frontend
+   ============================================ */
+
+/* Financial Amount Display - Monospace for Perfect Alignment */
+.absd-financial-amount {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-semibold);
+  letter-spacing: -0.01em;
+  color: var(--absd-authority);
+}
+
+/* Enhanced Card Components */
+.absd-card-enhanced {
+  background: var(--absd-surface-elevated);
+  border-radius: var(--absd-radius-lg);
+  box-shadow: var(--elevation-1);
+  padding: var(--space-lg);
+  border: 1px solid var(--absd-border);
+  transition: all var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+}
+
+.absd-card-enhanced::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--absd-authority-gradient);
+  transform: scaleX(0);
+  transition: transform var(--transition-normal);
+}
+
+.absd-card-enhanced:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card);
+}
+
+.absd-card-enhanced:hover::before {
+  transform: scaleX(1);
+}
+
+/* Glass Morphism Cards */
+.absd-card-glass {
+  background: var(--absd-surface-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--absd-radius-lg);
+  box-shadow: 0 8px 32px rgba(0, 37, 86, 0.1);
+}
+
+/* Loading States and Skeleton Screens */
+.absd-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--absd-subtle) 25%,
+    var(--absd-muted) 50%,
+    var(--absd-subtle) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--absd-radius-sm);
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.absd-loading-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Enhanced Button System */
+.absd-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--absd-radius-sm);
+  font-family: var(--font-body);
+  font-weight: var(--font-medium);
+  font-size: var(--text-sm);
+  line-height: 1;
+  transition: all var(--transition-normal);
+  cursor: pointer;
+  border: none;
+  text-decoration: none;
+  gap: var(--space-2);
+  position: relative;
+  overflow: hidden;
+}
+
+.absd-btn-primary {
+  background: var(--absd-authority-gradient);
+  color: var(--absd-surface);
+}
+
+.absd-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--elevation-3);
+}
+
+.absd-btn-ghost {
+  background: transparent;
+  color: var(--absd-authority);
+  border: 1px solid var(--absd-border);
+}
+
+.absd-btn-ghost:hover {
+  background: var(--absd-surface-highlight);
+  border-color: var(--absd-authority);
+}
+
+/* Focus States for Accessibility */
+.absd-focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 37, 86, 0.3);
+  border-radius: var(--absd-radius-sm);
+}
+
+/* Chart Container Enhancements */
+.absd-chart-container {
+  background: var(--absd-surface-elevated);
+  border-radius: var(--absd-radius-lg);
+  box-shadow: var(--elevation-1);
+  padding: var(--space-lg);
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-normal);
+}
+
+.absd-chart-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--absd-authority-gradient);
+}
+
+.absd-chart-container:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Floating Label Input Pattern */
+.absd-floating-input {
+  position: relative;
+  margin-bottom: var(--space-lg);
+}
+
+.absd-floating-input input {
+  width: 100%;
+  padding: var(--space-md) var(--space-sm) var(--space-sm);
+  border: 2px solid var(--absd-border);
+  border-radius: var(--absd-radius-sm);
+  font-size: var(--text-base);
+  font-family: var(--font-body);
+  transition: all var(--transition-normal);
+  background: var(--absd-surface);
+}
+
+.absd-floating-input input:focus {
+  border-color: var(--absd-authority);
+  box-shadow: 0 0 0 3px rgba(0, 37, 86, 0.1);
+  outline: none;
+}
+
+.absd-floating-input label {
+  position: absolute;
+  left: var(--space-sm);
+  top: var(--space-md);
+  color: var(--absd-text-muted);
+  transition: all var(--transition-normal);
+  pointer-events: none;
+  background: var(--absd-surface);
+  padding: 0 var(--space-2);
+}
+
+.absd-floating-input input:focus + label,
+.absd-floating-input input:not(:placeholder-shown) + label {
+  top: -8px;
+  left: var(--space-sm);
+  font-size: var(--text-xs);
+  color: var(--absd-authority);
+  font-weight: var(--font-medium);
+}
+
+/* Financial Data Emphasis */
+.absd-amount-large {
+  font-size: var(--text-display);
+  font-family: var(--font-mono);
+  font-weight: var(--font-bold);
+  color: var(--absd-authority);
+  line-height: var(--leading-tight);
+}
+
+.absd-amount-medium {
+  font-size: var(--text-title);
+  font-family: var(--font-mono);
+  font-weight: var(--font-semibold);
+  color: var(--absd-authority);
+}
+
+/* Gradient Backgrounds for Chart Areas */
+.absd-chart-gradient-success {
+  background: linear-gradient(135deg,
+    rgba(5, 150, 105, 0.1) 0%,
+    rgba(5, 150, 105, 0.05) 100%);
+}
+
+.absd-chart-gradient-authority {
+  background: linear-gradient(135deg,
+    rgba(0, 37, 86, 0.1) 0%,
+    rgba(0, 37, 86, 0.05) 100%);
+}
+
+.absd-chart-gradient-prosperity {
+  background: linear-gradient(135deg,
+    rgba(255, 201, 59, 0.1) 0%,
+    rgba(255, 215, 0, 0.05) 100%);
+}
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+  .absd-touch-target {
+    min-height: 44px;
+    min-width: 44px;
+    padding: var(--space-sm);
+  }
+
+  .absd-mobile-spacing {
+    padding: var(--space-md);
+  }
+
+  .absd-amount-large {
+    font-size: var(--text-3xl);
+  }
+
+  .absd-amount-medium {
+    font-size: var(--text-xl);
+  }
+}
+
+/* ============================================
+   ULTRA-REFINED TYPOGRAPHY SYSTEM ($100K Quality)
+   ============================================ */
+
+/* Golden Ratio Typography Classes */
+.type-display {
+  font-size: var(--type-display);
+  font-weight: var(--weight-light);
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.1;
+  color: var(--ultra-black);
+}
+
+.type-large {
+  font-size: var(--type-large);
+  font-weight: var(--weight-regular);
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.2;
+  color: var(--ultra-black);
+}
+
+.type-scale {
+  font-size: var(--type-scale);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-normal);
+  line-height: 1.3;
+  color: var(--ultra-black);
+}
+
+.type-base {
+  font-size: var(--type-base);
+  font-weight: var(--weight-regular);
+  letter-spacing: var(--tracking-normal);
+  line-height: 1.5;
+  color: var(--ultra-black);
+}
+
+.type-small {
+  font-size: var(--type-small);
+  font-weight: var(--weight-regular);
+  letter-spacing: var(--tracking-wide);
+  line-height: 1.4;
+  color: var(--ultra-gray);
+}
+
+.type-micro {
+  font-size: var(--type-micro);
+  font-weight: var(--weight-medium);
+  letter-spacing: var(--tracking-wide);
+  line-height: 1.3;
+  text-transform: uppercase;
+  color: var(--ultra-gray);
+}
+
+/* ============================================
+   ULTRA-REFINED MICRO-INTERACTIONS
+   ============================================ */
+
+/* Ultra-refined button states */
+.ultra-button {
+  background: var(--micro-surface);
+  border: 1px solid rgba(107, 114, 128, 0.2);
+  color: var(--ultra-black);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-weight: var(--weight-medium);
+  transition: all var(--duration-normal) var(--ease-gentle);
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.ultra-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: var(--micro-focus);
+  transition: left var(--duration-normal) var(--ease-gentle);
+}
+
+.ultra-button:hover {
+  box-shadow: 0 4px 8px rgba(10, 10, 10, 0.08);
+  transform: translateY(-1px);
+  border-color: var(--ultra-blue);
+}
+
+.ultra-button:hover::before {
+  left: 0;
+}
+
+.ultra-button:active {
+  transform: translateY(0);
+  transition: all var(--duration-instant) var(--ease-swift);
+}
+
+/* Breathing card effects */
+.ultra-card {
+  background: var(--ultra-white);
+  border: 1px solid rgba(107, 114, 128, 0.1);
+  border-radius: 12px;
+  padding: 24px;
+  transition: all var(--duration-normal) var(--ease-gentle);
+  position: relative;
+}
+
+.ultra-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--micro-gradient);
+  border-radius: 12px;
+  opacity: 0;
+  transition: opacity var(--duration-normal) var(--ease-gentle);
+  pointer-events: none;
+}
+
+.ultra-card:hover {
+  box-shadow: 0 8px 16px rgba(10, 10, 10, 0.08);
+  transform: translateY(-2px);
+}
+
+.ultra-card:hover::before {
+  opacity: 1;
+}
+
+/* Command palette magic */
+.ultra-command-palette {
+  background: var(--ultra-white);
+  border: 1px solid rgba(107, 114, 128, 0.2);
+  border-radius: 16px;
+  box-shadow: 0 25px 50px rgba(10, 10, 10, 0.15);
+  backdrop-filter: blur(20px);
+  position: relative;
+  overflow: hidden;
+}
+
+.ultra-command-palette::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--micro-focus);
+  transform: scaleX(0);
+  transition: transform var(--duration-slow) var(--ease-gentle);
+}
+
+.ultra-command-palette.active::before {
+  transform: scaleX(1);
+}
+
+/* Input magic with number formatting */
+.ultra-input {
+  background: var(--ultra-white);
+  border: 1px solid rgba(107, 114, 128, 0.2);
+  color: var(--ultra-black);
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: var(--weight-medium);
+  transition: all var(--duration-normal) var(--ease-gentle);
+  position: relative;
+}
+
+.ultra-input:focus {
+  outline: none;
+  border-color: var(--ultra-blue);
+  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.2);
+  background: var(--micro-focus);
+}
+
+.ultra-input.success {
+  border-color: var(--ultra-green);
+  box-shadow: 0 0 0 2px rgba(0, 170, 0, 0.2);
+  background: var(--micro-success);
+}
+
+/* Success celebration animation */
+@keyframes success-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.success-celebration {
+  animation: success-pulse var(--duration-normal) var(--ease-spring);
+}
+
+/* Typing rhythm animation */
+@keyframes typing-ripple {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 102, 204, 0.4);
+    opacity: 1;
+  }
+  100% {
+    box-shadow: 0 0 0 6px rgba(0, 102, 204, 0);
+    opacity: 0;
+  }
+}
+
+.typing-feedback {
+  animation: typing-ripple var(--duration-quick) var(--ease-gentle);
+}
+
+/* Number morphing animation */
+.number-morph {
+  transition: all var(--duration-normal) var(--ease-gentle);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Loading dots animation */
+@keyframes loading-dots {
+  0%, 80%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.loading-dots span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ultra-gray);
+  margin: 0 2px;
+  animation: loading-dots 1.4s infinite both;
+}
+
+.loading-dots span:nth-child(1) { animation-delay: -0.32s; }
+.loading-dots span:nth-child(2) { animation-delay: -0.16s; }
+.loading-dots span:nth-child(3) { animation-delay: 0s; }
+
+/* Contextual fade animation */
+.contextual-fade-in {
+  animation: fadeIn var(--duration-normal) var(--ease-gentle);
+}
+
+.contextual-fade-out {
+  animation: fadeOut var(--duration-normal) var(--ease-gentle);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-10px); }
+}
+
+/* Ultra-refined focus states */
+.ultra-focus:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.2);
+  border-radius: 4px;
+}
+
+/* Financial value emphasis */
+.financial-value {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-normal);
+}
+
+/* Micro-interaction for smart suggestions */
+.smart-suggestion {
+  transition: all var(--duration-quick) var(--ease-gentle);
+  cursor: pointer;
+}
+
+.smart-suggestion:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(10, 10, 10, 0.1);
+}
+
+/* ============================================
+   BREATHING INTERFACE ANIMATIONS
+   ============================================ */
+
+/* Subtle breathing keyframes */
+@keyframes breathe {
+  0%, 100% {
+    transform: scale(1) translateY(0px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+  }
+  50% {
+    transform: scale(1.005) translateY(-1px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+  }
+}
+
+@keyframes breathePulse {
+  0%, 100% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes gentleFloat {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes subtleGlow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(0, 102, 204, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.1);
+  }
+}
+
+/* Breathing card classes */
+.breathing-card {
+  animation: breathe 4s ease-in-out infinite;
+  transition: all 0.4s var(--ease-gentle);
+}
+
+.breathing-card:hover {
+  animation: breathe 2s ease-in-out infinite;
+  transform: scale(1.02) translateY(-4px) !important;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15) !important;
+}
+
+.breathing-pulse {
+  animation: breathePulse 3s ease-in-out infinite;
+}
+
+.floating-element {
+  animation: gentleFloat 6s ease-in-out infinite;
+}
+
+.subtle-glow {
+  animation: subtleGlow 4s ease-in-out infinite;
+}
+
+/* Dashboard breathing */
+.dashboard-alive .metric-card {
+  animation: breathe 5s ease-in-out infinite;
+  animation-delay: calc(var(--card-index, 0) * 0.3s);
+}
+
+.dashboard-alive .balance-indicator {
+  animation: breathePulse 4s ease-in-out infinite;
+}
+
+.dashboard-alive .smart-button {
+  animation: gentleFloat 6s ease-in-out infinite;
+  animation-delay: calc(var(--button-index, 0) * 0.2s);
+}
+
+/* Interactive breathing states */
+.breathing-focus {
+  animation: breathe 1.5s ease-in-out infinite;
+}
+
+.breathing-active {
+  animation: breathePulse 2s ease-in-out infinite;
+}
+
+.breathing-success {
+  animation: breathe 1s ease-in-out 3;
+  border: 2px solid var(--ultra-green);
+}
+
+/* Contextual breathing based on activity */
+.system-thinking .command-palette {
+  animation: breathePulse 1s ease-in-out infinite;
+}
+
+.data-loading .chart-container {
+  animation: breathe 2s ease-in-out infinite;
+}
+
+.user-typing .input-wrapper {
+  animation: subtleGlow 2s ease-in-out infinite;
+}
+
+/* Life-like micro-movements */
+.alive-text {
+  animation: gentleFloat 8s ease-in-out infinite;
+}
+
+.alive-icon {
+  animation: breathePulse 5s ease-in-out infinite;
+  animation-delay: calc(var(--icon-index, 0) * 0.4s);
+}
