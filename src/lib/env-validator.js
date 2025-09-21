@@ -86,7 +86,7 @@ class EnvironmentValidator {
     }
 
     // Validate PostgreSQL URL format
-    const pgUrlPattern = /^postgresql:\/\/[^:]+:[^@]+@[^:]+:\d+\/\w+$/;
+    const pgUrlPattern = /^postgres(ql)?:\/\/[^:\/\s]+:[^@\/\s]+@[^:\/\s]+:\d+\/[^\/\s?]+(\?.*)?$/;
     if (!pgUrlPattern.test(dbUrl)) {
       this.addError('DATABASE_URL must be a valid PostgreSQL connection string');
     } else {

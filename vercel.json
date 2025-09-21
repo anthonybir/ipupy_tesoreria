@@ -3,7 +3,11 @@
   "name": "ipupy-tesoreria",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/",
+      "destination": "/public/index.html"
+    },
+    {
+      "source": "/((?!api).*)",
       "destination": "/public/$1"
     }
   ],
