@@ -80,25 +80,58 @@ class EnvironmentValidator {
 
     const dbUrl = process.env.DATABASE_URL;
 
-    if (!dbUrl) {
+    if (!dbUrl || dbUrl.trim() === '') {
       this.addError('DATABASE_URL is required');
       return;
     }
 
-    // Validate PostgreSQL URL format
-    const pgUrlPattern = /^postgres(ql)?:\/\/[^:\/\s]+:[^@\/\s]+@[^:\/\s]+:\d+\/[^\/\s?]+(\?.*)?$/;
-    if (!pgUrlPattern.test(dbUrl)) {
+    const trimmedUrl = dbUrl.trim();
+    const initialErrorCount = this.errors.length;
+    let parsedUrl;
+
+    try {
+      parsedUrl = new URL(trimmedUrl);
+    } catch (error) {
       this.addError('DATABASE_URL must be a valid PostgreSQL connection string');
+      return;
+    }
+
+    if (!['postgres:', 'postgresql:'].includes(parsedUrl.protocol)) {
+      this.addError('DATABASE_URL must use the postgres:// or postgresql:// protocol');
+    }
+
+    if (!parsedUrl.username) {
+      this.addError('DATABASE_URL must include a username');
+    }
+
+    if (!parsedUrl.hostname) {
+      this.addError('DATABASE_URL must include a hostname');
+    }
+
+    const databaseName = parsedUrl.pathname.replace(/^\//, '');
+    if (!databaseName) {
+      this.addError('DATABASE_URL must include a database name');
+    }
+
+    if (parsedUrl.port) {
+      const portNumber = Number(parsedUrl.port);
+      if (Number.isNaN(portNumber) || portNumber <= 0 || portNumber > 65535) {
+        this.addError('DATABASE_URL port must be a valid number between 1 and 65535');
+      }
     } else {
+      this.addWarning('DATABASE_URL does not specify a port; the default (usually 5432) will be used');
+    }
+
+    if (this.errors.length === initialErrorCount) {
       console.log('  ✅ Database URL format is valid');
     }
 
     // Check for common security issues
-    if (dbUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
+    if (trimmedUrl.includes('localhost') && process.env.NODE_ENV === 'production') {
       this.addWarning('Using localhost database in production environment');
     }
 
-    if (dbUrl.includes('password') || dbUrl.includes('123456')) {
+    if (trimmedUrl.includes('password') || trimmedUrl.includes('123456')) {
       this.addWarning('Database URL appears to contain weak credentials');
     }
   }
