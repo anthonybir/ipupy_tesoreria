@@ -1,5 +1,6 @@
 const { execute } = require('../lib/db');
 const jwt = require('jsonwebtoken');
+const { setSecureCORSHeaders } = require('../src/lib/cors-handler');
 
 const parsePositiveInt = (value, fieldName) => {
   const parsed = Number.parseInt(value, 10);
@@ -26,13 +27,11 @@ const verifyToken = (req) => {
  * @returns {Promise<void>}
  */
 module.exports = async function handler(req, res) {
-  // Configurar CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  // Configure secure CORS (no wildcards)
+  const isPreflightHandled = setSecureCORSHeaders(req, res, ['PUT', 'DELETE']);
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+  if (isPreflightHandled) {
+    return; // Preflight request handled securely
   }
 
   try {
@@ -61,7 +60,7 @@ module.exports = async function handler(req, res) {
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
-}
+};
 
 /**
  * Maneja peticiones GET para obtener todas las iglesias activas
@@ -70,7 +69,7 @@ module.exports = async function handler(req, res) {
  * @param {Object} decoded - JWT decoded token
  * @returns {Promise<void>}
  */
-async function handleGet(req, res, decoded) {
+async function handleGet(req, res, _decoded) {
   const result = await execute('SELECT * FROM churches WHERE active = true ORDER BY name');
   const churches = result.rows || [];
   // Return consistent format like other APIs
@@ -84,7 +83,7 @@ async function handleGet(req, res, decoded) {
  * @param {Object} decoded - JWT decoded token
  * @returns {Promise<void>}
  */
-async function handlePost(req, res, decoded) {
+async function handlePost(req, res, _decoded) {
   const { name, city, pastor, phone, ruc, cedula, grado, posicion } = req.body;
 
   if (!name || !city || !pastor) {
@@ -108,7 +107,7 @@ async function handlePost(req, res, decoded) {
   }
 }
 
-async function handlePut(req, res, decoded) {
+async function handlePut(req, res, _decoded) {
   const { id } = req.query;
   const { name, city, pastor, phone, ruc, cedula, grado, posicion, active } = req.body;
 
@@ -142,7 +141,7 @@ async function handlePut(req, res, decoded) {
   res.json(result.rows[0]);
 }
 
-async function handleDelete(req, res, decoded) {
+async function handleDelete(req, res, _decoded) {
   const { id } = req.query;
 
   if (!id) {

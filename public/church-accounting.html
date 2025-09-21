@@ -342,53 +342,759 @@
                 </div>
 
                 <div id="reportsSection" class="section hidden">
-                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Informes</h2>
-                    <p class="text-gray-600 mb-4">Aquí se mostrarían los informes...</p>
+                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold text-gray-800">Informes Mensuales</h2>
+                            <p class="text-gray-600">Revisa el estado de tus envíos y presenta el informe del mes en minutos.</p>
+                        </div>
+                        <button id="startReportWizardBtn" class="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 transition flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                            </svg>
+                            Enviar Informe Mensual
+                        </button>
+                    </div>
+
+                    <div id="reportSummaryCards" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <!-- Se completa dinámicamente -->
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-md border mb-6">
+                        <div class="p-6 border-b flex justify-between items-center">
+                            <div>
+                                <h3 class="text-lg font-semibold">Historial de Informes</h3>
+                                <p class="text-sm text-gray-500">Los informes más recientes aparecen primero.</p>
+                            </div>
+                            <select id="reportYearFilter" class="border border-gray-300 rounded px-3 py-2 hidden md:block">
+                                <!-- Opciones dinámicas -->
+                            </select>
+                        </div>
+                        <div id="reportStatusList" class="divide-y">
+                            <!-- Se llena dinámicamente -->
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-lg shadow-md border">
+                        <div class="p-6 border-b">
+                            <h3 class="text-lg font-semibold">Línea de Tiempo</h3>
+                            <p class="text-sm text-gray-500">Visualiza el recorrido desde el envío hasta la aprobación.</p>
+                        </div>
+                        <div id="reportTimeline" class="p-6 space-y-4">
+                            <!-- Timeline dinámico -->
+                        </div>
+                    </div>
                 </div>
             </main>
         </div>
     </div>
 
-    <!-- Modals would be added here... -->
+    <!-- Report Wizard Modal -->
+    <div id="reportWizardModal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                <div class="p-6 border-b flex justify-between items-start">
+                    <div>
+                        <h3 class="text-lg font-semibold">Enviar Informe Mensual</h3>
+                        <p id="reportWizardStepLabel" class="text-sm text-gray-500">Paso 1 de 4</p>
+                    </div>
+                    <button id="closeReportWizardBtn" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
 
-    <script>
-        // Global variables
-        let currentUser = null;
-        let currentChurch = null;
-        let accounts = [];
-        let transactions = [];
-        let categories = [];
+                <div class="px-6 pt-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <div class="flex items-center gap-2" id="reportWizardSteps">
+                            <!-- Step indicators render dynamically -->
+                        </div>
+                        <div>
+                            <span id="reportWizardWarnings" class="text-sm text-red-500"></span>
+                        </div>
+                    </div>
+                </div>
 
-        // API Configuration
+                <form id="reportWizardForm" class="px-6 pb-6 space-y-6">
+                    <div class="wizard-step" data-step="1">
+                        <h4 class="text-lg font-semibold mb-3">1. Datos del Informe</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Año</label>
+                                <input type="number" id="wizardYear" class="w-full border rounded px-3 py-2" min="2020" max="2035" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Mes</label>
+                                <select id="wizardMonth" class="w-full border rounded px-3 py-2" required>
+                                    <option value="1">Enero</option>
+                                    <option value="2">Febrero</option>
+                                    <option value="3">Marzo</option>
+                                    <option value="4">Abril</option>
+                                    <option value="5">Mayo</option>
+                                    <option value="6">Junio</option>
+                                    <option value="7">Julio</option>
+                                    <option value="8">Agosto</option>
+                                    <option value="9">Septiembre</option>
+                                    <option value="10">Octubre</option>
+                                    <option value="11">Noviembre</option>
+                                    <option value="12">Diciembre</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Estado preliminar</label>
+                                <select id="wizardEstado" class="w-full border rounded px-3 py-2">
+                                    <option value="pendiente">Pendiente</option>
+                                    <option value="borrador">Borrador</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="wizard-step hidden" data-step="2">
+                        <h4 class="text-lg font-semibold mb-3">2. Resumen de Entradas</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Diezmos (Gs.)</label>
+                                <input type="number" id="wizardDiezmos" class="w-full border rounded px-3 py-2" step="0.01" min="0" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Ofrendas (Gs.)</label>
+                                <input type="number" id="wizardOfrendas" class="w-full border rounded px-3 py-2" step="0.01" min="0" required>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Anexos (Gs.)</label>
+                                <input type="number" id="wizardAnexos" class="w-full border rounded px-3 py-2" step="0.01" min="0">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Caballeros (Gs.)</label>
+                                <input type="number" id="wizardCaballeros" class="w-full border rounded px-3 py-2" step="0.01" min="0">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Damas (Gs.)</label>
+                                <input type="number" id="wizardDamas" class="w-full border rounded px-3 py-2" step="0.01" min="0">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Jóvenes (Gs.)</label>
+                                <input type="number" id="wizardJovenes" class="w-full border rounded px-3 py-2" step="0.01" min="0">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Niños (Gs.)</label>
+                                <input type="number" id="wizardNinos" class="w-full border rounded px-3 py-2" step="0.01" min="0">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Otros (Gs.)</label>
+                                <input type="number" id="wizardOtros" class="w-full border rounded px-3 py-2" step="0.01" min="0">
+                            </div>
+                        </div>
+                        <div class="mt-4 p-4 bg-blue-50 rounded">
+                            <p class="text-sm text-blue-700">Total Entradas: <span id="wizardTotalEntradas" class="font-semibold">0</span></p>
+                            <p class="text-sm text-blue-700">Fondo Nacional (10%): <span id="wizardFondoNacional" class="font-semibold">0</span></p>
+                        </div>
+                    </div>
+
+                    <div class="wizard-step hidden" data-step="3">
+                        <h4 class="text-lg font-semibold mb-3">3. Salidas y Depósito</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Honorarios Pastorales (Gs.)</label>
+                                <input type="number" id="wizardHonorariosPastoral" class="w-full border rounded px-3 py-2" step="0.01" min="0">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Servicios Públicos (Gs.)</label>
+                                <input type="number" id="wizardServicios" class="w-full border rounded px-3 py-2" step="0.01" min="0">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Monto Depositado (Gs.)</label>
+                                <input type="number" id="wizardMontoDepositado" class="w-full border rounded px-3 py-2" step="0.01" min="0">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Fecha de Depósito</label>
+                                <input type="date" id="wizardFechaDeposito" class="w-full border rounded px-3 py-2">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Número de Boleta</label>
+                                <input type="text" id="wizardNumeroDeposito" class="w-full border rounded px-3 py-2">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Asistencia de Visitas</label>
+                                <input type="number" id="wizardAsistenciaVisitas" class="w-full border rounded px-3 py-2" min="0">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Bautismos en Agua</label>
+                                <input type="number" id="wizardBautismosAgua" class="w-full border rounded px-3 py-2" min="0">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Bautismos Espíritu Santo</label>
+                                <input type="number" id="wizardBautismosEspiritu" class="w-full border rounded px-3 py-2" min="0">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="wizard-step hidden" data-step="4">
+                        <h4 class="text-lg font-semibold mb-3">4. Revisar y Adjuntar</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Resumen Financiero (Foto)</label>
+                                <input type="file" id="wizardResumenFile" accept="image/*" class="w-full border rounded px-3 py-2">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">Comprobante de Depósito (Foto)</label>
+                                <input type="file" id="wizardDepositoFile" accept="image/*" class="w-full border rounded px-3 py-2">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">Observaciones</label>
+                            <textarea id="wizardObservaciones" class="w-full border rounded px-3 py-2" rows="4" placeholder="Notas adicionales, aclaraciones o comentarios"></textarea>
+                        </div>
+                        <div class="mt-4 p-4 bg-gray-50 rounded" id="wizardReview">
+                            <!-- Resumen dinámico -->
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between pt-4 border-t">
+                        <button type="button" id="reportWizardBackBtn" class="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50">Atrás</button>
+                        <div class="flex gap-2">
+                            <button type="button" id="reportWizardSaveDraftBtn" class="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50 hidden">Guardar Borrador</button>
+                            <button type="button" id="reportWizardNextBtn" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Siguiente</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+        <script>
         const API_BASE = window.location.origin;
         const API_ENDPOINTS = {
             auth: '/api/auth',
-            accounts: '/api/church-accounts',
-            transactions: '/api/financial?type=church-transactions',
-            categories: '/api/church-transaction-categories'
+            reports: '/api/reports',
+            dashboard: '/api/dashboard'
         };
 
-        // Authentication
-        function getAuthToken() {
+        let authToken = null;
+        let currentUser = null;
+        let currentChurch = null;
+        let reportHistory = [];
+        let reportWizardState = null;
+
+        const REPORT_WIZARD_STEPS = [
+            { id: 1, label: 'Datos' },
+            { id: 2, label: 'Entradas' },
+            { id: 3, label: 'Salidas' },
+            { id: 4, label: 'Revisión' }
+        ];
+
+        function getStoredToken() {
             return localStorage.getItem('authToken');
         }
 
         function setAuthToken(token) {
-            localStorage.setItem('authToken', token);
-        }
-
-        function clearAuthToken() {
-            localStorage.removeItem('authToken');
+            authToken = token;
+            if (token) {
+                localStorage.setItem('authToken', token);
+            } else {
+                localStorage.removeItem('authToken');
+            }
         }
 
         function getAuthHeaders() {
-            const token = getAuthToken();
-            return token ? { 'Authorization': `Bearer ${token}` } : {};
+            return authToken ? { Authorization: `Bearer ${authToken}` } : {};
         }
 
-        // Login functionality
-        document.getElementById('loginForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
+        function notify(message, type = 'success') {
+            if (type === 'error') {
+                console.error(message);
+                alert(message);
+            } else {
+                console.log(message);
+            }
+        }
+
+        function showSection(sectionName) {
+            document.querySelectorAll('.section').forEach(section => section.classList.add('hidden'));
+            const target = document.getElementById(`${sectionName}Section`);
+            if (target) {
+                target.classList.remove('hidden');
+            }
+
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('bg-blue-100', 'text-blue-700');
+                link.classList.add('text-gray-600');
+                const handler = link.getAttribute('onclick') || '';
+                if (handler.includes(`'${sectionName}'`)) {
+                    link.classList.add('bg-blue-100', 'text-blue-700');
+                    link.classList.remove('text-gray-600');
+                }
+            });
+
+            if (window.innerWidth < 768) {
+                document.getElementById('sidebar').classList.add('sidebar-hidden');
+            }
+
+            if (sectionName === 'reports') {
+                renderReportSummaryCards();
+                renderReportList();
+                renderReportTimeline();
+            }
+        }
+
+        function logout() {
+            setAuthToken(null);
+            currentUser = null;
+            currentChurch = null;
+            document.getElementById('loginScreen').classList.remove('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+        }
+
+        document.getElementById('sidebarToggle').addEventListener('click', () => {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('sidebar-hidden');
+            sidebar.classList.toggle('sidebar-active');
+        });
+
+        function defaultReportWizardState() {
+            const now = new Date();
+            return {
+                step: 1,
+                form: {
+                    year: now.getFullYear(),
+                    month: now.getMonth() + 1,
+                    estado: 'pendiente',
+                    diezmos: 0,
+                    ofrendas: 0,
+                    anexos: 0,
+                    caballeros: 0,
+                    damas: 0,
+                    jovenes: 0,
+                    ninos: 0,
+                    otros: 0,
+                    honorarios_pastoral: 0,
+                    servicios: 0,
+                    monto_depositado: 0,
+                    fecha_deposito: '',
+                    numero_deposito: '',
+                    asistencia_visitas: 0,
+                    bautismos_agua: 0,
+                    bautismos_espiritu: 0,
+                    observaciones: ''
+                },
+                attachments: {
+                    summary: null,
+                    deposit: null
+                }
+            };
+        }
+
+        function openReportWizard() {
+            reportWizardState = defaultReportWizardState();
+            syncWizardForm();
+            updateWizardUI();
+            document.getElementById('reportWizardModal').classList.remove('hidden');
+        }
+
+        function closeReportWizard() {
+            reportWizardState = null;
+            document.getElementById('reportWizardModal').classList.add('hidden');
+        }
+
+        function syncWizardForm() {
+            if (!reportWizardState) return;
+            const form = reportWizardState.form;
+            document.getElementById('wizardYear').value = form.year;
+            document.getElementById('wizardMonth').value = form.month;
+            document.getElementById('wizardEstado').value = form.estado;
+            document.getElementById('wizardDiezmos').value = form.diezmos;
+            document.getElementById('wizardOfrendas').value = form.ofrendas;
+            document.getElementById('wizardAnexos').value = form.anexos;
+            document.getElementById('wizardCaballeros').value = form.caballeros;
+            document.getElementById('wizardDamas').value = form.damas;
+            document.getElementById('wizardJovenes').value = form.jovenes;
+            document.getElementById('wizardNinos').value = form.ninos;
+            document.getElementById('wizardOtros').value = form.otros;
+            document.getElementById('wizardHonorariosPastoral').value = form.honorarios_pastoral;
+            document.getElementById('wizardServicios').value = form.servicios;
+            document.getElementById('wizardMontoDepositado').value = form.monto_depositado;
+            document.getElementById('wizardFechaDeposito').value = form.fecha_deposito;
+            document.getElementById('wizardNumeroDeposito').value = form.numero_deposito;
+            document.getElementById('wizardAsistenciaVisitas').value = form.asistencia_visitas;
+            document.getElementById('wizardBautismosAgua').value = form.bautismos_agua;
+            document.getElementById('wizardBautismosEspiritu').value = form.bautismos_espiritu;
+            document.getElementById('wizardObservaciones').value = form.observaciones;
+            updateWizardTotals();
+        }
+
+        function updateWizardUI() {
+            if (!reportWizardState) return;
+            const step = reportWizardState.step;
+            document.querySelectorAll('#reportWizardForm .wizard-step').forEach(el => {
+                const stepNumber = parseInt(el.getAttribute('data-step'), 10);
+                el.classList.toggle('hidden', stepNumber !== step);
+            });
+
+            const backBtn = document.getElementById('reportWizardBackBtn');
+            const nextBtn = document.getElementById('reportWizardNextBtn');
+            const draftBtn = document.getElementById('reportWizardSaveDraftBtn');
+            const stepLabel = document.getElementById('reportWizardStepLabel');
+
+            backBtn.disabled = step === 1;
+            backBtn.classList.toggle('opacity-50', step === 1);
+            backBtn.classList.toggle('cursor-not-allowed', step === 1);
+
+            nextBtn.textContent = step === REPORT_WIZARD_STEPS.length ? 'Enviar Informe' : 'Siguiente';
+            draftBtn.classList.toggle('hidden', step !== REPORT_WIZARD_STEPS.length);
+            stepLabel.textContent = `Paso ${step} de ${REPORT_WIZARD_STEPS.length}`;
+
+            const stepsContainer = document.getElementById('reportWizardSteps');
+            stepsContainer.innerHTML = REPORT_WIZARD_STEPS.map(({ id, label }) => {
+                const isActive = id === step;
+                const isCompleted = id < step;
+                const base = 'px-3 py-1 rounded-full text-sm font-semibold border';
+                const palette = isActive
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : isCompleted
+                        ? 'bg-green-100 text-green-700 border-green-300'
+                        : 'bg-gray-100 text-gray-500 border-gray-200';
+                return `<span class="${base} ${palette}">${id}. ${label}</span>`;
+            }).join('');
+
+            if (step === REPORT_WIZARD_STEPS.length) {
+                renderWizardReview();
+            }
+        }
+
+        function updateWizardTotals() {
+            if (!reportWizardState) return;
+            const incomeFields = ['diezmos', 'ofrendas', 'anexos', 'caballeros', 'damas', 'jovenes', 'ninos', 'otros'];
+            incomeFields.forEach(field => {
+                const value = parseFloat(document.getElementById(`wizard${capitalize(field)}`).value || '0');
+                reportWizardState.form[field] = value;
+            });
+
+            const totalEntradas = incomeFields.reduce((sum, field) => sum + (reportWizardState.form[field] || 0), 0);
+            const fondoNacional = totalEntradas * 0.1;
+
+            reportWizardState.form.honorarios_pastoral = parseFloat(document.getElementById('wizardHonorariosPastoral').value || '0');
+            reportWizardState.form.servicios = parseFloat(document.getElementById('wizardServicios').value || '0');
+            reportWizardState.form.monto_depositado = parseFloat(document.getElementById('wizardMontoDepositado').value || '0');
+
+            document.getElementById('wizardTotalEntradas').textContent = formatCurrency(totalEntradas);
+            document.getElementById('wizardFondoNacional').textContent = formatCurrency(fondoNacional);
+        }
+
+        function renderWizardReview() {
+            if (!reportWizardState) return;
+            const form = reportWizardState.form;
+            const totalEntradas = ['diezmos', 'ofrendas', 'anexos', 'caballeros', 'damas', 'jovenes', 'ninos', 'otros']
+                .reduce((sum, field) => sum + (form[field] || 0), 0);
+            const fondoNacional = totalEntradas * 0.1;
+            const totalSalidas = fondoNacional + (form.honorarios_pastoral || 0) + (form.servicios || 0);
+
+            document.getElementById('wizardReview').innerHTML = `
+                <dl class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                    <div>
+                        <dt class="font-semibold text-gray-600">Periodo</dt>
+                        <dd>${formatMonthName(form.month)} ${form.year}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-gray-600">Estado</dt>
+                        <dd>${formatStatus(form.estado)}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-gray-600">Total Entradas</dt>
+                        <dd>${formatCurrency(totalEntradas)}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-gray-600">Fondo Nacional</dt>
+                        <dd>${formatCurrency(fondoNacional)}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-gray-600">Honorarios Pastorales</dt>
+                        <dd>${formatCurrency(form.honorarios_pastoral || 0)}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-gray-600">Servicios</dt>
+                        <dd>${formatCurrency(form.servicios || 0)}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-gray-600">Monto Depositado</dt>
+                        <dd>${formatCurrency(form.monto_depositado || 0)}</dd>
+                    </div>
+                    <div>
+                        <dt class="font-semibold text-gray-600">Observaciones</dt>
+                        <dd>${form.observaciones ? form.observaciones : 'Sin observaciones'}</dd>
+                    </div>
+                </dl>
+            `;
+        }
+
+        async function handleWizardFileChange(inputId, attachmentKey) {
+            if (!reportWizardState) return;
+            const input = document.getElementById(inputId);
+            if (!input || !input.files || !input.files[0]) {
+                reportWizardState.attachments[attachmentKey] = null;
+                return;
+            }
+            const file = input.files[0];
+            reportWizardState.attachments[attachmentKey] = await readFileAsDataURL(file);
+        }
+
+        function readFileAsDataURL(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function capitalize(text) {
+            return text.charAt(0).toUpperCase() + text.slice(1);
+        }
+
+        function validateWizardStep(step) {
+            const warningEl = document.getElementById('reportWizardWarnings');
+            warningEl.textContent = '';
+
+            if (step === 1) {
+                const year = parseInt(document.getElementById('wizardYear').value, 10);
+                const month = parseInt(document.getElementById('wizardMonth').value, 10);
+                if (!year || !month) {
+                    warningEl.textContent = 'Seleccione año y mes válidos.';
+                    return false;
+                }
+                reportWizardState.form.year = year;
+                reportWizardState.form.month = month;
+                reportWizardState.form.estado = document.getElementById('wizardEstado').value || 'pendiente';
+            }
+
+            if (step === 2) {
+                updateWizardTotals();
+            }
+
+            if (step === 3) {
+                reportWizardState.form.honorarios_pastoral = parseFloat(document.getElementById('wizardHonorariosPastoral').value || '0');
+                reportWizardState.form.servicios = parseFloat(document.getElementById('wizardServicios').value || '0');
+                reportWizardState.form.monto_depositado = parseFloat(document.getElementById('wizardMontoDepositado').value || '0');
+                reportWizardState.form.fecha_deposito = document.getElementById('wizardFechaDeposito').value || '';
+                reportWizardState.form.numero_deposito = document.getElementById('wizardNumeroDeposito').value || '';
+                reportWizardState.form.asistencia_visitas = parseInt(document.getElementById('wizardAsistenciaVisitas').value || '0', 10);
+                reportWizardState.form.bautismos_agua = parseInt(document.getElementById('wizardBautismosAgua').value || '0', 10);
+                reportWizardState.form.bautismos_espiritu = parseInt(document.getElementById('wizardBautismosEspiritu').value || '0', 10);
+            }
+
+            if (step === 4) {
+                reportWizardState.form.observaciones = document.getElementById('wizardObservaciones').value || '';
+            }
+
+            return true;
+        }
+
+        async function submitReportWizard(asDraft = false) {
+            if (!reportWizardState) return;
+            const form = reportWizardState.form;
+            const payload = {
+                month: form.month,
+                year: form.year,
+                estado: asDraft ? 'borrador' : form.estado,
+                submission_type: 'online',
+                diezmos: form.diezmos,
+                ofrendas: form.ofrendas,
+                anexos: form.anexos,
+                caballeros: form.caballeros,
+                damas: form.damas,
+                jovenes: form.jovenes,
+                ninos: form.ninos,
+                otros: form.otros,
+                honorarios_pastoral: form.honorarios_pastoral,
+                servicios: form.servicios,
+                monto_depositado: form.monto_depositado,
+                fecha_deposito: form.fecha_deposito,
+                numero_deposito: form.numero_deposito,
+                asistencia_visitas: form.asistencia_visitas,
+                bautismos_agua: form.bautismos_agua,
+                bautismos_espiritu: form.bautismos_espiritu,
+                observaciones: form.observaciones,
+                attachments: reportWizardState.attachments
+            };
+
+            try {
+                await axios.post(`${API_BASE}${API_ENDPOINTS.reports}`, payload, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getAuthHeaders()
+                    }
+                });
+                notify('Informe enviado correctamente');
+                closeReportWizard();
+                await loadMyReports();
+                showSection('reports');
+            } catch (error) {
+                console.error('Error enviando informe:', error);
+                notify(error.response?.data?.error || 'No se pudo enviar el informe', 'error');
+            }
+        }
+
+        function renderReportSummaryCards() {
+            const container = document.getElementById('reportSummaryCards');
+            if (!container) return;
+            const total = reportHistory.length;
+            const pendientes = reportHistory.filter(r => r.estado === 'pendiente').length;
+            const procesados = reportHistory.filter(r => r.estado === 'procesado').length;
+            const borradores = reportHistory.filter(r => r.estado === 'borrador').length;
+
+            const cards = [
+                { title: 'Informes enviados', value: total, color: 'text-blue-600', description: 'Total acumulado de informes registrados.' },
+                { title: 'Pendientes', value: pendientes, color: 'text-yellow-600', description: 'En espera de revisión del tesorero.' },
+                { title: 'Procesados', value: procesados, color: 'text-green-600', description: 'Informes aprobados y conciliados.' },
+                { title: 'Borradores', value: borradores, color: 'text-gray-600', description: 'Guardados para continuar luego.' }
+            ];
+
+            container.innerHTML = cards.map(card => `
+                <div class="bg-white border rounded-lg p-5 shadow-sm">
+                    <h4 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">${card.title}</h4>
+                    <p class="text-3xl font-bold ${card.color} mt-2">${card.value}</p>
+                    <p class="text-sm text-gray-500 mt-1">${card.description}</p>
+                </div>
+            `).join('');
+        }
+
+        function renderReportList() {
+            const listEl = document.getElementById('reportStatusList');
+            const yearFilterEl = document.getElementById('reportYearFilter');
+            if (!listEl || !yearFilterEl) return;
+
+            const years = [...new Set(reportHistory.map(r => r.year).filter(Boolean))].sort((a, b) => b - a);
+            yearFilterEl.innerHTML = '<option value="">Todos los años</option>' + years.map(year => `<option value="${year}">${year}</option>`).join('');
+            const selectedYear = yearFilterEl.value ? parseInt(yearFilterEl.value, 10) : null;
+            const rows = (selectedYear ? reportHistory.filter(r => r.year === selectedYear) : reportHistory)
+                .slice()
+                .sort(sortReportsByDate);
+
+            if (!rows.length) {
+                listEl.innerHTML = '<div class="p-6 text-center text-gray-500">Aún no registraste informes para este periodo.</div>';
+                return;
+            }
+
+            listEl.innerHTML = rows.map(report => {
+                const submittedAt = report.submitted_at || report.created_at;
+                const processedAt = report.processed_at;
+                const total = parseFloat(report.total_entradas || 0);
+                return `
+                    <div class="p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                        <div>
+                            <p class="text-sm text-gray-500">${formatMonthName(report.month)} ${report.year}</p>
+                            <p class="text-lg font-semibold text-gray-800">${formatCurrency(total)}</p>
+                            <p class="text-sm text-gray-500">${submittedAt ? 'Enviado el ' + formatDateTime(submittedAt) : 'Fecha de envío no disponible'}</p>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="px-3 py-1 rounded-full text-sm font-semibold ${statusChipClasses(report.estado)}">${formatStatus(report.estado)}</span>
+                            ${processedAt ? `<span class="text-xs text-gray-500">Procesado el ${formatDateTime(processedAt)}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderReportTimeline() {
+            const timelineEl = document.getElementById('reportTimeline');
+            if (!timelineEl) return;
+            if (!reportHistory.length) {
+                timelineEl.innerHTML = '<div class="text-center text-gray-500">Cuando envíes tu primer informe, verás aquí el recorrido completo.</div>';
+                return;
+            }
+            timelineEl.innerHTML = reportHistory.slice().sort(sortReportsByDate).slice(0, 8).map(report => {
+                const submittedAt = report.submitted_at || report.created_at;
+                const processedAt = report.processed_at;
+                const accent = report.estado === 'procesado' ? 'border-green-400' : 'border-blue-300';
+                const dot = report.estado === 'procesado' ? 'bg-green-500' : 'bg-blue-400';
+                return `
+                    <div class="relative pl-6 border-l-2 ${accent}">
+                        <span class="absolute -left-2 top-1 w-3 h-3 rounded-full ${dot}"></span>
+                        <p class="text-sm text-gray-500">${formatMonthName(report.month)} ${report.year}</p>
+                        <p class="font-semibold text-gray-800">${formatStatus(report.estado)}</p>
+                        <p class="text-sm text-gray-500">${submittedAt ? 'Enviado ' + formatDateTime(submittedAt) : 'Fecha de envío no disponible'}</p>
+                        ${processedAt ? `<p class="text-sm text-gray-500">Procesado ${formatDateTime(processedAt)}</p>` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function sortReportsByDate(a, b) {
+            const dateA = new Date(a.submitted_at || a.created_at || 0).getTime();
+            const dateB = new Date(b.submitted_at || b.created_at || 0).getTime();
+            return dateB - dateA;
+        }
+
+        async function loadMyReports() {
+            try {
+                const response = await axios.get(`${API_BASE}${API_ENDPOINTS.reports}`, {
+                    headers: getAuthHeaders()
+                });
+                reportHistory = Array.isArray(response.data) ? response.data : [];
+                renderReportSummaryCards();
+                renderReportList();
+                renderReportTimeline();
+            } catch (error) {
+                console.error('Error al cargar informes:', error);
+                notify('No se pudieron cargar los informes', 'error');
+            }
+        }
+
+        async function loadDashboardData() {
+            try {
+                await axios.get(`${API_BASE}${API_ENDPOINTS.dashboard}`, {
+                    headers: getAuthHeaders()
+                });
+            } catch (error) {
+                console.warn('Panel resumido aún no disponible.');
+            }
+        }
+
+        function formatCurrency(value) {
+            return new Intl.NumberFormat('es-PY', {
+                style: 'currency',
+                currency: 'PYG',
+                minimumFractionDigits: 0
+            }).format(value || 0);
+        }
+
+        function formatDateTime(value) {
+            if (!value) return 'N/D';
+            return new Date(value).toLocaleString('es-PY');
+        }
+
+        function formatMonthName(month) {
+            const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+            return months[(month - 1 + 12) % 12] || 'Mes';
+        }
+
+        function formatStatus(status) {
+            const map = {
+                pendiente: 'Pendiente',
+                procesado: 'Procesado',
+                borrador: 'Borrador',
+                eliminado: 'Eliminado'
+            };
+            return map[status] || status;
+        }
+
+        function statusChipClasses(status) {
+            switch (status) {
+            case 'procesado':
+                return 'bg-green-100 text-green-700';
+            case 'borrador':
+                return 'bg-gray-100 text-gray-600';
+            case 'pendiente':
+                return 'bg-yellow-100 text-yellow-700';
+            default:
+                return 'bg-blue-100 text-blue-700';
+            }
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
             const email = document.getElementById('loginEmail').value;
             const password = document.getElementById('loginPassword').value;
 
@@ -396,330 +1102,81 @@
             document.getElementById('loginLoading').classList.remove('hidden');
 
             try {
-                const response = await axios.post(`${API_BASE}${API_ENDPOINTS.auth}`, {
-                    email,
-                    password
-                });
-
+                const response = await axios.post(`${API_BASE}${API_ENDPOINTS.auth}`, { email, password });
                 setAuthToken(response.data.token);
                 currentUser = response.data.user;
                 currentChurch = response.data.church;
 
                 document.getElementById('loginScreen').classList.add('hidden');
                 document.getElementById('mainApp').classList.remove('hidden');
-                document.getElementById('userEmail').textContent = currentUser.email;
-
+                document.getElementById('userEmail').textContent = currentUser?.email || '';
                 if (currentChurch) {
                     document.getElementById('churchName').textContent = currentChurch.name;
                 }
 
                 await initializeApp();
-
             } catch (error) {
-                alert('Error de login: ' + (error.response?.data?.error || error.message));
+                notify(error.response?.data?.error || 'Credenciales inválidas', 'error');
             } finally {
                 document.getElementById('loginText').textContent = 'Iniciar Sesión';
                 document.getElementById('loginLoading').classList.add('hidden');
             }
         });
 
-        function logout() {
-            clearAuthToken();
-            currentUser = null;
-            currentChurch = null;
-            document.getElementById('loginScreen').classList.remove('hidden');
-            document.getElementById('mainApp').classList.add('hidden');
-        }
-
-        // Navigation
-        function showSection(sectionName) {
-            // Hide all sections
-            document.querySelectorAll('.section').forEach(section => {
-                section.classList.add('hidden');
-            });
-
-            // Show selected section
-            document.getElementById(sectionName + 'Section').classList.remove('hidden');
-
-            // Update nav links
-            document.querySelectorAll('.nav-link').forEach(link => {
-                link.classList.remove('bg-blue-100', 'text-blue-700');
-                link.classList.add('text-gray-600');
-            });
-
-            // Load section-specific data
-            switch (sectionName) {
-                case 'dashboard':
-                    loadDashboardData();
-                    break;
-                case 'accounts':
-                    loadAccounts();
-                    break;
-                case 'transactions':
-                    loadTransactions();
-                    break;
-                case 'categories':
-                    loadCategories();
-                    break;
+        document.getElementById('startReportWizardBtn').addEventListener('click', openReportWizard);
+        document.getElementById('closeReportWizardBtn').addEventListener('click', closeReportWizard);
+        document.getElementById('reportWizardBackBtn').addEventListener('click', () => {
+            if (!reportWizardState) return;
+            if (reportWizardState.step > 1) {
+                reportWizardState.step -= 1;
+                updateWizardUI();
             }
-
-            // Hide sidebar on mobile
-            if (window.innerWidth < 768) {
-                document.getElementById('sidebar').classList.add('sidebar-hidden');
+        });
+        document.getElementById('reportWizardNextBtn').addEventListener('click', async () => {
+            if (!reportWizardState) return;
+            const currentStep = reportWizardState.step;
+            if (!validateWizardStep(currentStep)) return;
+            if (currentStep === REPORT_WIZARD_STEPS.length) {
+                await submitReportWizard(false);
+            } else {
+                reportWizardState.step += 1;
+                updateWizardUI();
             }
-        }
-
-        // Sidebar toggle
-        document.getElementById('sidebarToggle').addEventListener('click', () => {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('sidebar-hidden');
-            sidebar.classList.toggle('sidebar-active');
+        });
+        document.getElementById('reportWizardSaveDraftBtn').addEventListener('click', async () => {
+            if (!validateWizardStep(REPORT_WIZARD_STEPS.length)) return;
+            await submitReportWizard(true);
         });
 
-        // Load dashboard data
-        async function loadDashboardData() {
-            try {
-                // Load summary data
-                await loadAccounts();
-                await loadTransactions();
-                updateDashboardSummary();
+        document.getElementById('wizardResumenFile').addEventListener('change', () => handleWizardFileChange('wizardResumenFile', 'summary'));
+        document.getElementById('wizardDepositoFile').addEventListener('change', () => handleWizardFileChange('wizardDepositoFile', 'deposit'));
 
-            } catch (error) {
-                console.error('Error loading dashboard:', error);
-            }
-        }
-
-        function updateDashboardSummary() {
-            // Calculate totals
-            const totalBalance = accounts.reduce((sum, account) => sum + parseFloat(account.current_balance || 0), 0);
-
-            const currentMonth = new Date().toISOString().substr(0, 7);
-            const monthlyTransactions = transactions.filter(t => t.transaction_date.startsWith(currentMonth));
-
-            const monthlyIncome = monthlyTransactions
-                .filter(t => t.transaction_type === 'income')
-                .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-
-            const monthlyExpenses = monthlyTransactions
-                .filter(t => t.transaction_type === 'expense')
-                .reduce((sum, t) => sum + parseFloat(t.amount), 0);
-
-            // Update UI
-            document.getElementById('totalBalance').textContent = formatCurrency(totalBalance);
-            document.getElementById('monthlyIncome').textContent = formatCurrency(monthlyIncome);
-            document.getElementById('monthlyExpenses').textContent = formatCurrency(monthlyExpenses);
-            document.getElementById('monthlyBalance').textContent = formatCurrency(monthlyIncome - monthlyExpenses);
-
-            // Update recent transactions
-            const recentTransactions = transactions.slice(0, 5);
-            const tbody = document.getElementById('recentTransactions');
-            tbody.innerHTML = recentTransactions.map(t => `
-                <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatDate(t.transaction_date)}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${t.description}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${t.category_name || 'Sin categoría'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium ${getAmountColorClass(t)}">
-                        ${getAmountDisplay(t)}
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        // Load accounts
-        async function loadAccounts() {
-            try {
-                const response = await axios.get(`${API_BASE}${API_ENDPOINTS.accounts}`, {
-                    headers: getAuthHeaders()
-                });
-                accounts = response.data;
-
-                if (document.getElementById('accountsSection').classList.contains('hidden') === false) {
-                    renderAccounts();
+        ['wizardDiezmos', 'wizardOfrendas', 'wizardAnexos', 'wizardCaballeros', 'wizardDamas', 'wizardJovenes', 'wizardNinos', 'wizardOtros', 'wizardHonorariosPastoral', 'wizardServicios', 'wizardMontoDepositado']
+            .forEach(id => {
+                const input = document.getElementById(id);
+                if (input) {
+                    input.addEventListener('input', updateWizardTotals);
                 }
-            } catch (error) {
-                console.error('Error loading accounts:', error);
-            }
-        }
+            });
 
-        function renderAccounts() {
-            const grid = document.getElementById('accountsGrid');
-            grid.innerHTML = accounts.map(account => `
-                <div class="bg-white p-6 rounded-lg shadow-md border-l-4 ${getAccountBorderColor(account.account_type)}">
-                    <div class="flex justify-between items-start mb-4">
-                        <div>
-                            <h3 class="text-lg font-semibold text-gray-800">${account.account_name}</h3>
-                            <p class="text-sm text-gray-500">${getAccountTypeLabel(account.account_type)}</p>
-                            ${account.bank_name ? `<p class="text-sm text-gray-500">${account.bank_name}</p>` : ''}
-                        </div>
-                        <span class="px-2 py-1 text-xs rounded-full ${account.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
-                            ${account.is_active ? 'Activa' : 'Inactiva'}
-                        </span>
-                    </div>
-                    <div class="text-2xl font-bold text-gray-900 mb-2">
-                        ${formatCurrency(account.current_balance)}
-                    </div>
-                    ${account.account_number ? `<p class="text-sm text-gray-500">Cuenta: ${account.account_number}</p>` : ''}
-                </div>
-            `).join('');
-        }
+        document.getElementById('reportYearFilter').addEventListener('change', renderReportList);
 
-        // Load transactions
-        async function loadTransactions() {
-            try {
-                const params = new URLSearchParams();
-
-                const filterAccount = document.getElementById('filterAccount')?.value;
-                const filterType = document.getElementById('filterType')?.value;
-                const filterStartDate = document.getElementById('filterStartDate')?.value;
-                const filterEndDate = document.getElementById('filterEndDate')?.value;
-
-                if (filterAccount) params.append('account_id', filterAccount);
-                if (filterType) params.append('transaction_type', filterType);
-                if (filterStartDate) params.append('start_date', filterStartDate);
-                if (filterEndDate) params.append('end_date', filterEndDate);
-
-                const response = await axios.get(`${API_BASE}${API_ENDPOINTS.transactions}?${params}`, {
-                    headers: getAuthHeaders()
-                });
-
-                transactions = response.data.transactions || response.data;
-
-                if (document.getElementById('transactionsSection').classList.contains('hidden') === false) {
-                    renderTransactions();
-                }
-            } catch (error) {
-                console.error('Error loading transactions:', error);
-            }
-        }
-
-        function renderTransactions() {
-            const tbody = document.getElementById('transactionsTable');
-            tbody.innerHTML = transactions.map(t => `
-                <tr>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatDate(t.transaction_date)}</td>
-                    <td class="px-6 py-4 text-sm text-gray-900">${t.description}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${t.account_name}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${t.category_name || 'Sin categoría'}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="px-2 py-1 text-xs rounded-full ${getTypeColorClass(t.transaction_type)}">
-                            ${getTypeLabel(t.transaction_type)}
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium ${getAmountColorClass(t)}">
-                        ${getAmountDisplay(t)}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <button onclick="editTransaction(${t.id})" class="text-blue-600 hover:text-blue-800 mr-2">Editar</button>
-                        <button onclick="deleteTransaction(${t.id})" class="text-red-600 hover:text-red-800">Eliminar</button>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        // Load categories
-        async function loadCategories() {
-            try {
-                const response = await axios.get(`${API_BASE}${API_ENDPOINTS.categories}`, {
-                    headers: getAuthHeaders()
-                });
-                categories = response.data.all_categories || response.data;
-            } catch (error) {
-                console.error('Error loading categories:', error);
-            }
-        }
-
-        // Utility functions
-        function formatCurrency(amount) {
-            return new Intl.NumberFormat('es-PY', {
-                style: 'currency',
-                currency: 'PYG',
-                minimumFractionDigits: 0
-            }).format(amount || 0);
-        }
-
-        function formatDate(dateString) {
-            return new Date(dateString).toLocaleDateString('es-PY');
-        }
-
-        function getAccountBorderColor(type) {
-            const colors = {
-                'checking': 'border-blue-500',
-                'savings': 'border-green-500',
-                'petty_cash': 'border-yellow-500',
-                'special_fund': 'border-purple-500'
-            };
-            return colors[type] || 'border-gray-500';
-        }
-
-        function getAccountTypeLabel(type) {
-            const labels = {
-                'checking': 'Cuenta Corriente',
-                'savings': 'Caja de Ahorro',
-                'petty_cash': 'Caja Chica',
-                'special_fund': 'Fondo Especial'
-            };
-            return labels[type] || type;
-        }
-
-        function getTypeColorClass(type) {
-            const colors = {
-                'income': 'bg-green-100 text-green-800',
-                'expense': 'bg-red-100 text-red-800',
-                'transfer': 'bg-blue-100 text-blue-800'
-            };
-            return colors[type] || 'bg-gray-100 text-gray-800';
-        }
-
-        function getTypeLabel(type) {
-            const labels = {
-                'income': 'Ingreso',
-                'expense': 'Gasto',
-                'transfer': 'Transferencia'
-            };
-            return labels[type] || type;
-        }
-
-        function getAmountColorClass(transaction) {
-            return transaction.transaction_type === 'income' ? 'text-green-600' : 'text-red-600';
-        }
-
-        function getAmountDisplay(transaction) {
-            const sign = transaction.transaction_type === 'income' ? '+' : '-';
-            return `${sign} ${formatCurrency(transaction.amount)}`;
-        }
-
-        // Form functions (placeholders)
-        function showNewAccountForm() {
-            alert('Formulario de nueva cuenta (por implementar)');
-        }
-
-        function showNewTransactionForm() {
-            alert('Formulario de nueva transacción (por implementar)');
-        }
-
-        function editTransaction(id) {
-            alert(`Editar transacción ${id} (por implementar)`);
-        }
-
-        function deleteTransaction(id) {
-            if (confirm('¿Está seguro de eliminar esta transacción?')) {
-                alert(`Eliminar transacción ${id} (por implementar)`);
-            }
-        }
-
-        // Initialize app
         async function initializeApp() {
+            await loadDashboardData();
+            await loadMyReports();
             showSection('dashboard');
         }
 
-        // Check for existing auth on page load
-        window.addEventListener('load', () => {
-            const token = getAuthToken();
-            if (token) {
-                // Validate token and auto-login if valid
-                // For now, just show login screen
+        window.addEventListener('load', async () => {
+            const storedToken = getStoredToken();
+            if (storedToken) {
+                setAuthToken(storedToken);
+                document.getElementById('loginScreen').classList.add('hidden');
+                document.getElementById('mainApp').classList.remove('hidden');
+                await initializeApp();
+            } else {
+                document.getElementById('loginScreen').classList.remove('hidden');
             }
-            document.getElementById('loginScreen').classList.remove('hidden');
         });
     </script>
 </body>

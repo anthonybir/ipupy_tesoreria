@@ -49,7 +49,7 @@ async function applyMigration() {
       const statement = statements[i];
 
       // Skip empty statements
-      if (!statement || statement.length < 10) continue;
+      if (!statement || statement.length < 10) {continue;}
 
       console.log(`   Ejecutando declaración ${i + 1}...`);
 

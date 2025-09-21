@@ -756,9 +756,8 @@
                     </button>
                 </div>
 
-                <form id="transactionForm" class="p-6">
-                    <!-- Basic Info -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <form id="transactionForm" class="p-6 space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium mb-2">Fecha *</label>
                             <input type="date" id="transactionDate" class="w-full px-3 py-2 border rounded" required>
@@ -771,7 +770,7 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium mb-2">Iglesia (opcional)</label>
                             <select id="transactionChurch" class="w-full px-3 py-2 border rounded">
@@ -785,7 +784,7 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium mb-2">Proveedor</label>
                             <input type="text" id="transactionProvider" class="w-full px-3 py-2 border rounded"
@@ -798,33 +797,56 @@
                         </div>
                     </div>
 
-                    <!-- Amount (Either In or Out) -->
-                    <div class="mb-6">
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium mb-2">Entrada (Gs.)</label>
-                                <input type="number" id="transactionAmountIn" class="w-full px-3 py-2 border rounded"
-                                       step="0.01" placeholder="0.00" onchange="handleAmountChange('in')">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-2">Salida (Gs.)</label>
-                                <input type="number" id="transactionAmountOut" class="w-full px-3 py-2 border rounded"
-                                       step="0.01" placeholder="0.00" onchange="handleAmountChange('out')">
-                            </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Entrada (Gs.)</label>
+                            <input type="number" id="transactionAmountIn" class="w-full px-3 py-2 border rounded"
+                                   step="0.01" placeholder="0.00">
                         </div>
-                        <p class="text-sm text-gray-500 mt-1">Especifique SOLO entrada O salida, no ambos</p>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Salida (Gs.)</label>
+                            <input type="number" id="transactionAmountOut" class="w-full px-3 py-2 border rounded"
+                                   step="0.01" placeholder="0.00">
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-500">Especifique SOLO entrada O salida, no ambos.</p>
+
+                    <div class="flex items-center justify-between border-t pt-4">
+                        <button type="button" id="addTransactionEntryBtn"
+                                class="px-4 py-2 bg-blue-100 text-blue-700 rounded hover:bg-blue-200">
+                            Agregar partida
+                        </button>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="closeTransactionModal()"
+                                    class="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50">
+                                Cancelar
+                            </button>
+                            <button type="button" id="saveTransactionBatchBtn"
+                                    class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                                Registrar partidas
+                            </button>
+                        </div>
                     </div>
 
-                    <!-- Action Buttons -->
-                    <div class="flex justify-end gap-3">
-                        <button type="button" onclick="closeTransactionModal()"
-                                class="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50">
-                            Cancelar
-                        </button>
-                        <button type="submit"
-                                class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                            Guardar Transacción
-                        </button>
+                    <div id="transactionEntriesContainer" class="hidden">
+                        <h4 class="text-sm font-semibold text-gray-700 mb-2">Partidas agregadas</h4>
+                        <div class="overflow-x-auto border rounded">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-4 py-2 text-left">Fecha</th>
+                                        <th class="px-4 py-2 text-left">Fondo</th>
+                                        <th class="px-4 py-2 text-left">Concepto</th>
+                                        <th class="px-4 py-2 text-right">Entrada</th>
+                                        <th class="px-4 py-2 text-right">Salida</th>
+                                        <th class="px-4 py-2 text-center">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="transactionEntriesTable" class="divide-y divide-gray-200">
+                                    <!-- Items dinámicos -->
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -1007,6 +1029,28 @@
                 month: '2-digit',
                 day: '2-digit'
             }).format(date);
+        }
+
+        function formatDateTime(value) {
+            if (!value) {
+                return 'N/A';
+            }
+            return new Date(value).toLocaleString('es-PY');
+        }
+
+        function formatMonthName(month) {
+            const names = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+            return names[(month - 1 + 12) % 12] || `${month}`;
+        }
+
+        function formatReportStatus(status) {
+            const map = {
+                procesado: 'Procesado',
+                pendiente: 'Pendiente',
+                borrador: 'Borrador',
+                recibido: 'Recibido'
+            };
+            return map[status] || status;
         }
 
         function showToast(title, message, type = 'info') {
@@ -1256,24 +1300,33 @@
                 const reportsListEl = document.getElementById('reportsList');
 
                 if (reports.length > 0) {
-                    reportsListEl.innerHTML = reports.map(report => `
+                    reportsListEl.innerHTML = reports.map(report => {
+                        const submittedAt = report.submitted_at || report.created_at;
+                        const statusClasses = report.estado === 'procesado'
+                            ? 'bg-green-100 text-green-800'
+                            : report.estado === 'borrador'
+                                ? 'bg-gray-100 text-gray-700'
+                                : 'bg-yellow-100 text-yellow-800';
+                        return `
                         <div class="border rounded-lg p-4">
-                            <div class="flex justify-between items-start">
+                            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                                 <div>
                                     <h4 class="font-semibold">${report.church_name}</h4>
                                     <p class="text-sm text-gray-600">${report.city} - ${report.pastor}</p>
-                                    <p class="text-sm text-gray-500">${report.month}/${report.year}</p>
+                                    <p class="text-sm text-gray-500">${formatMonthName(report.month)} ${report.year}</p>
+                                    <p class="text-xs text-gray-400">${submittedAt ? `Enviado ${formatDateTime(submittedAt)}` : 'Fecha no disponible'}</p>
                                 </div>
-                                <div class="text-right">
+                                <div class="text-right space-y-2">
                                     <div class="font-semibold text-lg">${formatCurrency(report.total_entradas)}</div>
                                     <div class="text-sm text-gray-500">Fondo Nacional: ${formatCurrency(report.fondo_nacional)}</div>
-                                    <span class="inline-block px-2 py-1 text-xs rounded-full ${
-                                        report.estado === 'recibido' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                                    }">${report.estado}</span>
+                                    <div class="flex items-center gap-2 justify-end">
+                                        <span class="inline-block px-2 py-1 text-xs rounded-full ${statusClasses}">${formatReportStatus(report.estado)}</span>
+                                        ${report.estado !== 'procesado' ? `<button type="button" class="text-xs text-blue-600 hover:text-blue-800" onclick="markReportProcessed(${report.id})">Procesar</button>` : ''}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    `).join('');
+                        </div>`;
+                    }).join('');
                 } else {
                     reportsListEl.innerHTML = '<p class="text-gray-500 text-center py-8">No hay informes disponibles</p>';
                 }
@@ -1306,30 +1359,55 @@
                 const reportsListEl = document.getElementById('reportsList');
 
                 if (reports.length > 0) {
-                    reportsListEl.innerHTML = reports.map(report => `
+                    reportsListEl.innerHTML = reports.map(report => {
+                        const submittedAt = report.submitted_at || report.created_at;
+                        const statusClasses = report.estado === 'procesado'
+                            ? 'bg-green-100 text-green-800'
+                            : report.estado === 'borrador'
+                                ? 'bg-gray-100 text-gray-700'
+                                : 'bg-yellow-100 text-yellow-800';
+                        return `
                         <div class="border rounded-lg p-4">
-                            <div class="flex justify-between items-start">
+                            <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                                 <div>
                                     <h4 class="font-semibold">${report.church_name}</h4>
                                     <p class="text-sm text-gray-600">${report.city} - ${report.pastor}</p>
-                                    <p class="text-sm text-gray-500">${report.month}/${report.year}</p>
+                                    <p class="text-sm text-gray-500">${formatMonthName(report.month)} ${report.year}</p>
+                                    <p class="text-xs text-gray-400">${submittedAt ? `Enviado ${formatDateTime(submittedAt)}` : 'Fecha no disponible'}</p>
                                 </div>
-                                <div class="text-right">
+                                <div class="text-right space-y-2">
                                     <div class="font-semibold text-lg">${formatCurrency(report.total_entradas)}</div>
                                     <div class="text-sm text-gray-500">Fondo Nacional: ${formatCurrency(report.fondo_nacional)}</div>
-                                    <span class="inline-block px-2 py-1 text-xs rounded-full ${
-                                        report.estado === 'recibido' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                                    }">${report.estado}</span>
+                                    <div class="flex items-center gap-2 justify-end">
+                                        <span class="inline-block px-2 py-1 text-xs rounded-full ${statusClasses}">${formatReportStatus(report.estado)}</span>
+                                        ${report.estado !== 'procesado' ? `<button type="button" class="text-xs text-blue-600 hover:text-blue-800" onclick="markReportProcessed(${report.id})">Procesar</button>` : ''}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    `).join('');
+                        </div>`;
+                    }).join('');
                 } else {
                     reportsListEl.innerHTML = '<p class="text-gray-500 text-center py-8">No se encontraron informes con los filtros aplicados</p>';
                 }
 
             } catch (error) {
                 showToast('Error', 'Error al filtrar informes', 'error');
+            }
+        }
+
+        async function markReportProcessed(reportId) {
+            try {
+                await axios.put(`${API_BASE}/reports?id=${reportId}`, {
+                    estado: 'procesado'
+                }, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                showToast('Éxito', 'Informe marcado como procesado', 'success');
+                loadReports();
+                loadDashboard();
+            } catch (error) {
+                showToast('Error', error.response?.data?.error || 'No se pudo actualizar el informe', 'error');
             }
         }
 
@@ -1692,25 +1770,32 @@
             }
         });
 
-        // Transaction Functions
+                // Transaction Functions
+        let transactionEntries = [];
+
         async function openTransactionModal() {
-            // Load funds and churches into dropdowns
             await loadFundsForTransaction();
             await loadChurchesForTransaction();
+            resetTransactionEntryForm();
+            transactionEntries = [];
+            renderTransactionEntries();
 
-            // Reset form
-            document.getElementById('transactionForm').reset();
-
-            // Set current date
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('transactionDate').value = today;
 
-            // Show modal
             document.getElementById('transactionModal').classList.remove('hidden');
         }
 
         function closeTransactionModal() {
             document.getElementById('transactionModal').classList.add('hidden');
+        }
+
+        function resetTransactionEntryForm() {
+            document.getElementById('transactionConcept').value = '';
+            document.getElementById('transactionProvider').value = '';
+            document.getElementById('transactionDocument').value = '';
+            document.getElementById('transactionAmountIn').value = '';
+            document.getElementById('transactionAmountOut').value = '';
         }
 
         async function loadFundsForTransaction() {
@@ -1725,17 +1810,16 @@
                 ];
 
                 fundSelects.forEach(select => {
-                    if (select) {
-                        const placeholder = select.id === 'transactionFund' ? 'Seleccionar fondo...' : 'Todos los fondos';
-                        select.innerHTML = `<option value="">${placeholder}</option>`;
+                    if (!select) return;
+                    const placeholder = select.id === 'transactionFund' ? 'Seleccionar fondo...' : 'Todos los fondos';
+                    select.innerHTML = `<option value="">${placeholder}</option>`;
 
-                        (response.data.data || response.data).forEach(fund => {
-                            const option = document.createElement('option');
-                            option.value = fund.id;
-                            option.textContent = `${fund.name} (${formatCurrency(fund.current_balance)})`;
-                            select.appendChild(option);
-                        });
-                    }
+                    (response.data.data || response.data).forEach(fund => {
+                        const option = document.createElement('option');
+                        option.value = fund.id;
+                        option.textContent = `${fund.name}`;
+                        select.appendChild(option);
+                    });
                 });
             } catch (error) {
                 showToast('Error', 'Error al cargar fondos', 'error');
@@ -1754,173 +1838,169 @@
                 ];
 
                 churchSelects.forEach(select => {
-                    if (select) {
-                        const placeholder = select.id === 'transactionChurch' ? 'Seleccionar iglesia...' : 'Todas las iglesias';
-                        select.innerHTML = `<option value="">${placeholder}</option>`;
+                    if (!select) return;
+                    const placeholder = select.id === 'transactionChurch' ? 'Seleccionar iglesia...' : 'Todas las iglesias';
+                    select.innerHTML = `<option value="">${placeholder}</option>`;
 
-                        response.data.forEach(church => {
-                            const option = document.createElement('option');
-                            option.value = church.id;
-                            option.textContent = `${church.name} - ${church.city}`;
-                            select.appendChild(option);
-                        });
-                    }
+                    response.data.forEach(church => {
+                        const option = document.createElement('option');
+                        option.value = church.id;
+                        option.textContent = `${church.name} - ${church.city}`;
+                        select.appendChild(option);
+                    });
                 });
             } catch (error) {
                 showToast('Error', 'Error al cargar iglesias', 'error');
             }
         }
 
-        function handleAmountChange(type) {
-            // Ensure only one amount is filled (entry OR exit, not both)
-            if (type === 'in') {
-                const amountIn = document.getElementById('transactionAmountIn').value;
-                if (amountIn && parseFloat(amountIn) > 0) {
-                    document.getElementById('transactionAmountOut').value = '';
-                }
-            } else if (type === 'out') {
-                const amountOut = document.getElementById('transactionAmountOut').value;
-                if (amountOut && parseFloat(amountOut) > 0) {
-                    document.getElementById('transactionAmountIn').value = '';
-                }
+        function addTransactionEntry() {
+            const date = document.getElementById('transactionDate').value;
+            const fundSelect = document.getElementById('transactionFund');
+            const fundId = fundSelect.value;
+            const fundName = fundSelect.options[fundSelect.selectedIndex]?.text || '';
+            const churchId = document.getElementById('transactionChurch').value || null;
+            const concept = document.getElementById('transactionConcept').value.trim();
+            const provider = document.getElementById('transactionProvider').value.trim();
+            const documentNumber = document.getElementById('transactionDocument').value.trim();
+            const amountIn = parseFloat(document.getElementById('transactionAmountIn').value) || 0;
+            const amountOut = parseFloat(document.getElementById('transactionAmountOut').value) || 0;
+
+            if (!date || !fundId || !concept) {
+                showToast('Error', 'Completa fecha, fondo y concepto antes de agregar.', 'error');
+                return;
+            }
+
+            if ((amountIn === 0 && amountOut === 0) || (amountIn > 0 && amountOut > 0)) {
+                showToast('Error', 'Indica solo un monto de entrada o de salida.', 'error');
+                return;
+            }
+
+            transactionEntries.push({
+                date,
+                fund_id: fundId,
+                fund_name: fundName,
+                church_id: churchId,
+                concept,
+                provider,
+                document_number: documentNumber,
+                amount_in: amountIn,
+                amount_out: amountOut
+            });
+
+            renderTransactionEntries();
+            resetTransactionEntryForm();
+        }
+
+        function renderTransactionEntries() {
+            const container = document.getElementById('transactionEntriesContainer');
+            const tableBody = document.getElementById('transactionEntriesTable');
+            if (!container || !tableBody) return;
+
+            if (transactionEntries.length === 0) {
+                container.classList.add('hidden');
+                tableBody.innerHTML = '';
+                return;
+            }
+
+            container.classList.remove('hidden');
+            tableBody.innerHTML = transactionEntries.map((entry, index) => `
+                <tr>
+                    <td class="px-4 py-2">${formatDate(entry.date)}</td>
+                    <td class="px-4 py-2">${entry.fund_name}</td>
+                    <td class="px-4 py-2">${entry.concept}</td>
+                    <td class="px-4 py-2 text-right">${entry.amount_in > 0 ? formatCurrency(entry.amount_in) : '-'}</td>
+                    <td class="px-4 py-2 text-right">${entry.amount_out > 0 ? formatCurrency(entry.amount_out) : '-'}</td>
+                    <td class="px-4 py-2 text-center">
+                        <button type="button" class="text-red-600 hover:text-red-800 text-xs" onclick="removeTransactionEntry(${index})">Quitar</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function removeTransactionEntry(index) {
+            transactionEntries.splice(index, 1);
+            renderTransactionEntries();
+        }
+
+        async function submitTransactionBatch() {
+            if (!transactionEntries.length) {
+                showToast('Error', 'Agrega al menos una partida antes de registrar.', 'error');
+                return;
+            }
+
+            const payload = {
+                entries: transactionEntries.map(entry => ({
+                    date: entry.date,
+                    fund_id: entry.fund_id,
+                    church_id: entry.church_id,
+                    concept: entry.concept,
+                    provider: entry.provider,
+                    document_number: entry.document_number,
+                    amount_in: entry.amount_in,
+                    amount_out: entry.amount_out
+                }))
+            };
+
+            try {
+                await axios.post(`${API_BASE}/financial?type=transactions`, payload, {
+                    headers: { Authorization: `Bearer ${authToken}` }
+                });
+
+                showToast('Éxito', 'Transacciones registradas correctamente', 'success');
+                closeTransactionModal();
+                loadTransactions();
+                loadFunds();
+            } catch (error) {
+                console.error('Error saving transactions:', error);
+                showToast('Error', error.response?.data?.error || 'Error al guardar las transacciones', 'error');
             }
         }
 
         async function loadTransactions() {
-            // Load dropdown options first
-            await loadFundsForTransaction();
-            await loadChurchesForTransaction();
-
-            try {
-                const response = await axios.get(`${API_BASE}/financial?type=transactions`, {
-                    headers: { Authorization: `Bearer ${authToken}` }
-                });
-
-                const transactionsList = document.getElementById('transactionsList');
-
-                if (response.data.length > 0) {
-                    transactionsList.innerHTML = response.data.map(transaction => `
-                        <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                ${new Date(transaction.date).toLocaleDateString()}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                ${transaction.church_name || '-'}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <span class="px-2 py-1 text-xs rounded-full ${
-                                    transaction.fund_type === 'national' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                                }">
-                                    ${transaction.fund_name}
-                                </span>
-                            </td>
-                            <td class="px-6 py-4 text-sm text-gray-900">${transaction.concept}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.provider || '-'}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.document_number || '-'}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                                ${transaction.amount_in > 0 ? formatCurrency(transaction.amount_in) : '-'}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                                ${transaction.amount_out > 0 ? formatCurrency(transaction.amount_out) : '-'}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
-                                ${formatCurrency(transaction.balance)}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                                <button onclick="editTransaction(${transaction.id})"
-                                        class="text-blue-600 hover:text-blue-900 mr-3">
-                                    Editar
-                                </button>
-                                <button onclick="deleteTransaction(${transaction.id})"
-                                        class="text-red-600 hover:text-red-900">
-                                    Eliminar
-                                </button>
-                            </td>
-                        </tr>
-                    `).join('');
-                } else {
-                    transactionsList.innerHTML = `
-                        <tr>
-                            <td colspan="10" class="px-6 py-4 text-center text-gray-500">
-                                No hay transacciones registradas
-                            </td>
-                        </tr>
-                    `;
-                }
-            } catch (error) {
-                showToast('Error', 'Error al cargar transacciones', 'error');
-            }
-        }
-
-        async function filterTransactions() {
             try {
                 const params = new URLSearchParams();
 
-                const fundId = document.getElementById('filterTransactionFund').value;
-                const churchId = document.getElementById('filterTransactionChurch').value;
-                const dateFrom = document.getElementById('filterTransactionDateFrom').value;
+                const filterFund = document.getElementById('filterTransactionFund')?.value;
+                const filterChurch = document.getElementById('filterTransactionChurch')?.value;
+                const filterDateFrom = document.getElementById('filterTransactionDateFrom')?.value;
 
-                if (fundId) params.append('fund_id', fundId);
-                if (churchId) params.append('church_id', churchId);
-                if (dateFrom) params.append('date_from', dateFrom);
+                if (filterFund) params.append('fund_id', filterFund);
+                if (filterChurch) params.append('church_id', filterChurch);
+                if (filterDateFrom) params.append('date_from', filterDateFrom);
 
-                const url = `${API_BASE}/financial?type=transactions` + (params.toString() ? '&' + params.toString() : '');
-
+                const url = `${API_BASE}/financial?type=transactions` + (params.toString() ? `&${params}` : '');
                 const response = await axios.get(url, {
                     headers: { Authorization: `Bearer ${authToken}` }
                 });
 
-                // Update the transaction list with filtered results
                 const transactionsList = document.getElementById('transactionsList');
+                if (!transactionsList) return;
 
-                if (response.data.length > 0) {
+                if (response.data.length) {
                     transactionsList.innerHTML = response.data.map(transaction => `
-                        <tr class="hover:bg-gray-50">
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatDate(transaction.date)}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.church_name || '-'}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                ${new Date(transaction.date).toLocaleDateString()}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                ${transaction.church_name || '-'}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                <span class="px-2 py-1 text-xs rounded-full ${
-                                    transaction.fund_type === 'national' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                                }">
+                                <span class="px-2 py-1 text-xs rounded-full ${transaction.fund_type === 'national' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}">
                                     ${transaction.fund_name}
                                 </span>
                             </td>
                             <td class="px-6 py-4 text-sm text-gray-900">${transaction.concept}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.provider || '-'}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${transaction.document_number || '-'}</td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                                ${transaction.amount_in > 0 ? formatCurrency(transaction.amount_in) : '-'}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">
-                                ${transaction.amount_out > 0 ? formatCurrency(transaction.amount_out) : '-'}
-                            </td>
-                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">
-                                ${formatCurrency(transaction.balance)}
-                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">${transaction.amount_in > 0 ? formatCurrency(transaction.amount_in) : '-'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">${transaction.amount_out > 0 ? formatCurrency(transaction.amount_out) : '-'}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-right">${formatCurrency(transaction.balance)}</td>
                             <td class="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-                                <button onclick="editTransaction(${transaction.id})"
-                                        class="text-blue-600 hover:text-blue-900 mr-3">
-                                    Editar
-                                </button>
-                                <button onclick="deleteTransaction(${transaction.id})"
-                                        class="text-red-600 hover:text-red-900">
-                                    Eliminar
-                                </button>
+                                <button onclick="editTransaction(${transaction.id})" class="text-blue-600 hover:text-blue-900 mr-3">Editar</button>
+                                <button onclick="deleteTransaction(${transaction.id})" class="text-red-600 hover:text-red-900">Eliminar</button>
                             </td>
                         </tr>
                     `).join('');
                 } else {
-                    transactionsList.innerHTML = `
-                        <tr>
-                            <td colspan="10" class="px-6 py-4 text-center text-gray-500">
-                                No se encontraron transacciones con los filtros aplicados
-                            </td>
-                        </tr>
-                    `;
+                    transactionsList.innerHTML = '<tr><td colspan="10" class="px-6 py-4 text-center text-gray-500">No se encontraron transacciones con los filtros aplicados</td></tr>';
                 }
             } catch (error) {
                 showToast('Error', 'Error al filtrar transacciones', 'error');
@@ -1928,18 +2008,17 @@
         }
 
         async function editTransaction(id) {
-            // For now, just show a simple prompt for concept editing
             const newConcept = prompt('Nuevo concepto:');
             if (newConcept && newConcept.trim()) {
                 try {
-                    await axios.put(`${API_BASE}/financial?type=transactions`, {
+                    await axios.put(`${API_BASE}/financial?type=transactions&id=${id}`, {
                         concept: newConcept.trim()
                     }, {
                         headers: { Authorization: `Bearer ${authToken}` }
                     });
 
                     showToast('Éxito', 'Transacción actualizada', 'success');
-                    loadTransactions(); // Reload the list
+                    loadTransactions();
                 } catch (error) {
                     showToast('Error', error.response?.data?.error || 'Error al actualizar transacción', 'error');
                 }
@@ -1947,56 +2026,27 @@
         }
 
         async function deleteTransaction(id) {
-            if (confirm('¿Está seguro de que desea eliminar esta transacción? Esta acción no se puede deshacer.')) {
-                try {
-                    await axios.delete(`${API_BASE}/financial?type=transactions`, {
-                        headers: { Authorization: `Bearer ${authToken}` }
-                    });
-
-                    showToast('Éxito', 'Transacción eliminada', 'success');
-                    loadTransactions(); // Reload the list
-                } catch (error) {
-                    showToast('Error', error.response?.data?.error || 'Error al eliminar transacción', 'error');
-                }
+            if (!confirm('¿Está seguro de que desea eliminar esta transacción? Esta acción no se puede deshacer.')) {
+                return;
             }
-        }
-
-        // Handle transaction form submission
-        document.getElementById('transactionForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const formData = {
-                date: document.getElementById('transactionDate').value,
-                fund_id: document.getElementById('transactionFund').value,
-                church_id: document.getElementById('transactionChurch').value || null,
-                concept: document.getElementById('transactionConcept').value,
-                provider: document.getElementById('transactionProvider').value,
-                document_number: document.getElementById('transactionDocument').value,
-                amount_in: parseFloat(document.getElementById('transactionAmountIn').value) || 0,
-                amount_out: parseFloat(document.getElementById('transactionAmountOut').value) || 0
-            };
-
             try {
-                await axios.post(`${API_BASE}/financial?type=transactions`, formData, {
+                await axios.delete(`${API_BASE}/financial?type=transactions&id=${id}`, {
                     headers: { Authorization: `Bearer ${authToken}` }
                 });
 
-                showToast('Éxito', 'Transacción registrada correctamente', 'success');
-                closeTransactionModal();
-
-                // Refresh transaction list if we're on the transactions tab
-                if (document.getElementById('transactionsTab').classList.contains('active')) {
-                    loadTransactions();
-                }
-
-                // Refresh dashboard to update fund balances
-                loadDashboard();
-
+                showToast('Éxito', 'Transacción eliminada', 'success');
+                loadTransactions();
             } catch (error) {
-                console.error('Error saving transaction:', error);
-                showToast('Error', error.response?.data?.error || 'Error al guardar la transacción', 'error');
+                showToast('Error', error.response?.data?.error || 'Error al eliminar transacción', 'error');
             }
+        }
+
+        document.getElementById('transactionForm').addEventListener('submit', (event) => {
+            event.preventDefault();
+            addTransactionEntry();
         });
+        document.getElementById('addTransactionEntryBtn').addEventListener('click', addTransactionEntry);
+        document.getElementById('saveTransactionBatchBtn').addEventListener('click', submitTransactionBatch);
 
         // Fund Management Functions
         async function loadFunds() {

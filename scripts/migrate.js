@@ -7,7 +7,7 @@ require('dotenv').config({ path: '.env.local' });
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { createConnection, execute } = require('../src/lib/db');
+const { createConnection, execute } = require('../lib/db');
 
 let pool;
 

@@ -4,8 +4,18 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env.local') });
 
+// Validate environment configuration before starting
+const EnvironmentValidator = require('./lib/env-validator');
+EnvironmentValidator.validateOrExit();
+
+// Import rate limiting middleware
+const { generalLimiter, authLimiter, financialLimiter, rateLimiter } = require('./lib/rate-limiter');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Apply general rate limiting to all routes
+app.use('/api/', generalLimiter);
 
 app.use(cors());
 app.use(express.json());
@@ -17,6 +27,16 @@ app.get('/api/test', (_req, res) => {
     message: 'ABSD Treasury API is running',
     timestamp: new Date().toISOString(),
     status: 'online'
+  });
+});
+
+// Rate limiter monitoring endpoint (for administrators)
+app.get('/api/rate-limiter/stats', (_req, res) => {
+  const stats = rateLimiter.getStats();
+  res.json({
+    message: 'Rate limiter statistics',
+    stats,
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -38,16 +58,19 @@ const registerApiRoute = (route, filePath) => {
 };
 
 registerApiRoute('/api/db-test', '../tests/api/db-test.js');
-// Consolidated endpoints
-registerApiRoute('/api/financial', '../api/financial.js');
-registerApiRoute('/api/data', '../api/data.js');
 
-// Core endpoints
+// Authentication endpoints (strict rate limiting)
+app.all('/api/auth', authLimiter, createApiHandler('../api/auth.js'));
+
+// Financial endpoints (moderate rate limiting)
+app.all('/api/financial', financialLimiter, createApiHandler('../api/financial.js'));
+app.all('/api/reports', financialLimiter, createApiHandler('../api/reports.js'));
+app.all('/api/fund-movements', financialLimiter, createApiHandler('../api/fund-movements.js'));
+
+// General endpoints (already covered by general limiter)
+registerApiRoute('/api/data', '../api/data.js');
 registerApiRoute('/api/churches', '../api/churches.js');
-registerApiRoute('/api/auth', '../api/auth.js');
 registerApiRoute('/api/dashboard', '../api/dashboard.js');
-registerApiRoute('/api/reports', '../api/reports.js');
-registerApiRoute('/api/fund-movements', '../api/fund-movements.js');
 registerApiRoute('/api/families', '../api/families.js');
 registerApiRoute('/api/members', '../api/members.js');
 

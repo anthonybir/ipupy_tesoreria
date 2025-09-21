@@ -196,16 +196,16 @@ async function runHealthCheck() {
   }
 
   const dbHealthy = await checkDatabase();
-  if (!dbHealthy) allHealthy = false;
+  if (!dbHealthy) {allHealthy = false;}
 
   const migrationsHealthy = await checkMigrations();
-  if (!migrationsHealthy) allHealthy = false;
+  if (!migrationsHealthy) {allHealthy = false;}
 
   const tablesHealthy = await checkTables();
-  if (!tablesHealthy) allHealthy = false;
+  if (!tablesHealthy) {allHealthy = false;}
 
   const adminHealthy = await checkAdminUser();
-  if (!adminHealthy) allHealthy = false;
+  if (!adminHealthy) {allHealthy = false;}
 
   healthStatus.status = allHealthy ? 'healthy' : 'attention_required';
 

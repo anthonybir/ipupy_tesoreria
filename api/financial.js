@@ -1,6 +1,7 @@
 const { execute } = require('../lib/db');
 const { setCORSHeaders, handlePreflight } = require('../lib/cors');
 const jwt = require('jsonwebtoken');
+const { queryBuilder } = require('../src/lib/query-builder');
 
 // Shared error classes and utilities
 class BadRequestError extends Error {
@@ -26,6 +27,59 @@ const toNumber = (value, fallback = 0) => {
   const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
+
+async function setAuditContext(actorEmail) {
+  if (!actorEmail) {
+    return;
+  }
+  try {
+    await execute('SELECT set_config($1, $2, true)', ['audit.user', actorEmail]);
+  } catch {
+    // Audit schema might not be installed yet
+  }
+}
+
+function prepareTransactionEntry(entry, decoded) {
+  if (!entry) {
+    throw new BadRequestError('Datos de transacción inválidos');
+  }
+
+  if (!isProvided(entry.date)) {
+    throw new BadRequestError('La fecha es requerida');
+  }
+
+  const fundId = parseInteger(entry.fund_id);
+  if (!fundId) {
+    throw new BadRequestError('El fondo es requerido');
+  }
+
+  if (!isProvided(entry.concept)) {
+    throw new BadRequestError('El concepto es requerido');
+  }
+
+  const amountIn = toNumber(entry.amount_in);
+  const amountOut = toNumber(entry.amount_out);
+
+  if ((amountIn === 0 && amountOut === 0) || (amountIn > 0 && amountOut > 0)) {
+    throw new BadRequestError('Debe especificar solo entrada o salida');
+  }
+
+  const churchId = entry.church_id ? parseInteger(entry.church_id) : null;
+  const reportId = entry.report_id ? parseInteger(entry.report_id) : null;
+
+  return {
+    date: entry.date,
+    fund_id: fundId,
+    church_id: churchId,
+    report_id: reportId,
+    concept: entry.concept,
+    provider: entry.provider || '',
+    document_number: entry.document_number || '',
+    amount_in: amountIn > 0 ? amountIn : 0,
+    amount_out: amountOut > 0 ? amountOut : 0,
+    created_by: decoded?.email || 'admin'
+  };
+}
 
 // Shared auth middleware
 const verifyToken = (req) => {
@@ -63,16 +117,16 @@ module.exports = async (req, res) => {
 
     // Route to appropriate handler based on type parameter
     switch (type) {
-      case 'funds':
-        return await handleFundsAPI(req, res, decoded);
-      case 'transactions':
-        return await handleTransactionsAPI(req, res, decoded);
-      case 'church-transactions':
-        return await handleChurchTransactionsAPI(req, res, decoded);
-      default:
-        return res.status(400).json({
-          error: 'Parámetro type requerido. Valores válidos: funds, transactions, church-transactions'
-        });
+    case 'funds':
+      return await handleFundsAPI(req, res, decoded);
+    case 'transactions':
+      return await handleTransactionsAPI(req, res, decoded);
+    case 'church-transactions':
+      return await handleChurchTransactionsAPI(req, res, decoded);
+    default:
+      return res.status(400).json({
+        error: 'Parámetro type requerido. Valores válidos: funds, transactions, church-transactions'
+      });
     }
   } catch (error) {
     console.error('Error en API financial:', error);
@@ -95,20 +149,20 @@ module.exports = async (req, res) => {
 // === FUNDS API HANDLERS ===
 async function handleFundsAPI(req, res, decoded) {
   switch (req.method) {
-    case 'GET':
-      await handleGetFunds(req, res, decoded);
-      break;
-    case 'PUT':
-      await handleUpdateFund(req, res, decoded);
-      break;
-    default:
-      res.status(405).json({ error: 'Método no permitido para funds' });
-      break;
+  case 'GET':
+    await handleGetFunds(req, res, decoded);
+    break;
+  case 'PUT':
+    await handleUpdateFund(req, res, decoded);
+    break;
+  default:
+    res.status(405).json({ error: 'Método no permitido para funds' });
+    break;
   }
 }
 
 // Obtener todos los fondos
-async function handleGetFunds(req, res, decoded) {
+async function handleGetFunds(req, res, _decoded) {
   try {
     const result = await execute(`
       SELECT
@@ -162,23 +216,15 @@ async function handleUpdateFund(req, res, decoded) {
       return res.status(404).json({ error: 'Fondo no encontrado' });
     }
 
-    // Actualizar el fondo
-    const updateFields = ['current_balance = $1', 'updated_at = NOW()'];
-    const updateValues = [current_balance];
-
+    // Actualizar el fondo usando query builder seguro
+    const updates = { current_balance };
     if (description !== undefined) {
-      updateFields.push('description = $2');
-      updateValues.push(description);
+      updates.description = description;
     }
 
-    updateValues.push(id); // Para el WHERE
-
-    const result = await execute(`
-      UPDATE funds
-      SET ${updateFields.join(', ')}
-      WHERE id = $${updateValues.length}
-      RETURNING id, name, type, description, current_balance, updated_at
-    `, updateValues);
+    const whereConditions = { id };
+    const query = queryBuilder.buildUpdate('funds', updates, whereConditions);
+    const result = await execute(query.sql, query.params);
 
     res.json({
       success: true,
@@ -194,16 +240,16 @@ async function handleUpdateFund(req, res, decoded) {
 // === TRANSACTIONS API HANDLERS ===
 async function handleTransactionsAPI(req, res, decoded) {
   switch (req.method) {
-    case 'GET':
-      return await handleGetTransactions(req, res, decoded);
-    case 'POST':
-      return await handlePostTransaction(req, res, decoded);
-    case 'PUT':
-      return await handlePutTransaction(req, res, decoded);
-    case 'DELETE':
-      return await handleDeleteTransaction(req, res, decoded);
-    default:
-      return res.status(405).json({ error: 'Método no permitido para transactions' });
+  case 'GET':
+    return await handleGetTransactions(req, res, decoded);
+  case 'POST':
+    return await handlePostTransaction(req, res, decoded);
+  case 'PUT':
+    return await handlePutTransaction(req, res, decoded);
+  case 'DELETE':
+    return await handleDeleteTransaction(req, res, decoded);
+  default:
+    return res.status(405).json({ error: 'Método no permitido para transactions' });
   }
 }
 
@@ -268,37 +314,30 @@ async function handleGetTransactions(req, res) {
 }
 
 async function handlePostTransaction(req, res, decoded) {
-  const data = req.body;
+  const data = req.body || {};
 
-  // Validate required fields
-  if (!data.date) {
-    throw new BadRequestError('La fecha es requerida');
-  }
-
-  if (!data.fund_id) {
-    throw new BadRequestError('El fondo es requerido');
-  }
-
-  if (!data.concept) {
-    throw new BadRequestError('El concepto es requerido');
-  }
-
-  const amount_in = toNumber(data.amount_in);
-  const amount_out = toNumber(data.amount_out);
-
-  if (amount_in === 0 && amount_out === 0) {
-    throw new BadRequestError('Debe especificar un monto de entrada o salida');
-  }
-
-  if (amount_in > 0 && amount_out > 0) {
-    throw new BadRequestError('Solo puede especificar entrada O salida, no ambos');
+  if (Array.isArray(data.entries) && data.entries.length > 0) {
+    try {
+      await setAuditContext(decoded?.email);
+      const results = await createTransactionBatch(data.entries, decoded);
+      return res.json({ success: true, transactions: results });
+    } catch (error) {
+      if (error instanceof BadRequestError) {
+        throw error;
+      }
+      console.error('Error creando transacciones múltiples:', error);
+      return res.status(500).json({ error: 'No se pudieron registrar las transacciones' });
+    }
   }
 
   try {
-    // Get current fund balance
+    await setAuditContext(decoded?.email);
+
+    const entry = prepareTransactionEntry(data, decoded);
+
     const fundResult = await execute(
-      'SELECT current_balance FROM funds WHERE id = $1',
-      [data.fund_id]
+      'SELECT current_balance FROM funds WHERE id = $1 FOR UPDATE',
+      [entry.fund_id]
     );
 
     if (fundResult.rows.length === 0) {
@@ -306,18 +345,15 @@ async function handlePostTransaction(req, res, decoded) {
     }
 
     const currentBalance = parseFloat(fundResult.rows[0].current_balance) || 0;
-    const movement = amount_in > 0 ? amount_in : -amount_out;
+    const movement = entry.amount_in > 0 ? entry.amount_in : -entry.amount_out;
     const newBalance = currentBalance + movement;
 
-    // Check if withdrawal would result in negative balance
     if (newBalance < 0) {
       throw new BadRequestError(`Saldo insuficiente. Saldo actual: ${currentBalance.toLocaleString()}`);
     }
 
-    // Start transaction
     await execute('BEGIN');
 
-    // Insert transaction
     const transactionResult = await execute(`
       INSERT INTO transactions (
         date, church_id, report_id, fund_id, concept, provider, document_number,
@@ -326,34 +362,32 @@ async function handlePostTransaction(req, res, decoded) {
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
       ) RETURNING *
     `, [
-      data.date,
-      data.church_id || null,
-      data.report_id || null,
-      data.fund_id,
-      data.concept,
-      data.provider || '',
-      data.document_number || '',
-      amount_in,
-      amount_out,
+      entry.date,
+      entry.church_id,
+      entry.report_id,
+      entry.fund_id,
+      entry.concept,
+      entry.provider,
+      entry.document_number,
+      entry.amount_in,
+      entry.amount_out,
       newBalance,
-      decoded.email || 'admin'
+      entry.created_by
     ]);
 
     const transaction = transactionResult.rows[0];
 
-    // Update fund balance
     await execute(
       'UPDATE funds SET current_balance = $1, updated_at = NOW() WHERE id = $2',
-      [newBalance, data.fund_id]
+      [newBalance, entry.fund_id]
     );
 
-    // Record fund movement
     await execute(`
       INSERT INTO fund_movements_enhanced (
         fund_id, transaction_id, previous_balance, movement, new_balance
       ) VALUES ($1, $2, $3, $4, $5)
     `, [
-      data.fund_id,
+      entry.fund_id,
       transaction.id,
       currentBalance,
       movement,
@@ -362,8 +396,90 @@ async function handlePostTransaction(req, res, decoded) {
 
     await execute('COMMIT');
 
-    res.json(transaction);
+    res.json({ success: true, transaction });
+  } catch (error) {
+    await execute('ROLLBACK');
+    if (error instanceof BadRequestError) {
+      throw error;
+    }
+    console.error('Error creando transacción:', error);
+    res.status(500).json({ error: 'No se pudo guardar la transacción' });
+  }
+}
 
+async function createTransactionBatch(entries, decoded) {
+  if (!entries.length) {
+    throw new BadRequestError('Debe incluir al menos una partida');
+  }
+
+  const normalizedEntries = entries.map(entry => prepareTransactionEntry(entry, decoded));
+  const inserted = [];
+
+  await execute('BEGIN');
+
+  try {
+    for (const entry of normalizedEntries) {
+      const fundResult = await execute(
+        'SELECT current_balance FROM funds WHERE id = $1 FOR UPDATE',
+        [entry.fund_id]
+      );
+
+      if (fundResult.rows.length === 0) {
+        throw new BadRequestError('Fondo no encontrado');
+      }
+
+      const currentBalance = parseFloat(fundResult.rows[0].current_balance) || 0;
+      const movement = entry.amount_in > 0 ? entry.amount_in : -entry.amount_out;
+      const newBalance = currentBalance + movement;
+
+      if (newBalance < 0) {
+        throw new BadRequestError(`Saldo insuficiente en el fondo ${entry.fund_id}. Saldo actual: ${currentBalance.toLocaleString()}`);
+      }
+
+      const transactionResult = await execute(`
+        INSERT INTO transactions (
+          date, church_id, report_id, fund_id, concept, provider, document_number,
+          amount_in, amount_out, balance, created_by
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+        ) RETURNING *
+      `, [
+        entry.date,
+        entry.church_id,
+        entry.report_id,
+        entry.fund_id,
+        entry.concept,
+        entry.provider,
+        entry.document_number,
+        entry.amount_in,
+        entry.amount_out,
+        newBalance,
+        entry.created_by
+      ]);
+
+      const transaction = transactionResult.rows[0];
+      inserted.push(transaction);
+
+      await execute(
+        'UPDATE funds SET current_balance = $1, updated_at = NOW() WHERE id = $2',
+        [newBalance, entry.fund_id]
+      );
+
+      await execute(`
+        INSERT INTO fund_movements_enhanced (
+          fund_id, transaction_id, previous_balance, movement, new_balance
+        ) VALUES ($1, $2, $3, $4, $5)
+      `, [
+        entry.fund_id,
+        transaction.id,
+        currentBalance,
+        movement,
+        newBalance
+      ]);
+    }
+
+    await execute('COMMIT');
+    return inserted;
   } catch (error) {
     await execute('ROLLBACK');
     throw error;
@@ -371,15 +487,16 @@ async function handlePostTransaction(req, res, decoded) {
 }
 
 async function handlePutTransaction(req, res, decoded) {
-  const transactionId = parseInteger(req.url.split('/').pop());
+  const transactionId = parseInteger(req.query.id || req.body?.id);
   if (!transactionId) {
     throw new BadRequestError('ID de transacción inválido');
   }
 
-  const data = req.body;
+  const data = req.body || {};
 
   try {
-    // Get existing transaction
+    await setAuditContext(decoded?.email);
+
     const existingResult = await execute(
       'SELECT * FROM transactions WHERE id = $1',
       [transactionId]
@@ -389,35 +506,31 @@ async function handlePutTransaction(req, res, decoded) {
       throw new BadRequestError('Transacción no encontrada');
     }
 
-    const existing = existingResult.rows[0];
+    // const existing = existingResult.rows[0]; // Reserved for future validation use
 
-    // For now, only allow updating certain fields to keep it simple
-    const updateFields = [];
-    const updateParams = [];
+    // Prepare updates using secure query builder
+    const updates = {};
 
     if (data.concept) {
-      updateParams.push(data.concept);
-      updateFields.push(`concept = $${updateParams.length}`);
+      updates.concept = data.concept;
     }
 
     if (data.provider !== undefined) {
-      updateParams.push(data.provider);
-      updateFields.push(`provider = $${updateParams.length}`);
+      updates.provider = data.provider;
     }
 
     if (data.document_number !== undefined) {
-      updateParams.push(data.document_number);
-      updateFields.push(`document_number = $${updateParams.length}`);
+      updates.document_number = data.document_number;
     }
 
-    if (updateFields.length === 0) {
+    if (Object.keys(updates).length === 0) {
       throw new BadRequestError('No hay campos para actualizar');
     }
 
-    updateParams.push(transactionId);
-    const query = `UPDATE transactions SET ${updateFields.join(', ')}, updated_at = NOW() WHERE id = $${updateParams.length} RETURNING *`;
+    const whereConditions = { id: transactionId };
+    const query = queryBuilder.buildUpdate('transactions', updates, whereConditions);
+    const result = await execute(query.sql, query.params);
 
-    const result = await execute(query, updateParams);
     res.json(result.rows[0]);
 
   } catch (error) {
@@ -426,13 +539,14 @@ async function handlePutTransaction(req, res, decoded) {
 }
 
 async function handleDeleteTransaction(req, res, decoded) {
-  const transactionId = parseInteger(req.url.split('/').pop());
+  const transactionId = parseInteger(req.query.id || req.body?.id);
   if (!transactionId) {
     throw new BadRequestError('ID de transacción inválido');
   }
 
   try {
-    // Get existing transaction
+    await setAuditContext(decoded?.email);
+
     const existingResult = await execute(
       'SELECT * FROM transactions WHERE id = $1',
       [transactionId]
@@ -498,16 +612,16 @@ async function handleDeleteTransaction(req, res, decoded) {
 // === CHURCH TRANSACTIONS API HANDLERS ===
 async function handleChurchTransactionsAPI(req, res, decoded) {
   switch (req.method) {
-    case 'GET':
-      return await handleGetChurchTransactions(req, res, decoded);
-    case 'POST':
-      return await handlePostChurchTransaction(req, res, decoded);
-    case 'PUT':
-      return await handlePutChurchTransaction(req, res, decoded);
-    case 'DELETE':
-      return await handleDeleteChurchTransaction(req, res, decoded);
-    default:
-      return res.status(405).json({ error: 'Método no permitido para church-transactions' });
+  case 'GET':
+    return await handleGetChurchTransactions(req, res, decoded);
+  case 'POST':
+    return await handlePostChurchTransaction(req, res, decoded);
+  case 'PUT':
+    return await handlePutChurchTransaction(req, res, decoded);
+  case 'DELETE':
+    return await handleDeleteChurchTransaction(req, res, decoded);
+  default:
+    return res.status(405).json({ error: 'Método no permitido para church-transactions' });
   }
 }
 
@@ -767,12 +881,11 @@ async function handlePutChurchTransaction(req, res, decoded) {
     return res.status(403).json({ error: 'Solo puede modificar transacciones de su iglesia' });
   }
 
-  const updates = [];
-  const params = [];
+  // Prepare updates using secure query builder
+  const updates = {};
 
   if (data.transaction_date !== undefined) {
-    updates.push(`transaction_date = $${params.length + 1}`);
-    params.push(data.transaction_date);
+    updates.transaction_date = data.transaction_date;
   }
 
   if (data.amount !== undefined) {
@@ -780,62 +893,57 @@ async function handlePutChurchTransaction(req, res, decoded) {
     if (amount <= 0) {
       return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
     }
-    updates.push(`amount = $${params.length + 1}`);
-    params.push(amount);
+    updates.amount = amount;
   }
 
   if (data.description !== undefined) {
-    updates.push(`description = $${params.length + 1}`);
-    params.push(data.description);
+    updates.description = data.description;
   }
 
   if (data.category_id !== undefined) {
-    updates.push(`category_id = $${params.length + 1}`);
-    params.push(data.category_id ? parseInt(data.category_id, 10) : null);
+    updates.category_id = data.category_id ? parseInt(data.category_id, 10) : null;
   }
 
   if (data.reference_number !== undefined) {
-    updates.push(`reference_number = $${params.length + 1}`);
-    params.push(data.reference_number || null);
+    updates.reference_number = data.reference_number || null;
   }
 
   if (data.check_number !== undefined) {
-    updates.push(`check_number = $${params.length + 1}`);
-    params.push(data.check_number || null);
+    updates.check_number = data.check_number || null;
   }
 
   if (data.vendor_customer !== undefined) {
-    updates.push(`vendor_customer = $${params.length + 1}`);
-    params.push(data.vendor_customer || null);
+    updates.vendor_customer = data.vendor_customer || null;
   }
 
   if (data.is_reconciled !== undefined) {
-    updates.push(`is_reconciled = $${params.length + 1}`);
-    params.push(Boolean(data.is_reconciled));
+    updates.is_reconciled = Boolean(data.is_reconciled);
     if (data.is_reconciled) {
-      updates.push('reconciled_date = CURRENT_DATE');
+      // Note: Special handling for CURRENT_DATE - this would need custom query builder support
+      // For now, we'll handle this case separately
+      updates.reconciled_date = new Date().toISOString().split('T')[0]; // Current date
     } else {
-      updates.push('reconciled_date = NULL');
+      updates.reconciled_date = null;
     }
   }
 
-  if (updates.length === 0) {
+  if (Object.keys(updates).length === 0) {
     return res.status(400).json({ error: 'No hay campos para actualizar' });
   }
 
-  params.push(transactionId);
+  try {
+    const whereConditions = { id: transactionId };
+    const query = queryBuilder.buildUpdate('church_transactions', updates, whereConditions);
+    const result = await execute(query.sql, query.params);
 
-  const result = await execute(`
-    UPDATE church_transactions
-    SET ${updates.join(', ')}
-    WHERE id = $${params.length}
-    RETURNING *
-  `, params);
-
-  res.json({
-    message: 'Transacción actualizada exitosamente',
-    transaction: result.rows[0]
-  });
+    res.json({
+      message: 'Transacción actualizada exitosamente',
+      transaction: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error actualizando transacción de iglesia:', error);
+    res.status(500).json({ error: 'Error al actualizar la transacción' });
+  }
 }
 
 async function handleDeleteChurchTransaction(req, res, decoded) {

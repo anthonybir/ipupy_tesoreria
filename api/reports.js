@@ -1,5 +1,8 @@
+const path = require('path');
+const fs = require('fs/promises');
 const { execute } = require('../lib/db');
 const jwt = require('jsonwebtoken');
+const { setSecureCORSHeaders } = require('../src/lib/cors-handler');
 
 class BadRequestError extends Error {
   constructor(message) {
@@ -89,6 +92,93 @@ const toIntOrZero = (value) => {
   const parsed = parseInteger(value);
   return parsed === null ? 0 : parsed;
 };
+
+const uploadsDir = path.join(process.cwd(), 'uploads');
+
+async function ensureUploadsDir() {
+  try {
+    await fs.mkdir(uploadsDir, { recursive: true });
+  } catch (error) {
+    if (error.code !== 'EEXIST') {
+      console.error('Failed to create uploads directory:', error);
+      throw error;
+    }
+  }
+}
+
+async function saveBase64Attachment(raw, prefix) {
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    await ensureUploadsDir();
+
+    const match = String(raw).match(/^data:(.+);base64,(.*)$/);
+    const mimeType = match ? match[1] : 'image/png';
+    const base64Data = match ? match[2] : raw;
+    const extension = mimeType.split('/').pop() || 'png';
+    const filename = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${extension}`;
+    const filePath = path.join(uploadsDir, filename);
+
+    await fs.writeFile(filePath, Buffer.from(base64Data, 'base64'));
+
+    return path.join('uploads', filename);
+  } catch (error) {
+    console.error('Failed to store attachment:', error);
+    return null;
+  }
+}
+
+async function recordReportStatus(reportId, previousStatus, newStatus, actor) {
+  if (!reportId || previousStatus === newStatus) {
+    return;
+  }
+
+  try {
+    await execute(`
+      INSERT INTO report_status_history (report_id, previous_status, new_status, changed_by)
+      VALUES ($1, $2, $3, $4)
+    `, [reportId, previousStatus || null, newStatus, actor || null]);
+  } catch (error) {
+    console.error('Failed to record report status transition:', error);
+  }
+}
+
+async function queueReportNotification(reportRow, actorEmail, notificationType = 'submission') {
+  const recipient = process.env.TREASURY_NOTIFICATION_EMAIL;
+  if (!recipient || !reportRow) {
+    return;
+  }
+
+  const actionLabel = notificationType === 'processed' ? 'Informe procesado' : 'Nuevo informe';
+  const subject = `${actionLabel} ${reportRow.month}/${reportRow.year} - Iglesia ${reportRow.church_id}`;
+  const body = `${actionLabel.toUpperCase()}\n` +
+    `Iglesia: ${reportRow.church_id}\n` +
+    `Monto total: ${reportRow.total_entradas || 0}\n` +
+    `Acción registrada por: ${actorEmail || 'usuario'}`;
+
+  try {
+    await execute(`
+      INSERT INTO report_notifications (report_id, notification_type, recipient_email, subject, body)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [reportRow.id, notificationType, recipient, subject, body]);
+  } catch (error) {
+    console.error('Failed to queue a report notification:', error);
+  }
+}
+
+async function setAuditContext(actorEmail) {
+  if (!actorEmail) {
+    return;
+  }
+
+  try {
+    await execute('SELECT set_config($1, $2, true)', ['audit.user', actorEmail]);
+  } catch (error) {
+    // Safe to ignore if audit schema is not yet installed
+  }
+}
 
 // Create automatic transactions when a report is submitted
 async function createReportTransactions(report, totals) {
@@ -273,13 +363,11 @@ const verifyToken = (req) => {
 };
 
 module.exports = async (req, res) => {
-  // Configurar CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  // Configure secure CORS (no wildcards)
+  const isPreflightHandled = setSecureCORSHeaders(req, res, ['PUT', 'DELETE']);
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+  if (isPreflightHandled) {
+    return; // Preflight request handled securely
   }
 
   try {
@@ -314,7 +402,7 @@ module.exports = async (req, res) => {
   }
 };
 
-async function handleGet(req, res) {
+async function handleGet(req, res, decoded) {
   const { year, month, church_id, page, limit } = req.query;
 
   const yearFilter = parseOptionalYear(year);
@@ -324,6 +412,15 @@ async function handleGet(req, res) {
   const filters = [];
   const params = [];
 
+  if (decoded?.role === 'church') {
+    const scopedChurchId = parseRequiredChurchId(decoded.churchId);
+    params.push(scopedChurchId);
+    filters.push(`r.church_id = $${params.length}`);
+  } else if (churchFilter !== null) {
+    params.push(churchFilter);
+    filters.push(`r.church_id = $${params.length}`);
+  }
+
   if (yearFilter !== null) {
     params.push(yearFilter);
     filters.push(`r.year = $${params.length}`);
@@ -332,11 +429,6 @@ async function handleGet(req, res) {
   if (monthFilter !== null) {
     params.push(monthFilter);
     filters.push(`r.month = $${params.length}`);
-  }
-
-  if (churchFilter !== null) {
-    params.push(churchFilter);
-    filters.push(`r.church_id = $${params.length}`);
   }
 
   const whereClause = filters.length ? ` WHERE ${filters.join(' AND ')}` : '';
@@ -370,25 +462,32 @@ async function handleGet(req, res) {
   res.json(result.rows);
 }
 
-async function handlePost(req, res) {
-  const data = req.body;
+async function handlePost(req, res, decoded) {
+  const data = req.body || {};
 
-  const churchId = parseRequiredChurchId(data.church_id);
+  const scopedChurchId = decoded?.role === 'church'
+    ? parseRequiredChurchId(decoded.churchId)
+    : parseRequiredChurchId(data.church_id);
+
+  if (decoded?.role === 'church' && data.church_id && parseRequiredChurchId(data.church_id) !== scopedChurchId) {
+    return res.status(403).json({ error: 'No puede registrar informes para otra iglesia' });
+  }
+
   const reportMonth = parseRequiredMonth(data.month);
   const reportYear = parseRequiredYear(data.year);
 
   try {
-    // Verificar si ya existe un informe para este mes/año/iglesia
+    await setAuditContext(decoded?.email);
+
     const existingReport = await execute(
-      'SELECT id FROM reports WHERE church_id = $1 AND month = $2 AND year = $3',
-      [churchId, reportMonth, reportYear]
+      'SELECT id, estado FROM reports WHERE church_id = $1 AND month = $2 AND year = $3',
+      [scopedChurchId, reportMonth, reportYear]
     );
 
     if (existingReport.rows.length > 0) {
       return res.status(400).json({ error: 'Ya existe un informe para este mes y año' });
     }
 
-    // Calcular totales automáticamente
     const diezmos = toNumber(data.diezmos);
     const ofrendas = toNumber(data.ofrendas);
     const anexos = toNumber(data.anexos);
@@ -399,15 +498,22 @@ async function handlePost(req, res) {
     const otros = toNumber(data.otros);
 
     const totalEntradas = diezmos + ofrendas + anexos + caballeros + damas + jovenes + ninos + otros;
-    const fondoNacional = totalEntradas * 0.1; // 10% automático
+    const fondoNacional = totalEntradas * 0.1;
 
     const honorariosPastoral = toNumber(data.honorarios_pastoral);
     const servicios = toNumber(data.servicios);
     const totalSalidas = honorariosPastoral + fondoNacional + servicios;
-
     const saldoMes = totalEntradas - totalSalidas;
 
-    // Crear el informe
+    const attachmentPrefix = `report-${scopedChurchId}-${reportYear}-${reportMonth}`;
+    const fotoInforme = await saveBase64Attachment(data.attachments?.summary, `${attachmentPrefix}-resumen`);
+    const fotoDeposito = await saveBase64Attachment(data.attachments?.deposit, `${attachmentPrefix}-deposito`);
+
+    const submissionType = data.submission_type || (decoded?.role === 'church' ? 'online' : 'manual');
+    const submittedBy = decoded?.email || data.submitted_by || null;
+    const submittedAt = new Date();
+    const estado = data.estado || 'pendiente';
+
     const result = await execute(`
       INSERT INTO reports (
         church_id, month, year, diezmos, ofrendas, anexos, caballeros, damas,
@@ -415,13 +521,15 @@ async function handlePost(req, res) {
         servicios, total_salidas, saldo_mes, ofrendas_directas_misiones, lazos_amor,
         mision_posible, aporte_caballeros, apy, instituto_biblico, diezmo_pastoral,
         numero_deposito, fecha_deposito, monto_depositado, asistencia_visitas,
-        bautismos_agua, bautismos_espiritu, observaciones, estado
+        bautismos_agua, bautismos_espiritu, observaciones, estado,
+        foto_informe, foto_deposito, submission_type, submitted_by, submitted_at
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-        $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32
+        $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32,
+        $33, $34, $35, $36, $37
       ) RETURNING *
     `, [
-      churchId, reportMonth, reportYear,
+      scopedChurchId, reportMonth, reportYear,
       diezmos, ofrendas, anexos, caballeros, damas, jovenes, ninos, otros,
       totalEntradas, fondoNacional, honorariosPastoral, servicios, totalSalidas, saldoMes,
       toNumber(data.ofrendas_directas_misiones),
@@ -438,12 +546,19 @@ async function handlePost(req, res) {
       toIntOrZero(data.bautismos_agua),
       toIntOrZero(data.bautismos_espiritu),
       data.observaciones || '',
-      data.estado || 'recibido'
+      estado,
+      fotoInforme,
+      fotoDeposito,
+      submissionType,
+      submittedBy,
+      submittedAt
     ]);
 
     const savedReport = result.rows[0];
 
-    // Create automatic transactions for the report
+    await recordReportStatus(savedReport.id, null, savedReport.estado, submittedBy);
+    await queueReportNotification(savedReport, submittedBy);
+
     await createReportTransactions(savedReport, {
       totalEntradas,
       fondoNacional,
@@ -454,9 +569,9 @@ async function handlePost(req, res) {
     });
 
     res.status(201).json({
-      id: result.rows[0].id,
+      id: savedReport.id,
       message: 'Informe guardado exitosamente',
-      report: result.rows[0],
+      report: savedReport,
       totales: { totalEntradas, fondoNacional, totalSalidas, saldoMes }
     });
 
@@ -464,7 +579,7 @@ async function handlePost(req, res) {
     if (error instanceof BadRequestError) {
       throw error;
     }
-    if (error.code === '23505') { // Unique violation
+    if (error.code === '23505') {
       return res.status(400).json({ error: 'Ya existe un informe para este mes y año' });
     }
     console.error('Error guardando informe:', error);
@@ -472,76 +587,151 @@ async function handlePost(req, res) {
   }
 }
 
-async function handlePut(req, res) {
+async function handlePut(req, res, decoded) {
   const { id } = req.query;
-  const data = req.body;
-
+  const data = req.body || {};
   const reportId = parseReportId(id);
 
-  // Recalcular totales
-  const diezmos = toNumber(data.diezmos);
-  const ofrendas = toNumber(data.ofrendas);
-  const anexos = toNumber(data.anexos);
-  const caballeros = toNumber(data.caballeros);
-  const damas = toNumber(data.damas);
-  const jovenes = toNumber(data.jovenes);
-  const ninos = toNumber(data.ninos);
-  const otros = toNumber(data.otros);
+  try {
+    await setAuditContext(decoded?.email);
 
-  const totalEntradas = diezmos + ofrendas + anexos + caballeros + damas + jovenes + ninos + otros;
-  const fondoNacional = totalEntradas * 0.1;
+    const existingResult = await execute('SELECT * FROM reports WHERE id = $1', [reportId]);
+    if (existingResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Informe no encontrado' });
+    }
 
-  const honorariosPastoral = toNumber(data.honorarios_pastoral);
-  const servicios = toNumber(data.servicios);
-  const totalSalidas = honorariosPastoral + fondoNacional + servicios;
+    const existing = existingResult.rows[0];
 
-  const saldoMes = totalEntradas - totalSalidas;
+    if (decoded?.role === 'church' && parseRequiredChurchId(decoded.churchId) !== existing.church_id) {
+      return res.status(403).json({ error: 'No tiene permisos para modificar este informe' });
+    }
 
-  const result = await execute(`
-    UPDATE reports SET
-      diezmos = $1, ofrendas = $2, anexos = $3, caballeros = $4, damas = $5,
-      jovenes = $6, ninos = $7, otros = $8, total_entradas = $9, fondo_nacional = $10,
-      honorarios_pastoral = $11, servicios = $12, total_salidas = $13, saldo_mes = $14,
-      numero_deposito = $15, fecha_deposito = $16, monto_depositado = $17,
-      asistencia_visitas = $18, bautismos_agua = $19, bautismos_espiritu = $20,
-      observaciones = $21, estado = $22, updated_at = CURRENT_TIMESTAMP
-    WHERE id = $23
-    RETURNING *
-  `, [
-    diezmos, ofrendas, anexos, caballeros, damas, jovenes, ninos, otros,
-    totalEntradas, fondoNacional, honorariosPastoral, servicios, totalSalidas, saldoMes,
-    data.numero_deposito || null,
-    data.fecha_deposito || null,
-    toNumber(data.monto_depositado, fondoNacional),
-    toIntOrZero(data.asistencia_visitas),
-    toIntOrZero(data.bautismos_agua),
-    toIntOrZero(data.bautismos_espiritu),
-    data.observaciones || '',
-    data.estado || 'recibido',
-    reportId
-  ]);
+    const attachmentPrefix = `report-${existing.church_id}-${existing.year}-${existing.month}`;
+    const attachments = data.attachments || {};
 
-  if (result.rows.length === 0) {
-    return res.status(404).json({ error: 'Informe no encontrado' });
+    const diezmos = data.diezmos !== undefined ? toNumber(data.diezmos) : parseFloat(existing.diezmos || 0);
+    const ofrendas = data.ofrendas !== undefined ? toNumber(data.ofrendas) : parseFloat(existing.ofrendas || 0);
+    const anexos = data.anexos !== undefined ? toNumber(data.anexos) : parseFloat(existing.anexos || 0);
+    const caballeros = data.caballeros !== undefined ? toNumber(data.caballeros) : parseFloat(existing.caballeros || 0);
+    const damas = data.damas !== undefined ? toNumber(data.damas) : parseFloat(existing.damas || 0);
+    const jovenes = data.jovenes !== undefined ? toNumber(data.jovenes) : parseFloat(existing.jovenes || 0);
+    const ninos = data.ninos !== undefined ? toNumber(data.ninos) : parseFloat(existing.ninos || 0);
+    const otros = data.otros !== undefined ? toNumber(data.otros) : parseFloat(existing.otros || 0);
+
+    const totalEntradas = diezmos + ofrendas + anexos + caballeros + damas + jovenes + ninos + otros;
+    const fondoNacional = totalEntradas * 0.1;
+
+    const honorariosPastoral = data.honorarios_pastoral !== undefined
+      ? toNumber(data.honorarios_pastoral)
+      : parseFloat(existing.honorarios_pastoral || 0);
+    const servicios = data.servicios !== undefined
+      ? toNumber(data.servicios)
+      : parseFloat(existing.servicios || 0);
+
+    const totalSalidas = honorariosPastoral + fondoNacional + servicios;
+    const saldoMes = totalEntradas - totalSalidas;
+
+    let fotoInformePath = existing.foto_informe;
+    if (Object.prototype.hasOwnProperty.call(attachments, 'summary')) {
+      fotoInformePath = attachments.summary === null
+        ? null
+        : await saveBase64Attachment(attachments.summary, `${attachmentPrefix}-resumen`);
+    }
+
+    let fotoDepositoPath = existing.foto_deposito;
+    if (Object.prototype.hasOwnProperty.call(attachments, 'deposit')) {
+      fotoDepositoPath = attachments.deposit === null
+        ? null
+        : await saveBase64Attachment(attachments.deposit, `${attachmentPrefix}-deposito`);
+    }
+
+    const submissionType = data.submission_type || existing.submission_type || (decoded?.role === 'church' ? 'online' : 'manual');
+    const estado = data.estado || existing.estado || 'pendiente';
+    const previousStatus = existing.estado;
+
+    let processedBy = existing.processed_by;
+    let processedAt = existing.processed_at ? new Date(existing.processed_at) : null;
+
+    if (estado === 'procesado' && previousStatus !== 'procesado') {
+      processedBy = decoded?.email || processedBy || null;
+      processedAt = new Date();
+    }
+
+    const updatedResult = await execute(`
+      UPDATE reports SET
+        diezmos = $1, ofrendas = $2, anexos = $3, caballeros = $4, damas = $5,
+        jovenes = $6, ninos = $7, otros = $8, total_entradas = $9, fondo_nacional = $10,
+        honorarios_pastoral = $11, servicios = $12, total_salidas = $13, saldo_mes = $14,
+        numero_deposito = $15, fecha_deposito = $16, monto_depositado = $17,
+        asistencia_visitas = $18, bautismos_agua = $19, bautismos_espiritu = $20,
+        observaciones = $21, estado = $22,
+        foto_informe = $23, foto_deposito = $24,
+        submission_type = $25, processed_by = $26, processed_at = $27,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $28
+      RETURNING *
+    `, [
+      diezmos, ofrendas, anexos, caballeros, damas, jovenes, ninos, otros,
+      totalEntradas, fondoNacional, honorariosPastoral, servicios, totalSalidas, saldoMes,
+      data.numero_deposito !== undefined ? data.numero_deposito || null : existing.numero_deposito || null,
+      data.fecha_deposito !== undefined ? data.fecha_deposito || null : existing.fecha_deposito || null,
+      data.monto_depositado !== undefined ? toNumber(data.monto_depositado, fondoNacional) : parseFloat(existing.monto_depositado || fondoNacional),
+      data.asistencia_visitas !== undefined ? toIntOrZero(data.asistencia_visitas) : existing.asistencia_visitas || 0,
+      data.bautismos_agua !== undefined ? toIntOrZero(data.bautismos_agua) : existing.bautismos_agua || 0,
+      data.bautismos_espiritu !== undefined ? toIntOrZero(data.bautismos_espiritu) : existing.bautismos_espiritu || 0,
+      data.observaciones !== undefined ? data.observaciones : existing.observaciones || '',
+      estado,
+      fotoInformePath,
+      fotoDepositoPath,
+      submissionType,
+      processedBy,
+      processedAt,
+      reportId
+    ]);
+
+    const updatedReport = updatedResult.rows[0];
+
+    await recordReportStatus(reportId, previousStatus, updatedReport.estado, decoded?.email);
+    if (previousStatus !== updatedReport.estado && updatedReport.estado === 'procesado') {
+      await queueReportNotification(updatedReport, decoded?.email, 'processed');
+    }
+
+    res.json({ success: true, report: updatedReport });
+  } catch (error) {
+    console.error('Error actualizando informe:', error);
+    res.status(500).json({ error: 'No se pudo actualizar el informe' });
   }
-
-  res.json({
-    message: 'Informe actualizado exitosamente',
-    report: result.rows[0],
-    totales: { totalEntradas, fondoNacional, totalSalidas, saldoMes }
-  });
 }
 
-async function handleDelete(req, res) {
+async function handleDelete(req, res, decoded) {
   const { id } = req.query;
 
   const reportId = parseReportId(id);
 
-  const result = await execute('DELETE FROM reports WHERE id = $1 RETURNING *', [reportId]);
+  try {
+    await setAuditContext(decoded?.email);
 
-  if (result.rows.length === 0) {
-    return res.status(404).json({ error: 'Informe no encontrado' });
+    const existingResult = await execute('SELECT church_id, estado FROM reports WHERE id = $1', [reportId]);
+    if (existingResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Informe no encontrado' });
+    }
+
+    const existing = existingResult.rows[0];
+    if (decoded?.role === 'church' && parseRequiredChurchId(decoded.churchId) !== existing.church_id) {
+      return res.status(403).json({ error: 'No tiene permisos para eliminar este informe' });
+    }
+
+    const result = await execute('DELETE FROM reports WHERE id = $1 RETURNING id', [reportId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Informe no encontrado' });
+    }
+
+    await recordReportStatus(reportId, existing.estado, 'eliminado', decoded?.email);
+
+    res.json({ message: 'Informe eliminado exitosamente' });
+  } catch (error) {
+    console.error('Error eliminando informe:', error);
+    res.status(500).json({ error: 'No se pudo eliminar el informe' });
   }
-
-  res.json({ message: 'Informe eliminado exitosamente' });
 }

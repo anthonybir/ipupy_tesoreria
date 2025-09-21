@@ -63,14 +63,14 @@ const NAME_MAPPINGS = {
 
 // Normalizar nombres de iglesias
 function normalizeChurchName(name) {
-  if (!name || typeof name !== 'string') return null;
+  if (!name || typeof name !== 'string') {return null;}
 
   // Primero intentar mapeo directo
-  if (NAME_MAPPINGS[name]) return NAME_MAPPINGS[name];
+  if (NAME_MAPPINGS[name]) {return NAME_MAPPINGS[name];}
 
   // Limpiar espacios y normalizar
   const cleaned = name.trim();
-  if (NAME_MAPPINGS[cleaned]) return NAME_MAPPINGS[cleaned];
+  if (NAME_MAPPINGS[cleaned]) {return NAME_MAPPINGS[cleaned];}
 
   // Si no se encuentra en el mapeo, devolver null para revisar
   console.warn(`WARN: nombre de iglesia no mapeado: "${name}"`);
@@ -78,7 +78,7 @@ function normalizeChurchName(name) {
 }
 
 const normalizeNumber = (value) => {
-  if (value === null || value === undefined || value === '') return 0;
+  if (value === null || value === undefined || value === '') {return 0;}
   const parsed = Number(value);
   return Number.isNaN(parsed) ? 0 : parsed;
 };
@@ -114,23 +114,23 @@ function categorizeTransaction(concepto, fondo, amount) {
   } else if (conceptoLower.includes('ofrenda')) {
     // Sub-clasificar por fondo
     switch (fondoLower) {
-      case 'misiones': result.ofrenda_misiones = amount; break;
-      case 'caballeros': result.caballeros = amount; break;
-      case 'damas': result.damas = amount; break;
-      case 'apy': result.apy = amount; break;
-      case 'niños': result.jovenes = amount; break; // Ninos van a jovenes
-      case 'lazos de amor': result.lazos_amor = amount; break;
-      case 'mision posible': result.mision_posible = amount; break;
-      case 'iba': result.instituto_biblico = amount; break;
-      default: result.ofrendas = amount;
+    case 'misiones': result.ofrenda_misiones = amount; break;
+    case 'caballeros': result.caballeros = amount; break;
+    case 'damas': result.damas = amount; break;
+    case 'apy': result.apy = amount; break;
+    case 'niños': result.jovenes = amount; break; // Ninos van a jovenes
+    case 'lazos de amor': result.lazos_amor = amount; break;
+    case 'mision posible': result.mision_posible = amount; break;
+    case 'iba': result.instituto_biblico = amount; break;
+    default: result.ofrendas = amount;
     }
   } else if (conceptoLower.includes('aporte')) {
     // Aportes van por fondo
     switch (fondoLower) {
-      case 'caballeros': result.caballeros = amount; break;
-      case 'damas': result.damas = amount; break;
-      case 'apy': result.apy = amount; break;
-      default: result.otros = amount;
+    case 'caballeros': result.caballeros = amount; break;
+    case 'damas': result.damas = amount; break;
+    case 'apy': result.apy = amount; break;
+    default: result.otros = amount;
     }
   } else {
     result.otros = amount;

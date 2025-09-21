@@ -117,7 +117,7 @@ module.exports = async function handler(req, res) {
       details: error.message
     });
   }
-}
+};
 
 async function handleGetMembers(req, res) {
   const {

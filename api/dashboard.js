@@ -1,14 +1,12 @@
 const { execute } = require('../lib/db');
+const { setSecureCORSHeaders } = require('../src/lib/cors-handler');
 
 module.exports = async function handler(req, res) {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  // Configure secure CORS (no wildcards)
+  const isPreflightHandled = setSecureCORSHeaders(req, res);
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+  if (isPreflightHandled) {
+    return; // Preflight request handled securely
   }
 
   if (req.method !== 'GET') {
@@ -17,7 +15,7 @@ module.exports = async function handler(req, res) {
 
   try {
     // Get summary statistics
-    const [churches, reports, recentReports] = await Promise.all([
+    const [churches, reports, recentReports, fundOverview, statusCounts, monthlySummary] = await Promise.all([
       execute('SELECT COUNT(*) as count FROM churches'),
       execute(`
         SELECT
@@ -36,6 +34,19 @@ module.exports = async function handler(req, res) {
         JOIN churches c ON r.church_id = c.id
         ORDER BY r.created_at DESC
         LIMIT 5
+      `),
+      execute('SELECT name, current_balance FROM funds ORDER BY name'),
+      execute('SELECT estado, COUNT(*) AS count FROM reports GROUP BY estado'),
+      execute(`
+        SELECT
+          year,
+          month,
+          COALESCE(SUM(total_entradas), 0) as total_entradas,
+          COALESCE(SUM(fondo_nacional), 0) as total_fondo_nacional
+        FROM reports
+        GROUP BY year, month
+        ORDER BY year DESC, month DESC
+        LIMIT 12
       `)
     ]);
 
@@ -71,7 +82,10 @@ module.exports = async function handler(req, res) {
           offerings: parseFloat(currentMonthStats.rows[0].offerings_this_month || 0),
           national_fund: parseFloat(currentMonthStats.rows[0].national_fund_this_month || 0)
         },
-        recent_reports: recentReports.rows
+        recent_reports: recentReports.rows,
+        monthly_summary: monthlySummary.rows,
+        fund_overview: fundOverview.rows,
+        status_counts: statusCounts.rows
       }
     };
 

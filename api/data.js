@@ -45,14 +45,14 @@ module.exports = async function handler(req, res) {
 
     // Route to appropriate handler based on action parameter
     switch (action) {
-      case 'import':
-        return await handleImportAPI(req, res);
-      case 'export':
-        return await handleExportAPI(req, res);
-      default:
-        return res.status(400).json({
-          error: 'Parámetro action requerido. Valores válidos: import, export'
-        });
+    case 'import':
+      return await handleImportAPI(req, res);
+    case 'export':
+      return await handleExportAPI(req, res);
+    default:
+      return res.status(400).json({
+        error: 'Parámetro action requerido. Valores válidos: import, export'
+      });
     }
   } catch (error) {
     console.error('Error en API data:', error);

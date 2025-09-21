@@ -68,10 +68,11 @@ graph TB
 
 ### Backend
 - **Node.js 20.x**: Runtime de servidor
-- **Vercel Serverless Functions**: 10 funciones optimizadas
-- **Express.js 5.x**: Framework web minimalista
+- **Vercel Serverless Functions**: API endpoints serverless
+- **Vanilla JavaScript**: Sin frameworks, implementación directa
 - **JWT**: Autenticación stateless
 - **bcrypt**: Hash seguro de contraseñas
+- **Secure Query Builder**: Prevención de SQL injection
 
 ### Base de Datos
 - **PostgreSQL 16**: Base de datos principal (Supabase)
@@ -162,45 +163,44 @@ erDiagram
 
 ## Patrones de Diseño Implementados
 
-### 1. Repository Pattern
+### 1. Direct Function Pattern
 ```javascript
-// Abstracción de acceso a datos
-class ChurchRepository {
-  async findById(id) {
-    return await db.query('SELECT * FROM churches WHERE id = $1', [id]);
-  }
+// Funciones directas para acceso a datos
+async function getChurchById(id) {
+  const query = 'SELECT * FROM churches WHERE id = $1';
+  return await execute(query, [id]);
+}
 
-  async findActive() {
-    return await db.query('SELECT * FROM churches WHERE active = true');
-  }
+async function getActiveChurches() {
+  const query = 'SELECT * FROM churches WHERE active = true ORDER BY name';
+  return await execute(query);
 }
 ```
 
-### 2. Service Layer Pattern
+### 2. Utility Functions Pattern
 ```javascript
-// Lógica de negocio separada
-class ReportService {
-  calculateFondoNacional(diezmos, ofrendas) {
-    return (diezmos + ofrendas) * 0.10;
-  }
+// Funciones utilitarias para lógica de negocio
+function calculateFondoNacional(diezmos, ofrendas) {
+  return (parseFloat(diezmos) + parseFloat(ofrendas)) * 0.10;
+}
 
-  validateMonthlyReport(reportData) {
-    // Validaciones específicas IPU
+function validateMonthlyReport(reportData) {
+  if (!reportData.month || reportData.month < 1 || reportData.month > 12) {
+    throw new Error('Mes inválido');
   }
+  // Validaciones específicas IPU
 }
 ```
 
-### 3. Factory Pattern
+### 3. Secure Query Builder Pattern
 ```javascript
-// Creación de objetos especializados
-class ExportFactory {
-  static createExporter(type) {
-    switch(type) {
-      case 'monthly_report': return new MonthlyReportExporter();
-      case 'annual_summary': return new AnnualSummaryExporter();
-      default: throw new Error('Tipo de exportación no soportado');
-    }
-  }
+// Constructor de consultas seguras
+const { queryBuilder } = require('../src/lib/query-builder');
+
+function updateChurch(id, updates) {
+  const whereConditions = { id };
+  const query = queryBuilder.buildUpdate('churches', updates, whereConditions);
+  return execute(query.sql, query.params);
 }
 ```
 
@@ -353,30 +353,34 @@ const logging = {
 ### Próximas Mejoras
 
 #### Q1 2025
-- [ ] Implementación de Redis para cache
-- [ ] Optimización de queries complejas
+- [x] API rate limiting implementado
+- [x] Row Level Security (RLS) implementado
+- [x] Data integrity constraints
+- [x] Performance indexes optimizados
 - [ ] Mejoras en el sistema de notificaciones
-- [ ] API rate limiting avanzado
+- [ ] Cache strategy implementation
 
 #### Q2 2025
-- [ ] Migration a PostgreSQL 17
-- [ ] Implementación de Event Sourcing
-- [ ] Real-time updates con WebSockets
 - [ ] Advanced analytics dashboard
+- [ ] Improved mobile interface
+- [ ] Enhanced Excel export/import features
+- [ ] Audit trail enhancements
 
 #### Q3 2025
-- [ ] Mobile app nativa (React Native)
-- [ ] AI-powered financial insights
-- [ ] Blockchain para auditoría inmutable
 - [ ] Integration con bancos paraguayos
+- [ ] Enhanced financial reporting
+- [ ] Multi-language support
+- [ ] Advanced user management
+
+**Nota**: El proyecto mantiene su arquitectura vanilla JavaScript por simplicidad y mantenibilidad.
 
 ## Consideraciones de Mantenimiento
 
 ### Code Maintenance
-- **ESLint**: Linting automático
-- **Prettier**: Formato consistente
-- **Jest**: Testing unitario e integración
-- **Husky**: Git hooks para quality gates
+- **Manual Code Review**: Revisión manual de código
+- **Consistent Formatting**: Formato consistente manual
+- **Manual Testing**: Testing manual y validación funcional
+- **Git Best Practices**: Commits descriptivos y branching strategy
 
 ### Database Maintenance
 - **Migrations**: Versionado de esquema
@@ -407,5 +411,5 @@ Esta arquitectura proporciona una base sólida para el crecimiento futuro mientr
 ---
 
 **Documentado por**: Equipo Técnico IPU PY
-**Última actualización**: Diciembre 2024
-**Versión**: 2.0.0
+**Última actualización**: Septiembre 2025
+**Versión**: 2.1.0 (Vanilla JS Implementation)

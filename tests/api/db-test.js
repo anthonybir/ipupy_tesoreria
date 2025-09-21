@@ -4,15 +4,14 @@
  */
 
 const { execute } = require('../../src/lib/db');
+const { setSecureCORSHeaders } = require('../../src/lib/cors-handler');
 
 module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  // Configure secure CORS (no wildcards)
+  const isPreflightHandled = setSecureCORSHeaders(req, res);
 
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+  if (isPreflightHandled) {
+    return; // Preflight request handled securely
   }
 
   try {

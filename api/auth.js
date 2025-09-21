@@ -94,7 +94,7 @@ module.exports = async function handler(req, res) {
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
-}
+};
 
 async function handleLogin(req, res) {
   const { email, password } = req.body;
@@ -405,7 +405,7 @@ async function handleGoogleAuth(req, res) {
     }
 
     const payload = ticket.getPayload();
-    const { email, name, hd, sub: googleId, picture } = payload;
+    const { email, name, sub: googleId, picture } = payload;
 
     // Check if user has allowed domain
     const allowedDomains = ['ipupy.org.py', 'ipupy.org'];
@@ -420,7 +420,7 @@ async function handleGoogleAuth(req, res) {
     }
 
     // Look for existing user
-    let userResult = await execute(
+    const userResult = await execute(
       'SELECT * FROM users WHERE email = $1 AND active = true',
       [email.toLowerCase()]
     );
