@@ -1,4 +1,4 @@
-const { execute } = require('../lib/db');
+const { execute } = require('../lib/db-supabase');
 const { setCORSHeaders, handlePreflight } = require('../lib/cors');
 const jwt = require('jsonwebtoken');
 const { queryBuilder } = require('../src/lib/query-builder');

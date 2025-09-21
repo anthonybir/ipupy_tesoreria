@@ -1,4 +1,4 @@
-const { execute } = require('../lib/db');
+const { execute } = require('../lib/db-supabase');
 const { setSecureCORSHeaders } = require('../src/lib/cors-handler');
 
 module.exports = async function handler(req, res) {
