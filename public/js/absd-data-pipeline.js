@@ -95,7 +95,11 @@ ABSD.DataPipeline = class {
   async fetchWithRetry(url, options = {}) {
     let lastError;
 
-    for (let i = 0; i < this.options.retryAttempts; i++) {
+    // Disable retries for auth endpoints to prevent rate limiting
+    const isAuthEndpoint = url.includes('/auth');
+    const maxAttempts = isAuthEndpoint ? 1 : this.options.retryAttempts;
+
+    for (let i = 0; i < maxAttempts; i++) {
       try {
         const response = await fetch(url, {
           ...options,
@@ -113,13 +117,13 @@ ABSD.DataPipeline = class {
       } catch (error) {
         lastError = error;
 
-        // Don't retry if offline
-        if (!navigator.onLine) {
+        // Don't retry if offline or auth endpoint
+        if (!navigator.onLine || isAuthEndpoint) {
           break;
         }
 
         // Wait before retrying
-        if (i < this.options.retryAttempts - 1) {
+        if (i < maxAttempts - 1) {
           await this.delay(this.options.retryDelay * Math.pow(2, i));
         }
       }

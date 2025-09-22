@@ -175,7 +175,7 @@ class RateLimiter {
    */
   createAuthLimiter(additionalOptions = {}) {
     return this.createLimiter({
-      requests: 5, // Very strict for auth
+      requests: 20, // Increased to handle dashboard initialization
       windowMs: 900000, // 15 minutes
       message: 'Too many authentication attempts. Please try again later.',
       ...additionalOptions

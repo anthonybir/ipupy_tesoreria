@@ -1,6 +1,39 @@
 const { execute } = require('../lib/db-supabase');
 const { setSecureCORSHeaders } = require('../src/lib/cors-handler');
 
+class BadRequestError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'BadRequestError';
+    this.status = 400;
+  }
+}
+
+const normalizeDate = (raw) => {
+  if (!raw) {
+    return null;
+  }
+  const value = String(raw).trim();
+  if (!value) {
+    return null;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new BadRequestError('Las fechas deben usar el formato AAAA-MM-DD');
+  }
+  return value;
+};
+
+const parseInteger = (value, message) => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed)) {
+    throw new BadRequestError(message);
+  }
+  return parsed;
+};
+
 module.exports = async function handler(req, res) {
   // Configure secure CORS (no wildcards)
   const isPreflightHandled = setSecureCORSHeaders(req, res, ['POST']);
@@ -10,53 +43,78 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const { fund_id, church_id, start_date, end_date } = req.query || {};
+    const {
+      fund_id,
+      church_id,
+      start_date,
+      end_date,
+      date_from,
+      date_to
+    } = req.query || {};
 
-    // Build query based on filters
+    const normalizedFundId = parseInteger(fund_id, 'fund_id debe ser numérico');
+    const normalizedChurchId = parseInteger(church_id, 'church_id debe ser numérico');
+    const startDate = normalizeDate(start_date) || normalizeDate(date_from);
+    const endDate = normalizeDate(end_date) || normalizeDate(date_to);
+
     let query = `
       SELECT
-        fm.*,
-        c.name as church_name,
-        f.name as fund_name
-      FROM fund_movements fm
-      LEFT JOIN churches c ON fm.church_id = c.id
+        fm.id,
+        fm.fund_id,
+        fm.transaction_id,
+        fm.previous_balance,
+        fm.movement,
+        fm.new_balance,
+        fm.created_at,
+        f.name AS fund_name,
+        t.concept,
+        t.date,
+        t.provider,
+        t.document_number,
+        t.amount_in,
+        t.amount_out,
+        t.balance,
+        t.church_id,
+        c.name AS church_name
+      FROM fund_movements_enhanced fm
       LEFT JOIN funds f ON fm.fund_id = f.id
+      LEFT JOIN transactions t ON fm.transaction_id = t.id
+      LEFT JOIN churches c ON t.church_id = c.id
       WHERE 1=1
     `;
+
     const params = [];
 
-    if (fund_id) {
-      params.push(fund_id);
+    if (normalizedFundId !== null) {
+      params.push(normalizedFundId);
       query += ` AND fm.fund_id = $${params.length}`;
     }
 
-    if (church_id) {
-      params.push(church_id);
-      query += ` AND fm.church_id = $${params.length}`;
+    if (normalizedChurchId !== null) {
+      params.push(normalizedChurchId);
+      query += ` AND t.church_id = $${params.length}`;
     }
 
-    if (start_date) {
-      params.push(start_date);
-      query += ` AND fm.movement_date >= $${params.length}`;
+    if (startDate) {
+      params.push(startDate);
+      query += ` AND (t.date >= $${params.length}::date OR (t.date IS NULL AND fm.created_at::date >= $${params.length}::date))`;
     }
 
-    if (end_date) {
-      params.push(end_date);
-      query += ` AND fm.movement_date <= $${params.length}`;
+    if (endDate) {
+      params.push(endDate);
+      query += ` AND (t.date <= $${params.length}::date OR (t.date IS NULL AND fm.created_at::date <= $${params.length}::date))`;
     }
 
-    query += ' ORDER BY fm.movement_date DESC';
+    query += ' ORDER BY COALESCE(t.date, fm.created_at::date) DESC, fm.id DESC';
 
-    // Check if the fund_movements table exists
     const tableCheck = await execute(`
       SELECT EXISTS (
         SELECT FROM information_schema.tables
-        WHERE table_name = 'fund_movements'
+        WHERE table_name = 'fund_movements_enhanced'
       )
     `);
 
     if (!tableCheck.rows[0].exists) {
-      // Return empty data if table doesn't exist
       return res.status(200).json({
         success: true,
         data: [],
@@ -74,7 +132,8 @@ module.exports = async function handler(req, res) {
 
   } catch (error) {
     console.error('Fund movements error:', error);
-    return res.status(500).json({
+    const status = error.status || 500;
+    return res.status(status).json({
       error: 'Error loading fund movements',
       details: error.message
     });

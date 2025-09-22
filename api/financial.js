@@ -254,29 +254,61 @@ async function handleTransactionsAPI(req, res, decoded) {
 }
 
 async function handleGetTransactions(req, res) {
-  const { fund_id, church_id, date_from, date_to, page, limit } = req.query;
+  const { fund_id, church_id, date_from, date_to, page, limit, month, year } = req.query;
 
   const filters = [];
   const params = [];
 
   if (fund_id) {
-    params.push(parseInteger(fund_id));
+    const fundId = parseInteger(fund_id);
+    if (fundId === null) {
+      throw new BadRequestError('Parámetro fund_id inválido');
+    }
+    params.push(fundId);
     filters.push(`t.fund_id = $${params.length}`);
   }
 
   if (church_id) {
-    params.push(parseInteger(church_id));
+    const churchId = parseInteger(church_id);
+    if (churchId === null) {
+      throw new BadRequestError('Parámetro church_id inválido');
+    }
+    params.push(churchId);
     filters.push(`t.church_id = $${params.length}`);
   }
 
+  if (month) {
+    const monthValue = parseInteger(month);
+    if (monthValue === null || monthValue < 1 || monthValue > 12) {
+      throw new BadRequestError('Mes inválido, use valores entre 1 y 12');
+    }
+    params.push(monthValue);
+    filters.push(`EXTRACT(MONTH FROM t.date) = $${params.length}`);
+  }
+
+  if (year) {
+    const yearValue = parseInteger(year);
+    if (yearValue === null || yearValue < 2000 || yearValue > 2100) {
+      throw new BadRequestError('Año inválido, use un valor entre 2000 y 2100');
+    }
+    params.push(yearValue);
+    filters.push(`EXTRACT(YEAR FROM t.date) = $${params.length}`);
+  }
+
   if (date_from) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date_from)) {
+      throw new BadRequestError('date_from debe usar el formato AAAA-MM-DD');
+    }
     params.push(date_from);
-    filters.push(`t.date >= $${params.length}`);
+    filters.push(`t.date >= $${params.length}::date`);
   }
 
   if (date_to) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date_to)) {
+      throw new BadRequestError('date_to debe usar el formato AAAA-MM-DD');
+    }
     params.push(date_to);
-    filters.push(`t.date <= $${params.length}`);
+    filters.push(`t.date <= $${params.length}::date`);
   }
 
   const whereClause = filters.length ? ` WHERE ${filters.join(' AND ')}` : '';

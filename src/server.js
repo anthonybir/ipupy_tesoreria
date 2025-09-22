@@ -62,6 +62,9 @@ registerApiRoute('/api/db-test', '../tests/api/db-test.js');
 // Authentication endpoints (strict rate limiting)
 app.all('/api/auth', authLimiter, createApiHandler('../api/auth.js'));
 
+// Dashboard initialization endpoint (moderate rate limiting for initial load)
+app.all('/api/dashboard-init', financialLimiter, createApiHandler('../api/dashboard-init.js'));
+
 // Financial endpoints (moderate rate limiting)
 app.all('/api/financial', financialLimiter, createApiHandler('../api/financial.js'));
 app.all('/api/reports', financialLimiter, createApiHandler('../api/reports.js'));

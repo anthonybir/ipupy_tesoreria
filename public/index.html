@@ -4,6 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IPU PY Tesorería Nacional - Sistema Modernizado</title>
+    <script>
+        (function() {
+            const originalWarn = console.warn;
+            console.warn = function(...args) {
+                if (args.length && typeof args[0] === 'string' && args[0].includes('tailwindcss.com should not be used in production')) {
+                    return;
+                }
+                return originalWarn.apply(console, args);
+            };
+        })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/css/absd-tokens.css">
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
@@ -302,7 +313,6 @@
         <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
             <h2 class="text-2xl font-bold text-center mb-6 text-gray-800">Iniciar Sesión</h2>
 
-            <!-- Google Sign-In Button -->
             <div class="mb-6">
                 <div id="g_id_onload"
                      data-client_id="44786170581-apr8ukthgnp6dku7rkjh90kfruc2sf8t.apps.googleusercontent.com"
@@ -320,61 +330,8 @@
                      data-width="400"
                      data-locale="es">
                 </div>
-
                 <div class="text-center mt-3 text-xs text-gray-500">
                     Solo para cuentas @ipupy.org
-                </div>
-            </div>
-
-            <!-- Divider -->
-            <div class="relative my-6">
-                <div class="absolute inset-0 flex items-center">
-                    <div class="w-full border-t border-gray-300"></div>
-                </div>
-                <div class="relative flex justify-center text-sm">
-                    <span class="px-2 bg-white text-gray-500">o usa email/contraseña</span>
-                </div>
-            </div>
-
-            <form id="loginForm" class="absd-form-grid">
-                <div class="absd-form-row">
-                    <label for="loginEmail" class="absd-label">Email <span class="required-dot" aria-hidden="true">*</span></label>
-                    <input type="email" id="loginEmail" required class="absd-input" autocomplete="email">
-                </div>
-
-                <div class="absd-form-row">
-                    <label for="loginPassword" class="absd-label">Contraseña <span class="required-dot" aria-hidden="true">*</span></label>
-                    <input type="password" id="loginPassword" required class="absd-input" autocomplete="current-password">
-                </div>
-
-                <button type="submit" class="absd-btn absd-btn-primary w-full justify-center">
-                    <span id="loginText">Iniciar Sesión</span>
-                    <div id="loginLoading" class="loading hidden ml-2" aria-hidden="true"></div>
-                </button>
-            </form>
-
-            <div class="mt-6 text-center">
-                <p class="text-sm text-gray-600">¿Primera vez?
-                    <button onclick="showInitForm()" class="text-blue-600 hover:underline">Inicializar Sistema</button>
-                </p>
-            </div>
-
-            <!-- Init Form -->
-            <div id="initForm" class="hidden mt-4 p-4 bg-gray-50 rounded">
-                <h3 class="font-semibold mb-3">Configuración Inicial</h3>
-                <div class="absd-form-grid">
-                    <div class="absd-form-row">
-                        <label for="initEmail" class="absd-label">Email del administrador <span class="required-dot" aria-hidden="true">*</span></label>
-                        <input type="email" id="initEmail" class="absd-input" placeholder="admin@ipupy.org" autocomplete="email">
-                    </div>
-                    <div class="absd-form-row">
-                        <label for="initPassword" class="absd-label">Contraseña inicial <span class="required-dot" aria-hidden="true">*</span></label>
-                        <input type="password" id="initPassword" class="absd-input" placeholder="Mínimo 6 caracteres" autocomplete="new-password" minlength="6">
-                        <p class="absd-field-hint">Se utilizará para el primer ingreso del administrador.</p>
-                    </div>
-                    <button type="button" onclick="initSystem()" class="absd-btn absd-btn-primary w-full justify-center">
-                        Inicializar
-                    </button>
                 </div>
             </div>
         </div>
@@ -772,13 +729,26 @@
                                     </select>
                                 </div>
                                 <div>
+                                    <label for="filterTransactionMonth" class="absd-label">Mes</label>
+                                    <select id="filterTransactionMonth" class="absd-select"></select>
+                                </div>
+                                <div>
+                                    <label for="filterTransactionYear" class="absd-label">Año</label>
+                                    <select id="filterTransactionYear" class="absd-select"></select>
+                                </div>
+                            </div>
+                            <div class="absd-form-row split-3 mt-4">
+                                <div>
                                     <label for="filterTransactionDateFrom" class="absd-label">Desde</label>
                                     <input type="date" id="filterTransactionDateFrom" class="absd-input" placeholder="Fecha desde">
                                 </div>
-                                <div>
-                                    <label class="absd-label">&#8203;</label>
-                                    <button onclick="filterTransactions()" class="absd-btn absd-btn-primary">
+                                <div class="flex items-end gap-2">
+                                    <button type="button" onclick="filterTransactions()" class="absd-btn absd-btn-primary">
                                         Filtrar
+                                    </button>
+                                    <button type="button" id="resetTransactionFiltersBtn"
+                                            class="px-4 py-2 border border-gray-300 rounded text-gray-700 hover:bg-gray-50">
+                                        Limpiar
                                     </button>
                                 </div>
                             </div>
@@ -1452,6 +1422,9 @@
         const API_BASE = window.location.origin + '/api';
         let authToken = localStorage.getItem('authToken');
         let currentUser = null;
+        let authVerified = false; // Cache auth verification status
+        let lastAuthVerification = 0; // Timestamp of last verification
+        const AUTH_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
         let currentTab = 'dashboard';
 
         const LAYOUT_PREF_KEY = 'absdLayoutPreferences';
@@ -1784,6 +1757,52 @@
             return new Date(value).toLocaleString('es-PY');
         }
 
+        function normalizeDateInput(value) {
+            if (!value) {
+                return '';
+            }
+            const trimmed = String(value).trim();
+            if (!trimmed) {
+                return '';
+            }
+            if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+                return trimmed;
+            }
+            const parsed = Date.parse(trimmed);
+            if (!Number.isNaN(parsed)) {
+                const date = new Date(parsed);
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            }
+            const match = trimmed.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})$/);
+            if (match) {
+                let [, first, second, rawYear] = match;
+                let year = rawYear.length === 2 ? `20${rawYear}` : rawYear;
+                const firstNum = Number.parseInt(first, 10);
+                const secondNum = Number.parseInt(second, 10);
+                if (Number.isNaN(firstNum) || Number.isNaN(secondNum)) {
+                    return '';
+                }
+                let day = firstNum;
+                let month = secondNum;
+                if (firstNum <= 12 && secondNum > 12) {
+                    day = secondNum;
+                    month = firstNum;
+                }
+                if (firstNum <= 12 && secondNum <= 12 && firstNum !== secondNum) {
+                    // Heuristic: prefer locale day/month ordering when ambiguous
+                    day = secondNum;
+                    month = firstNum;
+                }
+                const isoMonth = String(month).padStart(2, '0');
+                const isoDay = String(day).padStart(2, '0');
+                return `${year}-${isoMonth}-${isoDay}`;
+            }
+            return '';
+        }
+
         function formatMonthName(month) {
             const names = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
             return names[(month - 1 + 12) % 12] || `${month}`;
@@ -1822,51 +1841,7 @@
             }, 5000);
         }
 
-        function showLoading(element, show = true) {
-            const loading = element.querySelector('.loading');
-            const text = element.querySelector('span');
-
-            if (show) {
-                if (loading) loading.classList.remove('hidden');
-                if (text) text.style.opacity = '0.7';
-            } else {
-                if (loading) loading.classList.add('hidden');
-                if (text) text.style.opacity = '1';
-            }
-        }
-
-        // Authentication
-        async function login(event) {
-            event.preventDefault();
-
-            const email = document.getElementById('loginEmail').value;
-            const password = document.getElementById('loginPassword').value;
-            const submitBtn = event.target.querySelector('button[type="submit"]');
-
-            showLoading(submitBtn);
-
-            try {
-                const response = await axios.post(`${API_BASE}/auth?action=login`, {
-                    email,
-                    password
-                });
-
-                authToken = response.data.token;
-                currentUser = response.data.user;
-                localStorage.setItem('authToken', authToken);
-                localStorage.setItem('currentUser', JSON.stringify(currentUser));
-
-                showMainApp();
-                showToast('¡Bienvenido!', 'Sesión iniciada correctamente', 'success');
-
-            } catch (error) {
-                showToast('Error', error.response?.data?.error || 'Error al iniciar sesión', 'error');
-            } finally {
-                showLoading(submitBtn, false);
-            }
-        }
-
-        // Google OAuth Login Handler
+        // Autenticación
         async function handleGoogleLogin(response) {
             console.log('Google login response:', response);
 
@@ -1881,6 +1856,10 @@
                 currentUser = result.data.user;
                 localStorage.setItem('authToken', authToken);
                 localStorage.setItem('currentUser', JSON.stringify(currentUser));
+
+                // Set auth cache on successful login
+                authVerified = true;
+                lastAuthVerification = Date.now();
 
                 showMainApp();
                 showToast(
@@ -1901,50 +1880,47 @@
             localStorage.removeItem('currentUser');
             authToken = null;
             currentUser = null;
+            authVerified = false;
+            lastAuthVerification = 0;
             showLoginScreen();
             showToast('Sesión cerrada', 'Has cerrado sesión correctamente', 'info');
         }
 
-        async function verifyAuth() {
+        async function verifyAuth(forceRefresh = false) {
             if (!authToken) return false;
 
+            // Use cached auth verification if available and not expired
+            const now = Date.now();
+            if (!forceRefresh && authVerified && (now - lastAuthVerification) < AUTH_CACHE_DURATION) {
+                console.log('Using cached auth verification');
+                return true;
+            }
+
             try {
+                // Disable axios retries for auth verification to prevent rate limiting
                 const response = await axios.get(`${API_BASE}/auth?action=verify`, {
-                    headers: { Authorization: `Bearer ${authToken}` }
+                    headers: { Authorization: `Bearer ${authToken}` },
+                    timeout: 5000, // 5 second timeout
+                    retry: 0, // Disable retries
+                    retryDelay: 0
                 });
 
                 currentUser = response.data.user;
                 localStorage.setItem('currentUser', JSON.stringify(currentUser));
+
+                // Cache the successful verification
+                authVerified = true;
+                lastAuthVerification = now;
+
                 return true;
             } catch (error) {
                 localStorage.removeItem('authToken');
                 localStorage.removeItem('currentUser');
                 authToken = null;
                 currentUser = null;
+                authVerified = false;
+                lastAuthVerification = 0;
                 return false;
-            }
-        }
-
-        function showInitForm() {
-            document.getElementById('initForm').classList.toggle('hidden');
-        }
-
-        async function initSystem() {
-            const email = document.getElementById('initEmail').value;
-            const password = document.getElementById('initPassword').value;
-
-            if (!email || !password) {
-                showToast('Error', 'Email y contraseña requeridos', 'error');
-                return;
-            }
-
-            try {
-                await axios.post(`${API_BASE}/auth?action=init`, { email, password });
-                showToast('Sistema Inicializado', 'Ya puedes iniciar sesión', 'success');
-                document.getElementById('initForm').classList.add('hidden');
-                document.getElementById('loginEmail').value = email;
-            } catch (error) {
-                showToast('Error', error.response?.data?.error || 'Error al inicializar', 'error');
             }
         }
 
@@ -2037,8 +2013,8 @@
             const recentReportsStatus = document.getElementById('recentReportsStatus');
 
             try {
-                // Use ABSD pipeline for progressive loading with offline support
-                const data = await ABSD.pipeline.fetch(`${API_BASE}/dashboard`, {
+                // Use new consolidated dashboard-init endpoint to reduce API calls
+                const data = await ABSD.pipeline.fetch(`${API_BASE}/dashboard-init`, {
                     headers: { Authorization: `Bearer ${authToken}` },
                     container: null, // Manual skeleton handling
                     forceRefresh: false
@@ -2063,11 +2039,11 @@
                     }
                 };
 
-                // Update metrics progressively
-                updateMetric('totalChurches', data.totalChurches);
-                updateMetric('reportedChurches', data.reportedChurches);
-                updateMetric('monthTotal', data.monthTotal, formatCurrency);
-                updateMetric('nationalFund', data.nationalFund, formatCurrency);
+                // Update metrics progressively - using consolidated data structure
+                updateMetric('totalChurches', data.metrics?.total_churches);
+                updateMetric('reportedChurches', data.metrics?.current_month_reports);
+                updateMetric('monthTotal', data.metrics?.current_month_total, formatCurrency);
+                updateMetric('nationalFund', data.metrics?.current_month_total ? data.metrics.current_month_total * 0.1 : 0, formatCurrency);
 
                 // Hide skeleton for reports
                 ABSD.pipeline.hideSkeleton(recentReportsEl);
@@ -2102,10 +2078,10 @@
                         } else {
                             // Regular rendering for small datasets
                             recentReportsEl.innerHTML = data.recentReports.map(report => {
-                                const church = escapeHtml(report.churchName || report.church || 'Iglesia sin nombre');
-                                const city = escapeHtml(report.city || 'Ciudad no registrada');
-                                const total = formatCurrency(report.totalEntradas ?? report.total_entradas ?? 0);
-                                const created = formatDate(report.createdAt || report.created_at);
+                                const church = escapeHtml(report.church_name || report.churchName || report.church || 'Iglesia sin nombre');
+                                const city = escapeHtml(report.church_city || report.city || 'Ciudad no registrada');
+                                const total = formatCurrency((report.diezmos || 0) + (report.ofrendas || 0));
+                                const created = formatDate(report.created_at || report.createdAt);
                                 return `
                                     <article class="recent-report-item flex justify-between items-center gap-4 pb-3" role="listitem">
                                         <div>
@@ -2414,11 +2390,6 @@
         async function init() {
             axios.defaults.headers.common['Content-Type'] = 'application/json';
 
-            const loginForm = document.getElementById('loginForm');
-            if (loginForm) {
-                loginForm.addEventListener('submit', login);
-            }
-
             const themeSelect = document.getElementById('themePreference');
             const densitySelect = document.getElementById('densityPreference');
             const layoutToggle = document.getElementById('layoutSettingsToggle');
@@ -2630,17 +2601,89 @@
         let fundsScroller = null;
         let fundMovementsScroller = null;
 
+        const TRANSACTION_MONTH_OPTIONS = [
+            { value: '', label: 'Todos los meses' },
+            { value: '1', label: 'Enero' },
+            { value: '2', label: 'Febrero' },
+            { value: '3', label: 'Marzo' },
+            { value: '4', label: 'Abril' },
+            { value: '5', label: 'Mayo' },
+            { value: '6', label: 'Junio' },
+            { value: '7', label: 'Julio' },
+            { value: '8', label: 'Agosto' },
+            { value: '9', label: 'Septiembre' },
+            { value: '10', label: 'Octubre' },
+            { value: '11', label: 'Noviembre' },
+            { value: '12', label: 'Diciembre' }
+        ];
+        let transactionFiltersInitialized = false;
+
+        function populateTransactionFilterOptions() {
+            if (transactionFiltersInitialized) {
+                return;
+            }
+            const monthSelect = document.getElementById('filterTransactionMonth');
+            if (monthSelect) {
+                monthSelect.innerHTML = TRANSACTION_MONTH_OPTIONS
+                    .map(({ value, label }) => `<option value="${value}">${label}</option>`)
+                    .join('');
+            }
+            const yearSelect = document.getElementById('filterTransactionYear');
+            if (yearSelect) {
+                const currentYear = new Date().getFullYear();
+                const earliestYear = 2024;
+                const options = ['<option value="">Todos los años</option>'];
+                for (let year = currentYear; year >= earliestYear; year--) {
+                    options.push(`<option value="${year}">${year}</option>`);
+                }
+                yearSelect.innerHTML = options.join('');
+            }
+            const fundSelect = document.getElementById('filterTransactionFund');
+            if (fundSelect && fundSelect.options.length <= 1) {
+                loadFundsForTransaction();
+            }
+            const churchSelect = document.getElementById('filterTransactionChurch');
+            if (churchSelect && churchSelect.options.length <= 1) {
+                loadChurchesForTransaction();
+            }
+            transactionFiltersInitialized = true;
+        }
+
+        function resetTransactionFilters() {
+            const fundSelect = document.getElementById('filterTransactionFund');
+            const churchSelect = document.getElementById('filterTransactionChurch');
+            const monthSelect = document.getElementById('filterTransactionMonth');
+            const yearSelect = document.getElementById('filterTransactionYear');
+            const dateFromInput = document.getElementById('filterTransactionDateFrom');
+
+            if (fundSelect) { fundSelect.value = ''; }
+            if (churchSelect) { churchSelect.value = ''; }
+            if (monthSelect) { monthSelect.value = ''; }
+            if (yearSelect) { yearSelect.value = ''; }
+            if (dateFromInput) { dateFromInput.value = ''; }
+
+            loadTransactions();
+        }
+
         async function openTransactionModal() {
-            await loadFundsForTransaction();
-            await loadChurchesForTransaction();
-            resetTransactionEntryForm();
+            const modal = document.getElementById('transactionModal');
+
             transactionEntries = [];
             renderTransactionEntries();
+            resetTransactionEntryForm();
 
             const today = new Date().toISOString().split('T')[0];
-            document.getElementById('transactionDate').value = today;
+            const dateInput = document.getElementById('transactionDate');
+            if (dateInput) {
+                dateInput.value = today;
+            }
 
-            document.getElementById('transactionModal').classList.remove('hidden');
+            modal.classList.remove('hidden');
+
+            await Promise.allSettled([
+                loadFundsForTransaction(),
+                loadChurchesForTransaction()
+            ]);
         }
 
         function closeTransactionModal() {
@@ -2819,6 +2862,8 @@
         }
 
         async function loadTransactions() {
+            populateTransactionFilterOptions();
+
             const container = document.getElementById('transactionsListContainer');
             const listEl = document.getElementById('transactionsVirtualList');
             if (container) {
@@ -2830,10 +2875,18 @@
 
                 const filterFund = document.getElementById('filterTransactionFund')?.value;
                 const filterChurch = document.getElementById('filterTransactionChurch')?.value;
-                const filterDateFrom = document.getElementById('filterTransactionDateFrom')?.value;
+                const filterMonth = document.getElementById('filterTransactionMonth')?.value;
+                const filterYear = document.getElementById('filterTransactionYear')?.value;
+                const filterDateFromRaw = document.getElementById('filterTransactionDateFrom')?.value;
+                const filterDateFrom = normalizeDateInput(filterDateFromRaw);
+                if (filterDateFromRaw && !filterDateFrom) {
+                    showToast('Error', 'Formato de fecha inválido. Use AAAA-MM-DD o dd/mm/aaaa.', 'error');
+                }
 
                 if (filterFund) params.append('fund_id', filterFund);
                 if (filterChurch) params.append('church_id', filterChurch);
+                if (filterMonth) params.append('month', filterMonth);
+                if (filterYear) params.append('year', filterYear);
                 if (filterDateFrom) params.append('date_from', filterDateFrom);
 
                 const url = `${API_BASE}/financial?type=transactions` + (params.toString() ? `&${params}` : '');
@@ -2958,6 +3011,18 @@
         });
         document.getElementById('addTransactionEntryBtn').addEventListener('click', addTransactionEntry);
         document.getElementById('saveTransactionBatchBtn').addEventListener('click', submitTransactionBatch);
+        const resetFiltersBtn = document.getElementById('resetTransactionFiltersBtn');
+        if (resetFiltersBtn) {
+            resetFiltersBtn.addEventListener('click', resetTransactionFilters);
+        }
+        const monthFilter = document.getElementById('filterTransactionMonth');
+        if (monthFilter) {
+            monthFilter.addEventListener('change', loadTransactions);
+        }
+        const yearFilter = document.getElementById('filterTransactionYear');
+        if (yearFilter) {
+            yearFilter.addEventListener('change', loadTransactions);
+        }
 
         // Fund Management Functions
         async function loadFunds() {
@@ -3108,8 +3173,8 @@
                 const params = new URLSearchParams();
 
                 if (fundId) params.append('fund_id', fundId);
-                if (dateFrom) params.append('date_from', dateFrom);
-                if (dateTo) params.append('date_to', dateTo);
+                if (dateFrom) params.append('start_date', dateFrom);
+                if (dateTo) params.append('end_date', dateTo);
 
                 const url = `${API_BASE}/fund-movements${params.toString() ? `?${params}` : ''}`;
                 const data = await ABSD.pipeline.fetch(url, {
