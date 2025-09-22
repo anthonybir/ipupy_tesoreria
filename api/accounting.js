@@ -342,7 +342,7 @@ const buildMonthlyLedger = async (churchId, monthNum, yearNum) => {
     const worshipResult = await execute(`
       SELECT
         COUNT(*) as total_services,
-        SUM(num_hermanos + num_amigos + num_ninos) as total_attendance
+        SUM(COALESCE(total_asistencia, 0)) as total_attendance
       FROM worship_records
       WHERE church_id = $1
         AND EXTRACT(MONTH FROM fecha_culto) = $2
@@ -370,10 +370,51 @@ const buildMonthlyLedger = async (churchId, monthNum, yearNum) => {
       [churchId, monthNum, yearNum]
     );
 
+    // Transform flat database response into nested API structure
     return {
-      ...totals,
+      entradas: {
+        totales: {
+          total_diezmos: totals.total_diezmos || 0,
+          total_ofrendas: totals.total_ofrendas || 0,
+          total_misiones: totals.total_misiones || 0,
+          total_otros: totals.total_otros || 0,
+          total_entradas: totals.total_entradas || 0
+        },
+        detalle_por_tipo: []
+      },
+      distribucion_automatica: {
+        fondo_nacional_10_percent: totals.fondo_nacional_10_percent || 0,
+        fondo_nacional_100_percent: totals.fondo_nacional_100_percent || 0,
+        fondo_nacional_total: totals.fondo_nacional_total || 0,
+        disponible_local_90_percent: totals.disponible_local_90_percent || 0,
+        disponible_local_otros: totals.disponible_local_otros || 0,
+        disponible_local_total: totals.disponible_local_total || 0,
+        porcentaje_fondo_nacional: totals.total_entradas > 0
+          ? ((totals.fondo_nacional_total / totals.total_entradas) * 100).toFixed(1)
+          : "0.0"
+      },
+      gastos: {
+        totales: {
+          servicios_basicos: totals.total_gastos_servicios || 0,
+          otros_gastos: (totals.total_gastos || 0) - (totals.total_gastos_servicios || 0),
+          total_gastos: totals.total_gastos || 0
+        },
+        detalle_por_categoria: expensesResult.rows || []
+      },
+      salario_pastoral: {
+        calculado_automatico: totals.salario_pastoral_calculado || 0,
+        registrado_en_facturas: 0,
+        diferencia: totals.salario_pastoral_calculado || 0
+      },
+      balance: {
+        saldo_calculado: totals.balance_calculado || 0,
+        status: Math.abs(totals.balance_calculado || 0) < 1 ? 'balanceado' :
+                (totals.balance_calculado || 0) < 0 ? 'deficit' : 'superavit',
+        mensaje: Math.abs(totals.balance_calculado || 0) < 1 ? 'Mes balanceado correctamente' :
+                 (totals.balance_calculado || 0) < 0 ? 'Déficit detectado' : 'Superávit detectado',
+        puede_cerrar: Math.abs(totals.balance_calculado || 0) < 1
+      },
       worship_summary: worshipResult.rows[0] || { total_services: 0, total_attendance: 0 },
-      expense_breakdown: expensesResult.rows || [],
       report_status: existingReport.rows[0] || null
     };
   } catch (error) {
@@ -396,13 +437,8 @@ async function handleGetMonthlyLedger(req, res, decoded) {
       throw new NotFoundError('No hay datos para el mes especificado');
     }
 
-    return res.json({
-      success: true,
-      data: ledger,
-      month: monthNum,
-      year: yearNum,
-      church_id: churchId
-    });
+    // Return ledger data directly to match UI expectations
+    return res.json(ledger);
   } catch (error) {
     if (error instanceof BadRequestError) {
       return res.status(400).json({ error: error.message });
