@@ -51,6 +51,18 @@ ABSD.AccessibilityManager = class {
    * Create screen reader announcer element
    */
   createAnnouncer() {
+    // Check if document.body exists before appending
+    if (!document.body) {
+      // If body doesn't exist yet, wait for it
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => this.createAnnouncer(), { once: true });
+      }
+      return;
+    }
+
+    // Avoid duplicate announcers if already set up
+    if (this.announcer) return;
+
     this.announcer = document.createElement('div');
     this.announcer.className = 'sr-only';
     this.announcer.setAttribute('aria-live', 'polite');
