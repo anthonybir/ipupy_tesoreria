@@ -73,16 +73,20 @@ app.all('/api/donors/:id/summary', financialLimiter, createApiHandler('../api/do
 app.all('/api/donors/:id', financialLimiter, createApiHandler('../api/donors.js'));
 app.all('/api/donors', financialLimiter, createApiHandler('../api/donors.js'));
 app.all('/api/worship-records', financialLimiter, createApiHandler('../api/worship-records.js'));
-app.all('/api/expense-records', financialLimiter, createApiHandler('../api/expense-records.js'));
-app.all('/api/monthly-ledger/close', financialLimiter, createApiHandler('../api/monthly-ledger.js'));
-app.all('/api/monthly-ledger', financialLimiter, createApiHandler('../api/monthly-ledger.js'));
+app.all('/api/accounting', financialLimiter, createApiHandler('../api/accounting.js'));
+// Legacy routes redirect to accounting API
+app.all('/api/expense-records', financialLimiter, createApiHandler('../api/accounting.js'));
+app.all('/api/monthly-ledger/close', financialLimiter, createApiHandler('../api/accounting.js'));
+app.all('/api/monthly-ledger', financialLimiter, createApiHandler('../api/accounting.js'));
 
 // General endpoints (already covered by general limiter)
 registerApiRoute('/api/data', '../api/data.js');
 registerApiRoute('/api/churches', '../api/churches.js');
 registerApiRoute('/api/dashboard', '../api/dashboard.js');
-registerApiRoute('/api/families', '../api/families.js');
-registerApiRoute('/api/members', '../api/members.js');
+registerApiRoute('/api/people', '../api/people.js');
+// Legacy routes redirect to people API
+registerApiRoute('/api/families', '../api/people.js');
+registerApiRoute('/api/members', '../api/people.js');
 
 app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, '../public', 'index.html'));

@@ -3567,7 +3567,7 @@
             currentMonth = month;
 
             try {
-                const response = await axios.get(`${API_BASE}/monthly-ledger`, {
+                const response = await axios.get(`${API_BASE}/accounting?type=ledger`, {
                     headers: { Authorization: `Bearer ${authToken}` },
                     params: { church_id: churchId, year, month }
                 });
@@ -3663,7 +3663,7 @@
             const expenseSummary = document.getElementById('expenseSummary');
 
             try {
-                const response = await axios.get(`${API_BASE}/expense-records`, {
+                const response = await axios.get(`${API_BASE}/accounting?type=expenses`, {
                     headers: { Authorization: `Bearer ${authToken}` },
                     params: {
                         church_id: currentChurchId,
@@ -4419,7 +4419,7 @@
 
                 payload.total_factura = payload.monto_exenta + payload.monto_gravada_10 + payload.iva_10 + payload.monto_gravada_5 + payload.iva_5;
 
-                const response = await axios.post(`${API_BASE}/expense-records`, payload, {
+                const response = await axios.post(`${API_BASE}/accounting?type=expenses`, payload, {
                     headers: { Authorization: `Bearer ${authToken}` }
                 });
 
@@ -4487,7 +4487,7 @@
                     observaciones: `Factura generada automáticamente para balance del mes ${monthName} ${currentYear}`
                 };
 
-                const response = await axios.post(`${API_BASE}/expense-records`, payload, {
+                const response = await axios.post(`${API_BASE}/accounting?type=expenses`, payload, {
                     headers: { Authorization: `Bearer ${authToken}` }
                 });
 
@@ -4533,7 +4533,7 @@
             closeMonthBtn.textContent = 'Cerrando...';
 
             try {
-                const response = await axios.post(`${API_BASE}/monthly-ledger/close`, {
+                const response = await axios.post(`${API_BASE}/accounting?type=ledger&action=close`, {
                     church_id: currentChurchId,
                     year: currentYear,
                     month: currentMonth,

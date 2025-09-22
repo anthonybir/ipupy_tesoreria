@@ -6252,7 +6252,7 @@
                     ministry_id: ministryFilter
                 });
 
-                const response = await fetch(`${API_URL}/api/members?${params}`);
+                const response = await fetch(`${API_URL}/api/people?type=members&${params}`);
                 const data = await response.json();
 
                 if (data.success) {
@@ -6465,7 +6465,7 @@
         // Show family details when a member is selected
         async function showFamilyDetails(memberId) {
             try {
-                const response = await fetch(`${API_URL}/api/members/${memberId}`);
+                const response = await fetch(`${API_URL}/api/people?type=members&id=${memberId}`);
                 const data = await response.json();
 
                 if (data.success && data.data.family_id) {
@@ -6596,7 +6596,7 @@
         // Enhanced member details view with family context
         async function viewMemberDetails(memberId) {
             try {
-                const response = await fetch(`${API_URL}/api/members/${memberId}`);
+                const response = await fetch(`${API_URL}/api/people?type=members&id=${memberId}`);
                 const data = await response.json();
 
                 if (data.success) {
@@ -6913,7 +6913,7 @@
 
             try {
                 // Load members for attendance recording
-                const response = await fetch(`${API_URL}/api/members?church_id=${churchId}&es_activo=1&limit=1000`);
+                const response = await fetch(`${API_URL}/api/people?type=members&church_id=${churchId}&es_activo=1&limit=1000`);
                 const data = await response.json();
 
                 if (data.success) {
@@ -7262,7 +7262,7 @@
         // Load member ministry participation with contribution context
         async function loadMemberMinistryParticipation(memberId) {
             try {
-                const response = await fetch(`${API_URL}/api/members/${memberId}`);
+                const response = await fetch(`${API_URL}/api/people?type=members&id=${memberId}`);
                 const data = await response.json();
 
                 if (data.success && data.data.ministerios) {

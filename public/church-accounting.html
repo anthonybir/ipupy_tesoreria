@@ -1210,7 +1210,7 @@
 
             try {
                 const ledgerPromise = currentChurch?.id
-                    ? ABSD.pipeline.fetch(`${API_BASE}/api/monthly-ledger?church_id=${currentChurch.id}&month=${currentMonth}&year=${currentYear}`, {
+                    ? ABSD.pipeline.fetch(`${API_BASE}/api/accounting?type=ledger&church_id=${currentChurch.id}&month=${currentMonth}&year=${currentYear}`, {
                         headers: getAuthHeaders(),
                         container: null,
                         forceRefresh: true
