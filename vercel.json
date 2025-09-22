@@ -7,7 +7,7 @@
       "destination": "/public/index.html"
     },
     {
-      "source": "/((?!api).*)",
+      "source": "/((?!api/).*)",
       "destination": "/public/$1"
     }
   ],
