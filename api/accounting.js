@@ -244,11 +244,50 @@ const saveExpenseRecord = async (payload, decoded) => {
   return result.rows[0];
 };
 
-async function handleExpenseRecords(req, res, decoded) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Método no permitido para expense records' });
-  }
+async function handleGetExpenseRecords(req, res, decoded) {
+  const { church_id, year, month } = req.query;
 
+  try {
+    const churchId = enforceChurchAccess(decoded, church_id);
+    const yearNum = parseRequiredYear(year);
+    const monthNum = parseRequiredMonth(month);
+
+    const result = await execute(`
+      SELECT
+        er.*,
+        c.name as church_name
+      FROM expense_records er
+      LEFT JOIN churches c ON er.church_id = c.id
+      WHERE er.church_id = $1
+        AND EXTRACT(YEAR FROM er.fecha_comprobante) = $2
+        AND EXTRACT(MONTH FROM er.fecha_comprobante) = $3
+      ORDER BY er.fecha_comprobante DESC, er.created_at DESC`,
+      [churchId, yearNum, monthNum]
+    );
+
+    return res.json({
+      success: true,
+      records: result.rows || [],
+      month: monthNum,
+      year: yearNum,
+      church_id: churchId
+    });
+  } catch (error) {
+    if (error instanceof BadRequestError) {
+      return res.status(400).json({ error: error.message });
+    }
+    if (error instanceof ForbiddenError) {
+      return res.status(403).json({ error: error.message });
+    }
+    console.error('Error fetching expense records:', error);
+    return res.status(500).json({
+      error: 'Error al obtener los gastos',
+      details: error.message
+    });
+  }
+}
+
+async function handlePostExpenseRecord(req, res, decoded) {
   try {
     const payload = normalizeExpensePayload(req.body, decoded);
     const expense = await saveExpenseRecord(payload, decoded);
@@ -270,6 +309,16 @@ async function handleExpenseRecords(req, res, decoded) {
       error: 'Error al registrar el gasto',
       details: error.message
     });
+  }
+}
+
+async function handleExpenseRecords(req, res, decoded) {
+  if (req.method === 'GET') {
+    return handleGetExpenseRecords(req, res, decoded);
+  } else if (req.method === 'POST') {
+    return handlePostExpenseRecord(req, res, decoded);
+  } else {
+    return res.status(405).json({ error: 'Método no permitido para expense records' });
   }
 }
 
