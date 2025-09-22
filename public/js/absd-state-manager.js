@@ -461,6 +461,15 @@ ABSD.PreferenceManager = class extends ABSD.StateManager {
   }
 
   applyPreferences() {
+    // Check if document.body exists before applying preferences
+    if (!document.body) {
+      // If body doesn't exist yet, wait for it
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => this.applyPreferences(), { once: true });
+      }
+      return;
+    }
+
     // Apply theme
     const theme = this.get('theme');
     document.body.className = document.body.className

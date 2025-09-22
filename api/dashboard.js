@@ -65,29 +65,53 @@ module.exports = async function handler(req, res) {
       WHERE month = $1 AND year = $2
     `, [currentMonth, currentYear]);
 
+    // Get reported churches count for current month
+    const reportedChurches = await execute(`
+      SELECT COUNT(DISTINCT church_id) as count
+      FROM reports
+      WHERE month = $1 AND year = $2
+    `, [currentMonth, currentYear]);
+
+    // Calculate current month totals
+    const monthTotal = parseFloat(currentMonthStats.rows[0].tithes_this_month || 0) +
+                      parseFloat(currentMonthStats.rows[0].offerings_this_month || 0);
+
+    // Format response to match frontend expectations
     const response = {
-      success: true,
-      data: {
-        overview: {
-          total_churches: parseInt(churches.rows[0].count),
-          total_reports: parseInt(reports.rows[0].total),
-          total_tithes: parseFloat(reports.rows[0].total_tithes || 0),
-          total_offerings: parseFloat(reports.rows[0].total_offerings || 0),
-          total_national_fund: parseFloat(reports.rows[0].total_national_fund || 0)
-        },
-        current_month: {
-          month: currentMonth,
-          year: currentYear,
-          reports_count: parseInt(currentMonthStats.rows[0].reports_this_month),
-          tithes: parseFloat(currentMonthStats.rows[0].tithes_this_month || 0),
-          offerings: parseFloat(currentMonthStats.rows[0].offerings_this_month || 0),
-          national_fund: parseFloat(currentMonthStats.rows[0].national_fund_this_month || 0)
-        },
-        recent_reports: recentReports.rows,
-        monthly_summary: monthlySummary.rows,
-        fund_overview: fundOverview.rows,
-        status_counts: statusCounts.rows
-      }
+      // Main dashboard metrics (camelCase as expected by frontend)
+      totalChurches: parseInt(churches.rows[0].count),
+      reportedChurches: parseInt(reportedChurches.rows[0].count),
+      monthTotal: monthTotal,
+      nationalFund: parseFloat(currentMonthStats.rows[0].national_fund_this_month || 0),
+
+      // Recent reports with proper formatting
+      recentReports: recentReports.rows.map(report => ({
+        ...report,
+        churchName: report.church_name,
+        churchCity: report.church_city,
+        total: parseFloat(report.diezmos || 0) + parseFloat(report.ofrendas || 0),
+        fondoNacional: parseFloat(report.fondo_nacional || 0)
+      })),
+
+      // Additional data
+      overview: {
+        total_churches: parseInt(churches.rows[0].count),
+        total_reports: parseInt(reports.rows[0].total),
+        total_tithes: parseFloat(reports.rows[0].total_tithes || 0),
+        total_offerings: parseFloat(reports.rows[0].total_offerings || 0),
+        total_national_fund: parseFloat(reports.rows[0].total_national_fund || 0)
+      },
+      currentMonth: {
+        month: currentMonth,
+        year: currentYear,
+        reports_count: parseInt(currentMonthStats.rows[0].reports_this_month),
+        tithes: parseFloat(currentMonthStats.rows[0].tithes_this_month || 0),
+        offerings: parseFloat(currentMonthStats.rows[0].offerings_this_month || 0),
+        national_fund: parseFloat(currentMonthStats.rows[0].national_fund_this_month || 0)
+      },
+      monthlySummary: monthlySummary.rows,
+      fundOverview: fundOverview.rows,
+      statusCounts: statusCounts.rows
     };
 
     return res.status(200).json(response);
