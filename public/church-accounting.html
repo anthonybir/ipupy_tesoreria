@@ -5,8 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IPU PY - Contabilidad de Iglesia</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/css/absd-tokens.css">
     <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/js/absd-components.js"></script>
+    <script src="/js/absd-data-pipeline.js"></script>
+    <script src="/js/absd-state-manager.js"></script>
+    <script src="/js/absd-charts.js"></script>
+    <script src="/js/absd-accessibility.js"></script>
     <style>
         .glassmorphism {
             background: rgba(255, 255, 255, 0.25);
@@ -47,10 +53,10 @@
         }
     </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="min-h-screen theme-light density-normal absd-disclosure-basic">
     <!-- Header -->
     <header class="gradient-bg text-white shadow-lg relative z-50">
-        <div class="container mx-auto px-4 py-4">
+        <div class="absd-container py-4">
             <div class="flex justify-between items-center">
                 <div class="flex items-center">
                     <button id="sidebarToggle" class="md:hidden mr-4 p-2 rounded hover:bg-white/20">
@@ -77,20 +83,18 @@
     <div id="loginScreen" class="min-h-screen flex items-center justify-center gradient-bg">
         <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-md">
             <h2 class="text-2xl font-bold text-center mb-6 text-gray-800">Acceso a Contabilidad</h2>
-            <form id="loginForm" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                    <input type="email" id="loginEmail" required
-                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <form id="loginForm" class="absd-form-grid">
+                <div class="absd-form-row">
+                    <label for="loginEmail" class="absd-label">Email <span class="required-dot" aria-hidden="true">*</span></label>
+                    <input type="email" id="loginEmail" required class="absd-input" autocomplete="email">
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
-                    <input type="password" id="loginPassword" required
-                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <div class="absd-form-row">
+                    <label for="loginPassword" class="absd-label">Contraseña <span class="required-dot" aria-hidden="true">*</span></label>
+                    <input type="password" id="loginPassword" required class="absd-input" autocomplete="current-password">
                 </div>
-                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition flex items-center justify-center">
+                <button type="submit" class="absd-btn absd-btn-primary w-full justify-center">
                     <span id="loginText">Iniciar Sesión</span>
-                    <div id="loginLoading" class="loading hidden ml-2"></div>
+                    <div id="loginLoading" class="loading hidden ml-2" aria-hidden="true"></div>
                 </button>
             </form>
         </div>
@@ -99,6 +103,7 @@
     <!-- Main App -->
     <div id="mainApp" class="hidden">
         <div class="flex">
+            <a href="#main-content" class="sr-only focus:not-sr-only">Saltar al contenido principal</a>
             <!-- Sidebar -->
             <aside id="sidebar" class="sidebar-hidden md:sidebar-active fixed md:static inset-y-0 left-0 z-40 w-64 bg-white shadow-lg transition-transform duration-300 ease-in-out">
                 <div class="p-6 h-full overflow-y-auto">
@@ -153,12 +158,12 @@
                     </div>
 
                     <!-- Summary Cards -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                        <div class="bg-white p-6 rounded-lg shadow-md border-l-4 border-green-500">
+                    <div class="absd-grid mb-8" role="list">
+                        <article class="absd-card absd-density-target absd-span-minimal border-l-4 border-green-500" role="listitem" data-dashboard-metric data-skeleton-type="metric">
                             <div class="flex items-center">
                                 <div class="flex-1">
                                     <p class="text-sm font-medium text-gray-600 uppercase tracking-wide">Total en Cuentas</p>
-                                    <p class="text-2xl font-bold text-gray-900" id="totalBalance">₲ 0</p>
+                                    <p class="text-2xl font-bold text-gray-900 number-morph" id="totalBalance">₲ 0</p>
                                 </div>
                                 <div class="p-3 bg-green-100 rounded-full">
                                     <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -166,13 +171,13 @@
                                     </svg>
                                 </div>
                             </div>
-                        </div>
+                        </article>
 
-                        <div class="bg-white p-6 rounded-lg shadow-md border-l-4 border-blue-500">
+                        <article class="absd-card absd-density-target absd-span-minimal border-l-4 border-blue-500" role="listitem" data-dashboard-metric data-skeleton-type="metric">
                             <div class="flex items-center">
                                 <div class="flex-1">
                                     <p class="text-sm font-medium text-gray-600 uppercase tracking-wide">Ingresos del Mes</p>
-                                    <p class="text-2xl font-bold text-gray-900" id="monthlyIncome">₲ 0</p>
+                                    <p class="text-2xl font-bold text-gray-900 number-morph" id="monthlyIncome">₲ 0</p>
                                 </div>
                                 <div class="p-3 bg-blue-100 rounded-full">
                                     <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -180,13 +185,13 @@
                                     </svg>
                                 </div>
                             </div>
-                        </div>
+                        </article>
 
-                        <div class="bg-white p-6 rounded-lg shadow-md border-l-4 border-red-500">
+                        <article class="absd-card absd-density-target absd-span-minimal border-l-4 border-red-500" role="listitem" data-dashboard-metric data-skeleton-type="metric">
                             <div class="flex items-center">
                                 <div class="flex-1">
                                     <p class="text-sm font-medium text-gray-600 uppercase tracking-wide">Gastos del Mes</p>
-                                    <p class="text-2xl font-bold text-gray-900" id="monthlyExpenses">₲ 0</p>
+                                    <p class="text-2xl font-bold text-gray-900 number-morph" id="monthlyExpenses">₲ 0</p>
                                 </div>
                                 <div class="p-3 bg-red-100 rounded-full">
                                     <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -194,13 +199,13 @@
                                     </svg>
                                 </div>
                             </div>
-                        </div>
+                        </article>
 
-                        <div class="bg-white p-6 rounded-lg shadow-md border-l-4 border-purple-500">
+                        <article class="absd-card absd-density-target absd-span-minimal border-l-4 border-purple-500" role="listitem" data-dashboard-metric data-skeleton-type="metric">
                             <div class="flex items-center">
                                 <div class="flex-1">
                                     <p class="text-sm font-medium text-gray-600 uppercase tracking-wide">Balance del Mes</p>
-                                    <p class="text-2xl font-bold text-gray-900" id="monthlyBalance">₲ 0</p>
+                                    <p class="text-2xl font-bold text-gray-900 number-morph" id="monthlyBalance">₲ 0</p>
                                 </div>
                                 <div class="p-3 bg-purple-100 rounded-full">
                                     <svg class="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -208,19 +213,21 @@
                                     </svg>
                                 </div>
                             </div>
-                        </div>
+                        </article>
                     </div>
 
                     <!-- Charts Row -->
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                        <div class="bg-white p-6 rounded-lg shadow-md">
-                            <h3 class="text-lg font-semibold text-gray-800 mb-4">Flujo de Caja (Últimos 6 Meses)</h3>
-                            <canvas id="cashFlowChart" height="200"></canvas>
-                        </div>
-                        <div class="bg-white p-6 rounded-lg shadow-md">
-                            <h3 class="text-lg font-semibold text-gray-800 mb-4">Gastos por Categoría</h3>
-                            <canvas id="expensesChart" height="200"></canvas>
-                        </div>
+                    <div class="absd-grid mb-8">
+                        <section class="absd-card absd-density-target absd-span-standard absd-chart-container" aria-labelledby="cashFlowHeading" data-dashboard-chart data-skeleton-type="card">
+                            <h3 id="cashFlowHeading" class="text-lg font-semibold text-gray-800 mb-4">Flujo de Caja (Últimos 6 Meses)</h3>
+                            <canvas id="cashFlowChart" height="200" role="img" aria-label="Gráfico de flujo de caja de los últimos seis meses"></canvas>
+                            <div id="cashFlowChart_table" class="sr-only" aria-hidden="true"></div>
+                        </section>
+                        <section class="absd-card absd-density-target absd-span-standard absd-chart-container" aria-labelledby="expensesHeading" data-dashboard-chart data-skeleton-type="card">
+                            <h3 id="expensesHeading" class="text-lg font-semibold text-gray-800 mb-4">Gastos por Categoría</h3>
+                            <canvas id="expensesChart" height="200" role="img" aria-label="Gráfico de distribución de gastos por categoría"></canvas>
+                            <div id="expensesChart_table" class="sr-only" aria-hidden="true"></div>
+                        </section>
                     </div>
 
                     <!-- Recent Transactions -->
@@ -266,8 +273,8 @@
                     </div>
 
                     <!-- Accounts Grid -->
-                    <div id="accountsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <!-- Dynamic content -->
+                    <div id="accountsGrid" class="absd-grid">
+                        <!-- Dynamic content with ABSD span classes -->
                     </div>
                 </div>
 
@@ -279,29 +286,41 @@
                                 <h2 class="text-2xl font-bold text-gray-800 mb-2">Transacciones</h2>
                                 <p class="text-gray-600">Registro detallado de ingresos y gastos</p>
                             </div>
-                            <button onclick="showNewTransactionForm()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+                            <button onclick="showNewTransactionForm()" class="absd-btn absd-btn-primary">
                                 + Nueva Transacción
                             </button>
                         </div>
                     </div>
 
                     <!-- Filters -->
-                    <div class="bg-white p-4 rounded-lg shadow-md mb-6">
-                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <select id="filterAccount" class="border border-gray-300 rounded px-3 py-2">
-                                <option value="">Todas las cuentas</option>
-                            </select>
-                            <select id="filterType" class="border border-gray-300 rounded px-3 py-2">
-                                <option value="">Todos los tipos</option>
-                                <option value="income">Ingresos</option>
-                                <option value="expense">Gastos</option>
-                                <option value="transfer">Transferencias</option>
-                            </select>
-                            <input type="date" id="filterStartDate" class="border border-gray-300 rounded px-3 py-2">
-                            <input type="date" id="filterEndDate" class="border border-gray-300 rounded px-3 py-2">
+                    <div class="absd-card absd-density-target absd-form-grid mb-6" data-skeleton-type="table">
+                        <div class="absd-form-row split-4">
+                            <div>
+                                <label for="filterAccount" class="absd-label">Cuenta</label>
+                                <select id="filterAccount" class="absd-select">
+                                    <option value="">Todas las cuentas</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="filterType" class="absd-label">Tipo de movimiento</label>
+                                <select id="filterType" class="absd-select">
+                                    <option value="">Todos los tipos</option>
+                                    <option value="income">Ingresos</option>
+                                    <option value="expense">Gastos</option>
+                                    <option value="transfer">Transferencias</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="filterStartDate" class="absd-label">Desde</label>
+                                <input type="date" id="filterStartDate" class="absd-input">
+                            </div>
+                            <div>
+                                <label for="filterEndDate" class="absd-label">Hasta</label>
+                                <input type="date" id="filterEndDate" class="absd-input">
+                            </div>
                         </div>
-                        <div class="mt-4">
-                            <button onclick="loadTransactions()" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+                        <div class="absd-form-row">
+                            <button onclick="loadTransactions()" class="absd-btn absd-btn-primary">
                                 Filtrar
                             </button>
                         </div>
@@ -347,7 +366,7 @@
                             <h2 class="text-2xl font-bold text-gray-800">Informes Mensuales</h2>
                             <p class="text-gray-600">Revisa el estado de tus envíos y presenta el informe del mes en minutos.</p>
                         </div>
-                        <button id="startReportWizardBtn" class="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 transition flex items-center gap-2">
+                        <button id="startReportWizardBtn" class="absd-btn absd-btn-primary flex items-center gap-2">
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                             </svg>
@@ -355,7 +374,7 @@
                         </button>
                     </div>
 
-                    <div id="reportSummaryCards" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div id="reportSummaryCards" class="absd-grid mb-6" data-skeleton-type="card">
                         <!-- Se completa dinámicamente -->
                     </div>
 
@@ -365,12 +384,14 @@
                                 <h3 class="text-lg font-semibold">Historial de Informes</h3>
                                 <p class="text-sm text-gray-500">Los informes más recientes aparecen primero.</p>
                             </div>
-                            <select id="reportYearFilter" class="border border-gray-300 rounded px-3 py-2 hidden md:block">
+                            <select id="reportYearFilter" class="absd-select hidden md:block">
                                 <!-- Opciones dinámicas -->
                             </select>
                         </div>
-                        <div id="reportStatusList" class="divide-y">
-                            <!-- Se llena dinámicamente -->
+                        <div id="reportStatusListContainer" class="absd-virtual-panel" data-skeleton-type="table">
+                            <div id="reportStatusList" class="absd-virtual-scroll" role="list" aria-live="polite">
+                                <!-- Se llena dinámicamente -->
+                            </div>
                         </div>
                     </div>
 
@@ -379,7 +400,7 @@
                             <h3 class="text-lg font-semibold">Línea de Tiempo</h3>
                             <p class="text-sm text-gray-500">Visualiza el recorrido desde el envío hasta la aprobación.</p>
                         </div>
-                        <div id="reportTimeline" class="p-6 space-y-4">
+                        <div id="reportTimeline" class="p-6 space-y-4" data-skeleton-type="text">
                             <!-- Timeline dinámico -->
                         </div>
                     </div>
@@ -418,72 +439,78 @@
                 <form id="reportWizardForm" class="px-6 pb-6 space-y-6">
                     <div class="wizard-step" data-step="1">
                         <h4 class="text-lg font-semibold mb-3">1. Datos del Informe</h4>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Año</label>
-                                <input type="number" id="wizardYear" class="w-full border rounded px-3 py-2" min="2020" max="2035" required>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Mes</label>
-                                <select id="wizardMonth" class="w-full border rounded px-3 py-2" required>
-                                    <option value="1">Enero</option>
-                                    <option value="2">Febrero</option>
-                                    <option value="3">Marzo</option>
-                                    <option value="4">Abril</option>
-                                    <option value="5">Mayo</option>
-                                    <option value="6">Junio</option>
-                                    <option value="7">Julio</option>
-                                    <option value="8">Agosto</option>
-                                    <option value="9">Septiembre</option>
-                                    <option value="10">Octubre</option>
-                                    <option value="11">Noviembre</option>
-                                    <option value="12">Diciembre</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Estado preliminar</label>
-                                <select id="wizardEstado" class="w-full border rounded px-3 py-2">
-                                    <option value="pendiente">Pendiente</option>
-                                    <option value="borrador">Borrador</option>
-                                </select>
+                        <div class="absd-form-grid">
+                            <div class="absd-form-row split-3">
+                                <div>
+                                    <label for="wizardYear" class="absd-label">Año</label>
+                                    <input type="number" id="wizardYear" class="absd-input" min="2020" max="2035" required>
+                                </div>
+                                <div>
+                                    <label for="wizardMonth" class="absd-label">Mes</label>
+                                    <select id="wizardMonth" class="absd-select" required>
+                                        <option value="1">Enero</option>
+                                        <option value="2">Febrero</option>
+                                        <option value="3">Marzo</option>
+                                        <option value="4">Abril</option>
+                                        <option value="5">Mayo</option>
+                                        <option value="6">Junio</option>
+                                        <option value="7">Julio</option>
+                                        <option value="8">Agosto</option>
+                                        <option value="9">Septiembre</option>
+                                        <option value="10">Octubre</option>
+                                        <option value="11">Noviembre</option>
+                                        <option value="12">Diciembre</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="wizardEstado" class="absd-label">Estado preliminar</label>
+                                    <select id="wizardEstado" class="absd-select">
+                                        <option value="pendiente">Pendiente</option>
+                                        <option value="borrador">Borrador</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="wizard-step hidden" data-step="2">
                         <h4 class="text-lg font-semibold mb-3">2. Resumen de Entradas</h4>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Diezmos (Gs.)</label>
-                                <input type="number" id="wizardDiezmos" class="w-full border rounded px-3 py-2" step="0.01" min="0" required>
+                        <div class="absd-form-grid">
+                            <div class="absd-form-row split-4">
+                                <div>
+                                    <label for="wizardDiezmos" class="absd-label">Diezmos (Gs.)</label>
+                                    <input type="number" id="wizardDiezmos" class="absd-input" step="0.01" min="0" required>
+                                </div>
+                                <div>
+                                    <label for="wizardOfrendas" class="absd-label">Ofrendas (Gs.)</label>
+                                    <input type="number" id="wizardOfrendas" class="absd-input" step="0.01" min="0" required>
+                                </div>
+                                <div>
+                                    <label for="wizardAnexos" class="absd-label">Anexos (Gs.)</label>
+                                    <input type="number" id="wizardAnexos" class="absd-input" step="0.01" min="0">
+                                </div>
+                                <div>
+                                    <label for="wizardCaballeros" class="absd-label">Caballeros (Gs.)</label>
+                                    <input type="number" id="wizardCaballeros" class="absd-input" step="0.01" min="0">
+                                </div>
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Ofrendas (Gs.)</label>
-                                <input type="number" id="wizardOfrendas" class="w-full border rounded px-3 py-2" step="0.01" min="0" required>
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Anexos (Gs.)</label>
-                                <input type="number" id="wizardAnexos" class="w-full border rounded px-3 py-2" step="0.01" min="0">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Caballeros (Gs.)</label>
-                                <input type="number" id="wizardCaballeros" class="w-full border rounded px-3 py-2" step="0.01" min="0">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Damas (Gs.)</label>
-                                <input type="number" id="wizardDamas" class="w-full border rounded px-3 py-2" step="0.01" min="0">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Jóvenes (Gs.)</label>
-                                <input type="number" id="wizardJovenes" class="w-full border rounded px-3 py-2" step="0.01" min="0">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Niños (Gs.)</label>
-                                <input type="number" id="wizardNinos" class="w-full border rounded px-3 py-2" step="0.01" min="0">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Otros (Gs.)</label>
-                                <input type="number" id="wizardOtros" class="w-full border rounded px-3 py-2" step="0.01" min="0">
+                            <div class="absd-form-row split-4">
+                                <div>
+                                    <label for="wizardDamas" class="absd-label">Damas (Gs.)</label>
+                                    <input type="number" id="wizardDamas" class="absd-input" step="0.01" min="0">
+                                </div>
+                                <div>
+                                    <label for="wizardJovenes" class="absd-label">Jóvenes (Gs.)</label>
+                                    <input type="number" id="wizardJovenes" class="absd-input" step="0.01" min="0">
+                                </div>
+                                <div>
+                                    <label for="wizardNinos" class="absd-label">Niños (Gs.)</label>
+                                    <input type="number" id="wizardNinos" class="absd-input" step="0.01" min="0">
+                                </div>
+                                <div>
+                                    <label for="wizardOtros" class="absd-label">Otros (Gs.)</label>
+                                    <input type="number" id="wizardOtros" class="absd-input" step="0.01" min="0">
+                                </div>
                             </div>
                         </div>
                         <div class="mt-4 p-4 bg-blue-50 rounded">
@@ -494,59 +521,69 @@
 
                     <div class="wizard-step hidden" data-step="3">
                         <h4 class="text-lg font-semibold mb-3">3. Salidas y Depósito</h4>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Honorarios Pastorales (Gs.)</label>
-                                <input type="number" id="wizardHonorariosPastoral" class="w-full border rounded px-3 py-2" step="0.01" min="0">
+                        <div class="absd-form-grid">
+                            <div class="absd-form-row split-3">
+                                <div>
+                                    <label for="wizardHonorariosPastoral" class="absd-label">Honorarios Pastorales (Gs.)</label>
+                                    <input type="number" id="wizardHonorariosPastoral" class="absd-input" step="0.01" min="0">
+                                </div>
+                                <div>
+                                    <label for="wizardServicios" class="absd-label">Servicios Públicos (Gs.)</label>
+                                    <input type="number" id="wizardServicios" class="absd-input" step="0.01" min="0">
+                                </div>
+                                <div>
+                                    <label for="wizardMontoDepositado" class="absd-label">Monto Depositado (Gs.)</label>
+                                    <input type="number" id="wizardMontoDepositado" class="absd-input" step="0.01" min="0">
+                                </div>
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Servicios Públicos (Gs.)</label>
-                                <input type="number" id="wizardServicios" class="w-full border rounded px-3 py-2" step="0.01" min="0">
+                            <div class="absd-form-row split-3">
+                                <div>
+                                    <label for="wizardFechaDeposito" class="absd-label">Fecha de Depósito</label>
+                                    <input type="date" id="wizardFechaDeposito" class="absd-input">
+                                </div>
+                                <div>
+                                    <label for="wizardNumeroDeposito" class="absd-label">Número de Boleta</label>
+                                    <input type="text" id="wizardNumeroDeposito" class="absd-input">
+                                </div>
                             </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Monto Depositado (Gs.)</label>
-                                <input type="number" id="wizardMontoDepositado" class="w-full border rounded px-3 py-2" step="0.01" min="0">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Fecha de Depósito</label>
-                                <input type="date" id="wizardFechaDeposito" class="w-full border rounded px-3 py-2">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Número de Boleta</label>
-                                <input type="text" id="wizardNumeroDeposito" class="w-full border rounded px-3 py-2">
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Asistencia de Visitas</label>
-                                <input type="number" id="wizardAsistenciaVisitas" class="w-full border rounded px-3 py-2" min="0">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Bautismos en Agua</label>
-                                <input type="number" id="wizardBautismosAgua" class="w-full border rounded px-3 py-2" min="0">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Bautismos Espíritu Santo</label>
-                                <input type="number" id="wizardBautismosEspiritu" class="w-full border rounded px-3 py-2" min="0">
+                            <div class="absd-form-row split-3">
+                                <div>
+                                    <label for="wizardAsistenciaVisitas" class="absd-label">Asistencia de Visitas</label>
+                                    <input type="number" id="wizardAsistenciaVisitas" class="absd-input" min="0">
+                                </div>
+                                <div>
+                                    <label for="wizardBautismosAgua" class="absd-label">Bautismos en Agua</label>
+                                    <input type="number" id="wizardBautismosAgua" class="absd-input" min="0">
+                                </div>
+                                <div>
+                                    <label for="wizardBautismosEspiritu" class="absd-label">Bautismos Espíritu Santo</label>
+                                    <input type="number" id="wizardBautismosEspiritu" class="absd-input" min="0">
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="wizard-step hidden" data-step="4">
                         <h4 class="text-lg font-semibold mb-3">4. Revisar y Adjuntar</h4>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Resumen Financiero (Foto)</label>
-                                <input type="file" id="wizardResumenFile" accept="image/*" class="w-full border rounded px-3 py-2">
-                            </div>
-                            <div>
-                                <label class="block text-sm font-medium mb-1">Comprobante de Depósito (Foto)</label>
-                                <input type="file" id="wizardDepositoFile" accept="image/*" class="w-full border rounded px-3 py-2">
+                        <div class="absd-form-grid mb-4">
+                            <div class="absd-form-row split-2">
+                                <div>
+                                    <label for="wizardResumenFile" class="absd-label">Resumen Financiero (Foto)</label>
+                                    <input type="file" id="wizardResumenFile" accept="image/*" class="absd-input">
+                                </div>
+                                <div>
+                                    <label for="wizardDepositoFile" class="absd-label">Comprobante de Depósito (Foto)</label>
+                                    <input type="file" id="wizardDepositoFile" accept="image/*" class="absd-input">
+                                </div>
                             </div>
                         </div>
-                        <div>
-                            <label class="block text-sm font-medium mb-1">Observaciones</label>
-                            <textarea id="wizardObservaciones" class="w-full border rounded px-3 py-2" rows="4" placeholder="Notas adicionales, aclaraciones o comentarios"></textarea>
+                        <div class="absd-form-grid">
+                            <div class="absd-form-row">
+                                <div>
+                                    <label for="wizardObservaciones" class="absd-label">Observaciones</label>
+                                    <textarea id="wizardObservaciones" class="absd-textarea" rows="4" placeholder="Notas adicionales, aclaraciones o comentarios"></textarea>
+                                </div>
+                            </div>
                         </div>
                         <div class="mt-4 p-4 bg-gray-50 rounded" id="wizardReview">
                             <!-- Resumen dinámico -->
@@ -554,10 +591,10 @@
                     </div>
 
                     <div class="flex justify-between pt-4 border-t">
-                        <button type="button" id="reportWizardBackBtn" class="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50">Atrás</button>
+                        <button type="button" id="reportWizardBackBtn" class="absd-btn absd-btn-ghost">Atrás</button>
                         <div class="flex gap-2">
-                            <button type="button" id="reportWizardSaveDraftBtn" class="px-4 py-2 text-gray-600 border border-gray-300 rounded hover:bg-gray-50 hidden">Guardar Borrador</button>
-                            <button type="button" id="reportWizardNextBtn" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Siguiente</button>
+                            <button type="button" id="reportWizardSaveDraftBtn" class="absd-btn absd-btn-ghost hidden">Guardar Borrador</button>
+                            <button type="button" id="reportWizardNextBtn" class="absd-btn absd-btn-primary">Siguiente</button>
                         </div>
                     </div>
                 </form>
@@ -578,6 +615,10 @@
         let currentChurch = null;
         let reportHistory = [];
         let reportWizardState = null;
+        let cashFlowChartInstance = null;
+        let expensesChartInstance = null;
+        let reportListScroller = null;
+        let reportWizardFocusTrap = null;
 
         const REPORT_WIZARD_STEPS = [
             { id: 1, label: 'Datos' },
@@ -599,6 +640,31 @@
             }
         }
 
+        async function restoreUserContext() {
+            if (!authToken) {
+                return;
+            }
+            try {
+                const response = await axios.get(`${API_BASE}${API_ENDPOINTS.auth}?action=verify`, {
+                    headers: getAuthHeaders()
+                });
+                const user = response.data?.user;
+                if (user) {
+                    currentUser = user;
+                    currentChurch = user.churchId ? {
+                        id: user.churchId,
+                        name: user.churchName || 'Iglesia IPUPY'
+                    } : null;
+                    document.getElementById('userEmail').textContent = currentUser.email || '';
+                    if (currentChurch?.name) {
+                        document.getElementById('churchName').textContent = currentChurch.name;
+                    }
+                }
+            } catch (error) {
+                console.warn('No se pudo restaurar la sesión', error);
+            }
+        }
+
         function getAuthHeaders() {
             return authToken ? { Authorization: `Bearer ${authToken}` } : {};
         }
@@ -610,6 +676,40 @@
             } else {
                 console.log(message);
             }
+        }
+
+        function enhanceFormControls(root = document) {
+            const INPUT_SELECTOR = 'input[type="text"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], input[type="tel"], input[type="url"], input[type="search"], input:not([type])';
+            const legacyClasses = ['px-3', 'py-2', 'border', 'border-gray-300', 'border-gray-200', 'rounded', 'rounded-md', 'focus:outline-none', 'focus:ring-2', 'focus:ring', 'focus:ring-blue-500'];
+
+            root.querySelectorAll(INPUT_SELECTOR).forEach((input) => {
+                if (!input.classList.contains('absd-input') && !input.classList.contains('absd-input--skip')) {
+                    input.classList.add('absd-input');
+                }
+                legacyClasses.forEach(cls => input.classList.remove(cls));
+            });
+
+            root.querySelectorAll('select').forEach((select) => {
+                if (!select.classList.contains('absd-select') && !select.classList.contains('absd-input--skip')) {
+                    select.classList.add('absd-select');
+                }
+                legacyClasses.forEach(cls => select.classList.remove(cls));
+            });
+
+            root.querySelectorAll('textarea').forEach((textarea) => {
+                if (!textarea.classList.contains('absd-textarea') && !textarea.classList.contains('absd-input--skip')) {
+                    textarea.classList.add('absd-textarea');
+                }
+                legacyClasses.forEach(cls => textarea.classList.remove(cls));
+            });
+
+            const labelLegacyClasses = ['block', 'text-sm', 'font-medium', 'text-gray-700', 'text-gray-600', 'mb-1'];
+            root.querySelectorAll('label').forEach((label) => {
+                if (!label.classList.contains('absd-label') && !label.classList.contains('absd-label--skip')) {
+                    label.classList.add('absd-label');
+                }
+                labelLegacyClasses.forEach(cls => label.classList.remove(cls));
+            });
         }
 
         function showSection(sectionName) {
@@ -691,12 +791,23 @@
             reportWizardState = defaultReportWizardState();
             syncWizardForm();
             updateWizardUI();
-            document.getElementById('reportWizardModal').classList.remove('hidden');
+            const modal = document.getElementById('reportWizardModal');
+            modal.classList.remove('hidden');
+            modal.setAttribute('aria-hidden', 'false');
+            if (ABSD.a11y?.createFocusTrap) {
+                reportWizardFocusTrap = ABSD.a11y.createFocusTrap(modal);
+            }
         }
 
         function closeReportWizard() {
+            const modal = document.getElementById('reportWizardModal');
+            if (reportWizardFocusTrap && ABSD.a11y?.releaseFocusTrap) {
+                ABSD.a11y.releaseFocusTrap(reportWizardFocusTrap.element);
+            }
+            reportWizardFocusTrap = null;
             reportWizardState = null;
-            document.getElementById('reportWizardModal').classList.add('hidden');
+            modal.classList.add('hidden');
+            modal.setAttribute('aria-hidden', 'true');
         }
 
         function syncWizardForm() {
@@ -961,40 +1072,69 @@
         }
 
         function renderReportList() {
+            const containerEl = document.getElementById('reportStatusListContainer');
             const listEl = document.getElementById('reportStatusList');
             const yearFilterEl = document.getElementById('reportYearFilter');
             if (!listEl || !yearFilterEl) return;
 
+            if (containerEl) {
+                ABSD.pipeline.hideSkeleton(containerEl);
+            }
+
             const years = [...new Set(reportHistory.map(r => r.year).filter(Boolean))].sort((a, b) => b - a);
+            const previousYearValue = yearFilterEl.value;
             yearFilterEl.innerHTML = '<option value="">Todos los años</option>' + years.map(year => `<option value="${year}">${year}</option>`).join('');
+            if (previousYearValue && years.includes(parseInt(previousYearValue, 10))) {
+                yearFilterEl.value = previousYearValue;
+            }
             const selectedYear = yearFilterEl.value ? parseInt(yearFilterEl.value, 10) : null;
+
             const rows = (selectedYear ? reportHistory.filter(r => r.year === selectedYear) : reportHistory)
                 .slice()
                 .sort(sortReportsByDate);
 
             if (!rows.length) {
-                listEl.innerHTML = '<div class="p-6 text-center text-gray-500">Aún no registraste informes para este periodo.</div>';
+                if (reportListScroller) {
+                    reportListScroller.destroy();
+                    reportListScroller = null;
+                }
+                listEl.innerHTML = '<div class="absd-data-empty">Aún no registraste informes para este periodo.</div>';
                 return;
             }
 
-            listEl.innerHTML = rows.map(report => {
+            const renderItem = (report) => {
                 const submittedAt = report.submitted_at || report.created_at;
                 const processedAt = report.processed_at;
-                const total = parseFloat(report.total_entradas || 0);
+                const total = parseFloat(report.total_entradas || report.totalEntradas || 0);
+                const statusLabel = formatStatus(report.estado);
+                const statusClass = statusChipClasses(report.estado);
                 return `
-                    <div class="p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                    <article class="absd-virtual-item" role="listitem">
                         <div>
-                            <p class="text-sm text-gray-500">${formatMonthName(report.month)} ${report.year}</p>
+                            <p class="text-sm text-gray-500">${escapeHtml(formatMonthName(report.month))} ${escapeHtml(report.year)}</p>
                             <p class="text-lg font-semibold text-gray-800">${formatCurrency(total)}</p>
-                            <p class="text-sm text-gray-500">${submittedAt ? 'Enviado el ' + formatDateTime(submittedAt) : 'Fecha de envío no disponible'}</p>
+                            <p class="text-sm text-gray-500">${submittedAt ? 'Enviado el ' + escapeHtml(formatDateTime(submittedAt)) : 'Fecha de envío no disponible'}</p>
                         </div>
                         <div class="flex items-center gap-3">
-                            <span class="px-3 py-1 rounded-full text-sm font-semibold ${statusChipClasses(report.estado)}">${formatStatus(report.estado)}</span>
-                            ${processedAt ? `<span class="text-xs text-gray-500">Procesado el ${formatDateTime(processedAt)}</span>` : ''}
+                            <span class="px-3 py-1 rounded-full text-sm font-semibold ${statusClass}">${escapeHtml(statusLabel)}</span>
+                            ${processedAt ? `<span class="text-xs text-gray-500">Procesado el ${escapeHtml(formatDateTime(processedAt))}</span>` : ''}
                         </div>
-                    </div>
+                    </article>
                 `;
-            }).join('');
+            };
+
+            if (!reportListScroller) {
+                listEl.innerHTML = '';
+                reportListScroller = new ABSD.VirtualScroller(listEl, {
+                    itemHeight: 140,
+                    threshold: 60,
+                    renderItem
+                });
+            } else {
+                reportListScroller.options.renderItem = renderItem;
+            }
+
+            reportListScroller.setItems(rows);
         }
 
         function renderReportTimeline() {
@@ -1028,6 +1168,16 @@
         }
 
         async function loadMyReports() {
+            const summaryContainer = document.getElementById('reportSummaryCards');
+            const listContainer = document.getElementById('reportStatusListContainer');
+            const timelineContainer = document.getElementById('reportTimeline');
+
+            [summaryContainer, listContainer, timelineContainer].forEach((el) => {
+                if (el) {
+                    ABSD.pipeline.showSkeleton(el);
+                }
+            });
+
             try {
                 const response = await axios.get(`${API_BASE}${API_ENDPOINTS.reports}`, {
                     headers: getAuthHeaders()
@@ -1039,16 +1189,159 @@
             } catch (error) {
                 console.error('Error al cargar informes:', error);
                 notify('No se pudieron cargar los informes', 'error');
+            } finally {
+                [summaryContainer, listContainer, timelineContainer].forEach((el) => {
+                    if (el) {
+                        ABSD.pipeline.hideSkeleton(el);
+                    }
+                });
             }
         }
 
         async function loadDashboardData() {
+            const metricCards = document.querySelectorAll('[data-dashboard-metric]');
+            const chartPanels = document.querySelectorAll('[data-dashboard-chart]');
+            metricCards.forEach(card => ABSD.pipeline.showSkeleton(card));
+            chartPanels.forEach(panel => ABSD.pipeline.showSkeleton(panel));
+
+            const now = new Date();
+            const currentMonth = now.getMonth() + 1;
+            const currentYear = now.getFullYear();
+
             try {
-                await axios.get(`${API_BASE}${API_ENDPOINTS.dashboard}`, {
-                    headers: getAuthHeaders()
+                const ledgerPromise = currentChurch?.id
+                    ? ABSD.pipeline.fetch(`${API_BASE}/api/monthly-ledger?church_id=${currentChurch.id}&month=${currentMonth}&year=${currentYear}`, {
+                        headers: getAuthHeaders(),
+                        container: null,
+                        forceRefresh: true
+                    }).catch((error) => {
+                        console.warn('No se pudo cargar el libro mensual', error);
+                        return null;
+                    })
+                    : Promise.resolve(null);
+
+                const dashboardPromise = ABSD.pipeline.fetch(`${API_BASE}${API_ENDPOINTS.dashboard}`, {
+                    headers: getAuthHeaders(),
+                    container: null,
+                    forceRefresh: true
+                }).catch((error) => {
+                    console.warn('Panel resumido aún no disponible.', error);
+                    return null;
                 });
+
+                const [ledgerData, dashboardRaw] = await Promise.all([ledgerPromise, dashboardPromise]);
+                const dashboardData = dashboardRaw?.data || dashboardRaw || {};
+
+                const totalsFromLedger = ledgerData?.entradas?.totales;
+                const expensesFromLedger = ledgerData?.gastos?.totales;
+                const balanceFromLedger = ledgerData?.balance;
+
+                const totalBalance = Array.isArray(dashboardData?.fund_overview)
+                    ? dashboardData.fund_overview.reduce((sum, fund) => sum + Number(fund.current_balance || 0), 0)
+                    : 0;
+
+                const monthlyIncome = totalsFromLedger?.total_entradas ?? (
+                    Number(dashboardData?.current_month?.tithes || 0) +
+                    Number(dashboardData?.current_month?.offerings || 0) +
+                    Number(dashboardData?.current_month?.national_fund || 0)
+                );
+
+                const monthlyExpenses = expensesFromLedger?.total_gastos ?? Number(dashboardData?.current_month?.national_fund || 0);
+                const monthlyBalance = balanceFromLedger?.saldo_calculado ?? (monthlyIncome - monthlyExpenses);
+
+                const updateMetric = (id, value, formatter) => {
+                    const element = document.getElementById(id);
+                    if (!element) return;
+                    const container = element.closest('[data-dashboard-metric]');
+                    if (container) {
+                        ABSD.pipeline.hideSkeleton(container);
+                    }
+                    const formattedValue = formatter ? formatter(value) : value;
+                    element.textContent = formattedValue;
+                };
+
+                updateMetric('totalBalance', totalBalance, formatCurrency);
+                updateMetric('monthlyIncome', monthlyIncome, formatCurrency);
+                updateMetric('monthlyExpenses', monthlyExpenses, formatCurrency);
+                updateMetric('monthlyBalance', monthlyBalance, formatCurrency);
+
+                const monthlySummary = Array.isArray(dashboardData?.monthly_summary)
+                    ? dashboardData.monthly_summary.slice(0, 6).reverse()
+                    : [];
+
+                const cashFlowTableEl = document.getElementById('cashFlowChart_table');
+                const expensesTableEl = document.getElementById('expensesChart_table');
+                if (cashFlowTableEl) cashFlowTableEl.innerHTML = '';
+                if (expensesTableEl) expensesTableEl.innerHTML = '';
+
+                if (monthlySummary.length) {
+                    const labels = monthlySummary.map(item => `${formatMonthName(item.month)} ${item.year}`);
+                    const incomeSeries = monthlySummary.map(item => Number(item.total_entradas || 0));
+                    const nationalFundSeries = monthlySummary.map(item => Number(item.total_fondo_nacional || 0));
+
+                    cashFlowChartInstance = ABSD.Charts.createChart('cashFlowChart', 'line', {
+                        labels,
+                        datasets: [
+                            {
+                                label: 'Entradas totales',
+                                data: incomeSeries,
+                                fill: false
+                            },
+                            {
+                                label: 'Fondo Nacional',
+                                data: nationalFundSeries,
+                                fill: false
+                            }
+                        ]
+                    }, {
+                        title: 'Flujo de Caja (últimos 6 meses)',
+                        isCurrency: true,
+                        showLegend: true
+                    });
+                }
+
+                const ledgerExpenses = Array.isArray(ledgerData?.gastos?.detalle_por_categoria)
+                    ? ledgerData.gastos.detalle_por_categoria
+                    : [];
+
+                const expenseSource = ledgerExpenses.length ? ledgerExpenses : (Array.isArray(dashboardData?.status_counts) ? dashboardData.status_counts : []);
+
+                if (expenseSource.length) {
+                    const labels = ledgerExpenses.length
+                        ? ledgerExpenses.map(item => formatCategory(item.categoria))
+                        : expenseSource.map(item => formatStatus(item.estado));
+
+                    const values = ledgerExpenses.length
+                        ? ledgerExpenses.map(item => Number(item.total_monto || 0))
+                        : expenseSource.map(item => Number(item.count || 0));
+
+                    expensesChartInstance = ABSD.Charts.createChart('expensesChart', ledgerExpenses.length ? 'doughnut' : 'bar', {
+                        labels,
+                        datasets: [
+                            {
+                                label: ledgerExpenses.length ? 'Monto' : 'Reportes',
+                                data: values
+                            }
+                        ]
+                    }, {
+                        title: ledgerExpenses.length ? 'Gastos por categoría' : 'Estados de informes',
+                        isCurrency: !!ledgerExpenses.length,
+                        showLegend: ledgerExpenses.length > 0,
+                        legendPosition: 'right'
+                    });
+                }
+
+                chartPanels.forEach(panel => ABSD.pipeline.hideSkeleton(panel));
+
+                if (ledgerData?.balance?.mensaje) {
+                    ABSD.a11y?.announce(ledgerData.balance.mensaje, false);
+                }
+
             } catch (error) {
-                console.warn('Panel resumido aún no disponible.');
+                console.error('Error al cargar el dashboard de la iglesia', error);
+                metricCards.forEach(card => ABSD.pipeline.hideSkeleton(card));
+                chartPanels.forEach(panel => ABSD.pipeline.hideSkeleton(panel));
+                notify('No se pudo cargar el panel principal', 'error');
             }
         }
 
@@ -1058,6 +1351,18 @@
                 currency: 'PYG',
                 minimumFractionDigits: 0
             }).format(value || 0);
+        }
+
+        function escapeHtml(value) {
+            if (value === undefined || value === null) {
+                return '';
+            }
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         }
 
         function formatDateTime(value) {
@@ -1078,6 +1383,24 @@
                 eliminado: 'Eliminado'
             };
             return map[status] || status;
+        }
+
+        function formatCategory(category) {
+            const normalized = (category || '').toString().toLowerCase();
+            const map = {
+                servicios_basicos: 'Servicios básicos',
+                honorarios: 'Honorarios pastorales',
+                ministerio: 'Ministerio',
+                materiales: 'Materiales',
+                mantenimiento: 'Mantenimiento',
+                otros: 'Otros gastos'
+            };
+            if (map[normalized]) {
+                return map[normalized];
+            }
+            return normalized
+                ? normalized.charAt(0).toUpperCase() + normalized.slice(1).replace(/_/g, ' ')
+                : 'Otros';
         }
 
         function statusChipClasses(status) {
@@ -1102,15 +1425,20 @@
             document.getElementById('loginLoading').classList.remove('hidden');
 
             try {
-                const response = await axios.post(`${API_BASE}${API_ENDPOINTS.auth}`, { email, password });
-                setAuthToken(response.data.token);
-                currentUser = response.data.user;
-                currentChurch = response.data.church;
+                const response = await axios.post(`${API_BASE}${API_ENDPOINTS.auth}?action=login`, { email, password });
+                const { token, user } = response.data || {};
+
+                setAuthToken(token);
+                currentUser = user || null;
+                currentChurch = user?.churchId ? {
+                    id: user.churchId,
+                    name: user.churchName || 'Iglesia IPUPY'
+                } : null;
 
                 document.getElementById('loginScreen').classList.add('hidden');
                 document.getElementById('mainApp').classList.remove('hidden');
                 document.getElementById('userEmail').textContent = currentUser?.email || '';
-                if (currentChurch) {
+                if (currentChurch?.name) {
                     document.getElementById('churchName').textContent = currentChurch.name;
                 }
 
@@ -1162,12 +1490,16 @@
         document.getElementById('reportYearFilter').addEventListener('change', renderReportList);
 
         async function initializeApp() {
+            if (!currentUser) {
+                await restoreUserContext();
+            }
             await loadDashboardData();
             await loadMyReports();
             showSection('dashboard');
         }
 
         window.addEventListener('load', async () => {
+            enhanceFormControls();
             const storedToken = getStoredToken();
             if (storedToken) {
                 setAuthToken(storedToken);

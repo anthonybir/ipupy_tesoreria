@@ -75,7 +75,7 @@ async function importReportsAsTransactions() {
         if (amount > 0) {
           const categoryId = await getCategoryId(categoryName);
 
-          const result = await db.execute(`
+          await db.execute(`
             INSERT INTO church_transactions (
               church_id, account_id, transaction_date, amount, transaction_type,
               category_id, description, report_id, created_by
@@ -104,7 +104,7 @@ async function importReportsAsTransactions() {
         if (amount > 0) {
           const categoryId = await getCategoryId(categoryName);
 
-          const result = await db.execute(`
+          await db.execute(`
             INSERT INTO church_transactions (
               church_id, account_id, transaction_date, amount, transaction_type,
               category_id, description, report_id, created_by
@@ -138,7 +138,7 @@ async function importReportsAsTransactions() {
         if (amount > 0) {
           const categoryId = await getCategoryId('Fondo Nacional');
 
-          const result = await db.execute(`
+          await db.execute(`
             INSERT INTO church_transactions (
               church_id, account_id, transaction_date, amount, transaction_type,
               category_id, description, report_id, created_by

@@ -28,7 +28,7 @@ async function finalFixTotals() {
   // Usar SQL directo para hacer la actualización masiva
   console.log('Actualizando total_entradas...');
 
-  const { data: updateEntradasResult, error: updateEntradasError } = await supabase.rpc('execute_sql', {
+  const { error: updateEntradasError } = await supabase.rpc('execute_sql', {
     query: `
       UPDATE reports
       SET total_entradas = (
@@ -55,7 +55,7 @@ async function finalFixTotals() {
 
   console.log('Actualizando total_salidas...');
 
-  const { data: updateSalidasResult, error: updateSalidasError } = await supabase.rpc('execute_sql', {
+  const { error: updateSalidasError } = await supabase.rpc('execute_sql', {
     query: `
       UPDATE reports
       SET total_salidas = (
@@ -119,7 +119,7 @@ async function finalFixTotals() {
 // Ejecutar corrección si se llama directamente
 if (require.main === module) {
   finalFixTotals()
-    .then((result) => {
+    .then(() => {
       console.log('\nCorreción final completada');
       process.exit(0);
     })

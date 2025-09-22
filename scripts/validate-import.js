@@ -110,16 +110,16 @@ async function validateImport() {
 
   let dbTotalEntradas = 0;
   let dbTotalSalidas = 0;
-  let calculatedEntradas = 0;
-  let calculatedSalidas = 0;
+  // let calculatedEntradas = 0;
+  // let calculatedSalidas = 0;
 
   financialTotals.forEach(report => {
     dbTotalEntradas += parseFloat(report.total_entradas || 0);
     dbTotalSalidas += parseFloat(report.total_salidas || 0);
 
     // Recalcular entradas
-    calculatedEntradas += parseFloat(report.diezmos || 0) +
-                         parseFloat(report.ofrendas || 0) +
+    // calculatedEntradas += parseFloat(report.diezmos || 0) +
+    parseFloat(report.ofrendas || 0) +
                          parseFloat(report.ofrenda_misiones || 0) +
                          parseFloat(report.caballeros || 0) +
                          parseFloat(report.damas || 0) +
@@ -132,8 +132,8 @@ async function validateImport() {
                          parseFloat(report.otros || 0);
 
     // Recalcular salidas
-    calculatedSalidas += parseFloat(report.honorarios_pastoral || 0) +
-                        parseFloat(report.energia_electrica || 0) +
+    // calculatedSalidas += parseFloat(report.honorarios_pastoral || 0) +
+    parseFloat(report.energia_electrica || 0) +
                         parseFloat(report.agua || 0) +
                         parseFloat(report.otros_gastos || 0);
   });

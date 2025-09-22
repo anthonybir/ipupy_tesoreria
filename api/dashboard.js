@@ -1,12 +1,13 @@
 const { execute } = require('../lib/db-supabase');
-const { setSecureCORSHeaders } = require('../src/lib/cors-handler');
+const { setCORSHeaders, handlePreflight } = require('../lib/cors');
 
 module.exports = async function handler(req, res) {
-  // Configure secure CORS (no wildcards)
-  const isPreflightHandled = setSecureCORSHeaders(req, res);
+  // Set CORS headers
+  setCORSHeaders(req, res);
 
-  if (isPreflightHandled) {
-    return; // Preflight request handled securely
+  // Handle preflight requests
+  if (handlePreflight(req, res)) {
+    return;
   }
 
   if (req.method !== 'GET') {

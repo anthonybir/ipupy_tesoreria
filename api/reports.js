@@ -175,7 +175,7 @@ async function setAuditContext(actorEmail) {
 
   try {
     await execute('SELECT set_config($1, $2, true)', ['audit.user', actorEmail]);
-  } catch (error) {
+  } catch {
     // Safe to ignore if audit schema is not yet installed
   }
 }

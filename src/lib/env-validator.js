@@ -4,7 +4,7 @@
  * Prevents application from starting with insecure configuration
  */
 
-const crypto = require('crypto');
+// const crypto = require('crypto'); // Reserved for future use
 
 class EnvironmentValidator {
   constructor() {
@@ -91,7 +91,7 @@ class EnvironmentValidator {
 
     try {
       parsedUrl = new URL(trimmedUrl);
-    } catch (error) {
+    } catch {
       this.addError('DATABASE_URL must be a valid PostgreSQL connection string');
       return;
     }
@@ -198,7 +198,7 @@ class EnvironmentValidator {
     const hasUppercase = /[A-Z]/.test(adminPassword);
     const hasLowercase = /[a-z]/.test(adminPassword);
     const hasNumbers = /\d/.test(adminPassword);
-    const hasSpecialChars = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(adminPassword);
+    const hasSpecialChars = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(adminPassword);
 
     if (!hasUppercase || !hasLowercase || !hasNumbers) {
       this.addWarning('ADMIN_PASSWORD should contain uppercase, lowercase, and numbers');

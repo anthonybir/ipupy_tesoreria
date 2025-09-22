@@ -57,7 +57,7 @@ async function getAppliedMigrations() {
   try {
     const result = await execute('SELECT migration_file, checksum FROM migration_history ORDER BY migration_file');
     return new Map(result.rows.map((row) => [row.migration_file, row.checksum]));
-  } catch (error) {
+  } catch {
     // Table may not exist on first run
     return new Map();
   }

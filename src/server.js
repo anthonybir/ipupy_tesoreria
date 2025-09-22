@@ -67,6 +67,16 @@ app.all('/api/financial', financialLimiter, createApiHandler('../api/financial.j
 app.all('/api/reports', financialLimiter, createApiHandler('../api/reports.js'));
 app.all('/api/fund-movements', financialLimiter, createApiHandler('../api/fund-movements.js'));
 
+// New donor and ledger management endpoints (moderate rate limiting)
+app.all('/api/donors/search', financialLimiter, createApiHandler('../api/donors.js'));
+app.all('/api/donors/:id/summary', financialLimiter, createApiHandler('../api/donors.js'));
+app.all('/api/donors/:id', financialLimiter, createApiHandler('../api/donors.js'));
+app.all('/api/donors', financialLimiter, createApiHandler('../api/donors.js'));
+app.all('/api/worship-records', financialLimiter, createApiHandler('../api/worship-records.js'));
+app.all('/api/expense-records', financialLimiter, createApiHandler('../api/expense-records.js'));
+app.all('/api/monthly-ledger/close', financialLimiter, createApiHandler('../api/monthly-ledger.js'));
+app.all('/api/monthly-ledger', financialLimiter, createApiHandler('../api/monthly-ledger.js'));
+
 // General endpoints (already covered by general limiter)
 registerApiRoute('/api/data', '../api/data.js');
 registerApiRoute('/api/churches', '../api/churches.js');

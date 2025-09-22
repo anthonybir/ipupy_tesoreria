@@ -372,7 +372,7 @@ const importExcel = async () => {
 
       // El fondo nacional se calculara automaticamente por el trigger
       // pero podemos calcularlo aqui para verificacion
-      const fondoNacionalCalculado = (report.diezmos + report.ofrendas) * 0.10;
+      // const fondoNacionalCalculado = (report.diezmos + report.ofrendas) * 0.10;
 
       const { error: upsertError } = await supabase
         .from('reports')

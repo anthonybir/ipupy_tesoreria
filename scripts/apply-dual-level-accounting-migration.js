@@ -118,7 +118,7 @@ async function applyMigration() {
     console.log('\n=== VERIFICACION DE VISTAS ===');
 
     try {
-      const { data: viewData, error: viewError } = await supabase
+      const { error: viewError } = await supabase
         .from('church_financial_summary')
         .select('*')
         .limit(1);
@@ -133,7 +133,7 @@ async function applyMigration() {
     }
 
     try {
-      const { data: macroData, error: macroError } = await supabase
+      const { error: macroError } = await supabase
         .from('national_treasury_summary')
         .select('*')
         .limit(1);

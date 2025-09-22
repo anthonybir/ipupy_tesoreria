@@ -494,48 +494,43 @@ async function handlePutTransaction(req, res, decoded) {
 
   const data = req.body || {};
 
-  try {
-    await setAuditContext(decoded?.email);
+  await setAuditContext(decoded?.email);
 
-    const existingResult = await execute(
-      'SELECT * FROM transactions WHERE id = $1',
-      [transactionId]
-    );
+  const existingResult = await execute(
+    'SELECT * FROM transactions WHERE id = $1',
+    [transactionId]
+  );
 
-    if (existingResult.rows.length === 0) {
-      throw new BadRequestError('Transacción no encontrada');
-    }
-
-    // const existing = existingResult.rows[0]; // Reserved for future validation use
-
-    // Prepare updates using secure query builder
-    const updates = {};
-
-    if (data.concept) {
-      updates.concept = data.concept;
-    }
-
-    if (data.provider !== undefined) {
-      updates.provider = data.provider;
-    }
-
-    if (data.document_number !== undefined) {
-      updates.document_number = data.document_number;
-    }
-
-    if (Object.keys(updates).length === 0) {
-      throw new BadRequestError('No hay campos para actualizar');
-    }
-
-    const whereConditions = { id: transactionId };
-    const query = queryBuilder.buildUpdate('transactions', updates, whereConditions);
-    const result = await execute(query.sql, query.params);
-
-    res.json(result.rows[0]);
-
-  } catch (error) {
-    throw error;
+  if (existingResult.rows.length === 0) {
+    throw new BadRequestError('Transacción no encontrada');
   }
+
+  // const existing = existingResult.rows[0]; // Reserved for future validation use
+
+  // Prepare updates using secure query builder
+  const updates = {};
+
+  if (data.concept) {
+    updates.concept = data.concept;
+  }
+
+  if (data.provider !== undefined) {
+    updates.provider = data.provider;
+  }
+
+  if (data.document_number !== undefined) {
+    updates.document_number = data.document_number;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    throw new BadRequestError('No hay campos para actualizar');
+  }
+
+  const whereConditions = { id: transactionId };
+  const query = queryBuilder.buildUpdate('transactions', updates, whereConditions);
+  const result = await execute(query.sql, query.params);
+
+  res.json(result.rows[0]);
 }
 
 async function handleDeleteTransaction(req, res, decoded) {
@@ -544,23 +539,23 @@ async function handleDeleteTransaction(req, res, decoded) {
     throw new BadRequestError('ID de transacción inválido');
   }
 
+  await setAuditContext(decoded?.email);
+
+  const existingResult = await execute(
+    'SELECT * FROM transactions WHERE id = $1',
+    [transactionId]
+  );
+
+  if (existingResult.rows.length === 0) {
+    throw new BadRequestError('Transacción no encontrada');
+  }
+
+  const transaction = existingResult.rows[0];
+
+  // Start transaction
+  await execute('BEGIN');
+
   try {
-    await setAuditContext(decoded?.email);
-
-    const existingResult = await execute(
-      'SELECT * FROM transactions WHERE id = $1',
-      [transactionId]
-    );
-
-    if (existingResult.rows.length === 0) {
-      throw new BadRequestError('Transacción no encontrada');
-    }
-
-    const transaction = existingResult.rows[0];
-
-    // Start transaction
-    await execute('BEGIN');
-
     // Get current fund balance
     const fundResult = await execute(
       'SELECT current_balance FROM funds WHERE id = $1',
@@ -600,9 +595,7 @@ async function handleDeleteTransaction(req, res, decoded) {
     ]);
 
     await execute('COMMIT');
-
     res.json({ success: true, message: 'Transacción eliminada correctamente' });
-
   } catch (error) {
     await execute('ROLLBACK');
     throw error;

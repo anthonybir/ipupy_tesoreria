@@ -2,9 +2,15 @@
 
 ## Descripción General
 
-El sistema IPU PY Tesorería expone 10 funciones serverless optimizadas para el manejo integral de la tesorería de 22 iglesias de la Iglesia Pentecostal Unida del Paraguay.
+El sistema IPU PY Tesorería expone 14+ funciones serverless optimizadas para el manejo integral de la tesorería de 22 iglesias de la Iglesia Pentecostal Unida del Paraguay.
 
 **Base URL**: `https://ipupytesoreria.vercel.app/api`
+
+## Version 2.0.0 Updates
+- New three-step monthly workflow system
+- Permanent donor registry with autocomplete
+- Individual fund transaction generation
+- Corrected fund allocation rules (10% vs 100%)
 
 ## Autenticación
 
@@ -876,6 +882,276 @@ Resumen financiero general
 
 ---
 
+## 11. `/api/worship-records` - Registros de Culto (v2.0.0)
+
+### GET `/api/worship-records`
+Obtener registros de culto para una iglesia y mes específico.
+
+**Query Parameters:**
+- `church_id` (required): ID de la iglesia
+- `month` (required): Número de mes (1-12)
+- `year` (required): Año (2020-2030)
+
+**Headers:**
+```http
+Authorization: Bearer <jwt_token>
+```
+
+**Response:**
+```json
+{
+  "records": [
+    {
+      "id": 1,
+      "church_id": 1,
+      "fecha_culto": "2025-09-01",
+      "tipo_culto": "dominical",
+      "predicador": "Rev. Juan Pérez",
+      "total_diezmos": 10000000,
+      "total_ofrendas": 1000000,
+      "total_misiones": 50000,
+      "total_recaudado": 11050000,
+      "miembros_activos": 30,
+      "visitas": 15,
+      "total_asistencia": 45,
+      "contributions": [
+        {
+          "id": 1,
+          "donor_id": 123,
+          "nombre_aportante": "Juan González",
+          "ci_ruc": "1234567",
+          "fund_bucket": "diezmo",
+          "total": 500000
+        }
+      ]
+    }
+  ]
+}
+```
+
+### POST `/api/worship-records`
+Crear nuevo registro de culto con contribuciones.
+
+**Request Body:**
+```json
+{
+  "church_id": 1,
+  "fecha_culto": "2025-09-01",
+  "tipo_culto": "dominical",
+  "predicador": "Rev. Juan Pérez",
+  "encargado_registro": "María López",
+  "contributions": [
+    {
+      "donor_id": 123,
+      "nombre_aportante": "Juan González",
+      "ci_ruc": "1234567",
+      "diezmo": 500000,
+      "ofrenda": 100000,
+      "misiones": 50000,
+      "apy": 50000
+    }
+  ],
+  "miembros_activos": 30,
+  "visitas": 15,
+  "ninos": 10,
+  "jovenes": 8,
+  "ofrenda_general_anonima": 25000,
+  "observaciones": "Culto especial de misiones"
+}
+```
+
+---
+
+## 12. `/api/expense-records` - Registros de Gastos (v2.0.0)
+
+### GET `/api/expense-records`
+Obtener gastos de una iglesia para un mes específico.
+
+**Query Parameters:**
+- `church_id` (required): ID de la iglesia
+- `month` (required): Número de mes (1-12)
+- `year` (required): Año (2020-2030)
+
+**Response:**
+```json
+{
+  "expenses": [
+    {
+      "id": 1,
+      "church_id": 1,
+      "fecha_comprobante": "2025-09-15",
+      "proveedor": "ANDE",
+      "ruc_proveedor": "80000000-1",
+      "numero_comprobante": "001-002-0000123",
+      "concepto": "Electricidad mes de septiembre",
+      "expense_category": "servicios_basicos",
+      "total_factura": 150000,
+      "es_honorario_pastoral": false
+    }
+  ],
+  "total_expenses": 2000000,
+  "total_pastoral": 7900000
+}
+```
+
+### POST `/api/expense-records`
+Registrar nuevo gasto o factura pastoral.
+
+**Request Body:**
+```json
+{
+  "church_id": 1,
+  "fecha_comprobante": "2025-09-15",
+  "proveedor": "ANDE",
+  "ruc_proveedor": "80000000-1",
+  "numero_comprobante": "001-002-0000123",
+  "concepto": "Electricidad mes de septiembre",
+  "expense_category": "servicios_basicos",
+  "total_factura": 150000,
+  "es_honorario_pastoral": false
+}
+```
+
+**Categories válidas:**
+- `servicios_basicos`: Electricidad, agua, internet
+- `honorarios`: Honorarios profesionales
+- `ministerio`: Gastos ministeriales
+- `materiales`: Materiales y suministros
+- `mantenimiento`: Reparaciones, limpieza
+- `otros`: Otros gastos
+
+---
+
+## 13. `/api/donors` - Registro de Donantes (v2.0.0)
+
+### GET `/api/donors`
+Buscar y listar donantes de una iglesia.
+
+**Query Parameters:**
+- `church_id` (required): ID de la iglesia
+- `search` (optional): Término de búsqueda (nombre o CI/RUC)
+- `limit` (optional): Límite de resultados (default: 10, max: 50)
+
+**Response:**
+```json
+{
+  "donors": [
+    {
+      "id": 123,
+      "church_id": 1,
+      "nombre": "Juan González",
+      "ci_ruc": "1234567",
+      "telefono": "0981234567",
+      "direccion": "Asunción",
+      "email": "juan@email.com",
+      "created_at": "2025-01-01T00:00:00Z"
+    }
+  ],
+  "total": 150
+}
+```
+
+---
+
+## 14. `/api/monthly-ledger` - Libro Mayor Mensual (v2.0.0)
+
+### GET `/api/monthly-ledger`
+Obtener cálculos completos del mes con distribución de fondos.
+
+**Query Parameters:**
+- `church_id` (required): ID de la iglesia
+- `month` (required): Número de mes (1-12)
+- `year` (required): Año (2020-2030)
+
+**Response:**
+```json
+{
+  "iglesia": {
+    "id": 1,
+    "nombre": "IPU Lambaré",
+    "pastor": "Rev. Juan Pérez"
+  },
+  "entradas": {
+    "totales": {
+      "diezmos": 10000000,
+      "ofrendas": 1000000,
+      "misiones": 50000,
+      "otros": 0,
+      "total_entradas": 11050000
+    },
+    "detalle_por_tipo": [
+      {
+        "tipo": "diezmo",
+        "cantidad_contribuciones": 25,
+        "total_monto": 10000000,
+        "donantes_unicos": 20
+      }
+    ]
+  },
+  "distribucion_automatica": {
+    "fondo_nacional_10_percent": 1100000,
+    "fondo_nacional_100_percent": 50000,
+    "fondo_nacional_total": 1150000,
+    "disponible_local_90_percent": 9900000,
+    "disponible_local_otros": 0,
+    "disponible_local_total": 9900000,
+    "porcentaje_fondo_nacional": "10.4"
+  },
+  "gastos": {
+    "totales": {
+      "servicios_basicos": 500000,
+      "otros_gastos": 1500000,
+      "total_gastos": 2000000
+    },
+    "detalle_por_categoria": []
+  },
+  "salario_pastoral": {
+    "calculado_automatico": 7900000,
+    "registrado_en_facturas": 7900000,
+    "diferencia": 0
+  },
+  "balance": {
+    "saldo_calculado": 0,
+    "status": "balanceado",
+    "mensaje": "Mes balanceado correctamente",
+    "puede_cerrar": true
+  }
+}
+```
+
+### POST `/api/monthly-ledger/close`
+Cerrar período mensual y generar transacciones de fondos.
+
+**Request Body:**
+```json
+{
+  "church_id": 1,
+  "month": 9,
+  "year": 2025,
+  "force_close": false
+}
+```
+
+**Response:**
+```json
+{
+  "message": "Mes balanceado y cerrado",
+  "report_id": 123,
+  "balance_final": 0,
+  "fondo_nacional_transferido": 1150000,
+  "fecha_cierre": "2025-09-21T12:00:00Z",
+  "status": "balanceado"
+}
+```
+
+**Transacciones Generadas (Automáticamente):**
+- General Fund: 10% de diezmos/ofrendas
+- Misiones Fund: 100% de ofrendas misioneras
+- APY Fund: 100% de contribuciones APY
+- Otros fondos especiales según corresponda
+
+---
+
 ## Códigos de Error Comunes
 
 | Código | Descripción | Acción Recomendada |
@@ -908,5 +1184,5 @@ Para reportar problemas con la API:
 
 ---
 
-**Última actualización**: Diciembre 2024
-**Versión API**: v1.0.0
+**Última actualización**: Septiembre 2025
+**Versión API**: v2.0.0

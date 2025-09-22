@@ -187,7 +187,7 @@ async function debugTotals() {
 
 if (require.main === module) {
   debugTotals()
-    .then((result) => {
+    .then(() => {
       console.log('\nDebug completed');
       process.exit(0);
     })

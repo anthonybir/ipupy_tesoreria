@@ -50,7 +50,7 @@ async function checkExistingAdmin() {
   try {
     const result = await execute('SELECT COUNT(*) AS count FROM users WHERE role = $1', ['admin']);
     return Number(result.rows[0].count) > 0;
-  } catch (error) {
+  } catch {
     return false;
   }
 }

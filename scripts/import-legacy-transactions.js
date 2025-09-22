@@ -219,7 +219,7 @@ async function insertStartingBalances() {
       created_by: 'legacy-import'
     };
 
-    const result = await db.execute(`
+    await db.execute(`
       INSERT INTO transactions (
         date, fund_id, church_id, report_id, concept, provider,
         document_number, amount_in, amount_out, balance, created_by
