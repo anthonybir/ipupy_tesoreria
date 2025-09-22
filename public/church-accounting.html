@@ -12,7 +12,6 @@
     <script src="/js/absd-data-pipeline.js"></script>
     <script src="/js/absd-state-manager.js"></script>
     <script src="/js/absd-charts.js"></script>
-    <script src="/js/absd-accessibility.js"></script>
     <style>
         .glassmorphism {
             background: rgba(255, 255, 255, 0.25);
@@ -618,7 +617,6 @@
         let cashFlowChartInstance = null;
         let expensesChartInstance = null;
         let reportListScroller = null;
-        let reportWizardFocusTrap = null;
 
         const REPORT_WIZARD_STEPS = [
             { id: 1, label: 'Datos' },
@@ -794,17 +792,10 @@
             const modal = document.getElementById('reportWizardModal');
             modal.classList.remove('hidden');
             modal.setAttribute('aria-hidden', 'false');
-            if (ABSD.a11y?.createFocusTrap) {
-                reportWizardFocusTrap = ABSD.a11y.createFocusTrap(modal);
-            }
         }
 
         function closeReportWizard() {
             const modal = document.getElementById('reportWizardModal');
-            if (reportWizardFocusTrap && ABSD.a11y?.releaseFocusTrap) {
-                ABSD.a11y.releaseFocusTrap(reportWizardFocusTrap.element);
-            }
-            reportWizardFocusTrap = null;
             reportWizardState = null;
             modal.classList.add('hidden');
             modal.setAttribute('aria-hidden', 'true');
@@ -1332,10 +1323,6 @@
                 }
 
                 chartPanels.forEach(panel => ABSD.pipeline.hideSkeleton(panel));
-
-                if (ledgerData?.balance?.mensaje) {
-                    ABSD.a11y?.announce(ledgerData.balance.mensaje, false);
-                }
 
             } catch (error) {
                 console.error('Error al cargar el dashboard de la iglesia', error);

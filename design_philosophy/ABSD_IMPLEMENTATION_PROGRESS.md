@@ -63,28 +63,24 @@ This document tracks the implementation of ABSD Studio principles and BIRHAUS de
 
 ## 🟡 Week 3: Accessibility & Church Accounting (In Progress)
 
-### Accessibility Module (`/public/js/absd-accessibility.js`)
-- ✅ Screen reader announcements with live regions
-- 🟡 Focus trap utilities now wrap the church accounting report wizard; remaining dialogs queue for Week 4 wiring.
-- 🟡 Keyboard shortcuts now cover tab navigation plus transactions/funds actions; remaining modal-specific workflows queue for polish.
-- ✅ Skip navigation links
-- ✅ Focus management basics (initial focus, skip links)
-- ✅ Reduced motion support
-- **BIRHAUS Principle**: Accessibility = Dignity (rollout partially complete)
+### Accessibility Module (Removed September 22, 2025)
+- ❌ The dedicated accessibility layer (`/public/js/absd-accessibility.js`) has been removed from the runtime bundle.
+- ❌ Screen reader announcers, keyboard shortcut helpers, skip links, and focus traps were decommissioned to stabilize the dashboard.
+- ℹ️ Future accessibility work will require bespoke implementations or a new framework module.
+- **BIRHAUS Principle**: Accessibility = Dignity (temporarily paused pending replacement strategy)
 
 ### Church Accounting Refactoring (`/public/church-accounting.html`)
 - ✅ Core dashboard widgets now pair ABSD grid layouts with pipeline-driven skeletons and themed charts.
 - ✅ Transactional filters and the monthly report wizard now use ABSD form grids, labels, and button system.
 - ✅ ABSD scripts (data pipeline, state manager) bundled for future use.
-- ✅ Report history uses the ABSD VirtualScroller with skeleton fallbacks; wizard modal ships with an ABSD focus trap.
+- ⚠️ Modal focus trapping now relies on native browser behaviour following the accessibility layer removal.
 - **BIRHAUS Principle**: Form Serves Flow (remaining modal shortcuts scheduled for Week 4)
 
-### ARIA Implementation
-- ✅ Added aria-labels to dashboard metrics
-- ✅ Implemented aria-live regions for dynamic KPI updates
-- 🟡 Role/label coverage for modals and tables still being audited
-- 🟡 `aria-describedby` links for form errors pending across pages
-- **BIRHAUS Principle**: Data Dignity through accessibility (audit ongoing)
+### ARIA Implementation (On Hold)
+- ⚠️ Prior live-region integrations were removed alongside the accessibility module.
+- ⚠️ Role/label coverage for modals and tables paused until a replacement plan is agreed.
+- ⚠️ `aria-describedby` links for form errors will be re-evaluated with the next accessibility overhaul.
+- **BIRHAUS Principle**: Data Dignity through accessibility (audit postponed)
 
 ---
 

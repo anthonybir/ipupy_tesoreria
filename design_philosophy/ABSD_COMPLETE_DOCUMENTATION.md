@@ -66,7 +66,7 @@ The IPU PY Tesorería system has been transformed from a basic HTML application 
 │   ├── absd-data-pipeline.js    # Progressive loading & offline
 │   ├── absd-state-manager.js    # State persistence layer
 │   ├── absd-charts.js           # Chart theming system
-│   └── absd-accessibility.js    # Accessibility manager
+│   └── (removed) absd-accessibility.js    # Accessibility manager (retired Sep 22, 2025)
 ├── index.html                    # National dashboard
 └── church-accounting.html        # Church accounting interface
 ```
@@ -189,34 +189,8 @@ const chart = ABSD.Charts.createChart('canvas-id', 'bar', {
 ABSD.Charts.updateChartTheme(chart);
 ```
 
-### 5. Accessibility Manager
-Complete WCAG AA+ compliance with keyboard navigation and screen reader support.
-
-#### Features
-- **Screen Reader Announcements** - Live regions for dynamic content
-- **Focus Trap** - Modal dialog focus management
-- **Keyboard Shortcuts** - Power user navigation
-- **Skip Links** - Quick navigation to main content
-- **Reduced Motion** - Respects user preferences
-
-> **Current status:** Skip links, announcements, the report wizard focus trap, and contextual shortcuts for transactions/fondos are live; the remaining modal shortcut matrix is scheduled for Week 4.
-
-#### API
-```javascript
-// Screen reader announcement
-ABSD.a11y.announce('Data loaded successfully');
-ABSD.a11y.announce('Error: Connection failed', true); // Urgent
-
-// Focus trap for modals
-const trap = ABSD.a11y.createFocusTrap(modalElement);
-// ... later
-ABSD.a11y.releaseFocusTrap(modalElement);
-
-// Register keyboard shortcut
-ABSD.a11y.registerShortcut('Alt+E', () => {
-  showExportDialog();
-}, 'Open export dialog');
-```
+### 5. Accessibility Manager (Removed September 22, 2025)
+The former accessibility helper (`/public/js/absd-accessibility.js`) has been removed from the application bundle. Screen reader announcements, focus traps, keyboard shortcut registration, skip links, and reduced-motion helpers are no longer available. Reintroduce accessibility support by implementing custom utilities within the consuming views or by adopting a different framework-level solution.
 
 #### Default Keyboard Shortcuts
 | Shortcut | Action | Description |
@@ -248,7 +222,7 @@ ABSD.a11y.registerShortcut('Alt+E', () => {
   <script src="/js/absd-data-pipeline.js"></script>
   <script src="/js/absd-state-manager.js"></script>
   <script src="/js/absd-charts.js"></script>
-  <script src="/js/absd-accessibility.js"></script>
+  <!-- Accessibility helper removed September 22, 2025 -->
 </head>
 <body class="theme-light density-normal absd-disclosure-basic">
   <!-- Your content -->
@@ -441,7 +415,7 @@ const loadData = async () => {
     updateUI(data);
   } catch (error) {
     // Offline queue handles retry automatically
-    ABSD.a11y.announce('Datos guardados para sincronizar');
+    // Accessibility announcer removed September 22, 2025
   }
 };
 ```
@@ -733,8 +707,7 @@ class Dashboard {
       ABSD.pipeline.hideSkeleton(document.getElementById(id));
     });
 
-    // Announce to screen readers
-    ABSD.a11y.announce(`Dashboard loaded: ${data.reports.length} reports`);
+    // Accessibility announcer removed September 22, 2025
   }
 
   updateMetrics(metrics) {
@@ -806,14 +779,7 @@ class Dashboard {
   }
 
   setupAccessibility() {
-    // Register dashboard-specific shortcuts
-    ABSD.a11y.registerShortcut('Alt+M', () => {
-      document.getElementById('metrics').focus();
-    }, 'Focus metrics section');
-
-    ABSD.a11y.registerShortcut('Alt+C', () => {
-      document.getElementById('charts').focus();
-    }, 'Focus charts section');
+    // Accessibility shortcut helpers removed September 22, 2025
   }
 
   applyFilters(filters) {
@@ -857,7 +823,7 @@ class ReportForm {
       e.preventDefault();
 
       if (!this.validate()) {
-        ABSD.a11y.announce('Por favor corrija los errores', true);
+        // Accessibility announcer removed September 22, 2025
         return;
       }
 
@@ -922,7 +888,7 @@ class ReportForm {
         if (field) field.value = value;
       });
 
-      ABSD.a11y.announce('Borrador restaurado');
+      // Accessibility announcer removed September 22, 2025
     }
   }
 
@@ -955,13 +921,12 @@ class ReportForm {
       // Clear draft
       ABSD.state.set('form.draft', null);
 
-      // Success feedback
-      ABSD.a11y.announce('Informe enviado exitosamente');
+      // Success feedback (accessibility announcer removed September 22, 2025)
       this.form.reset();
 
     } catch (error) {
       // Error is handled by pipeline (offline queue)
-      ABSD.a11y.announce('Informe guardado para enviar cuando haya conexión');
+      // Accessibility announcer removed September 22, 2025
     } finally {
       ABSD.pipeline.hideSkeleton(this.form);
     }

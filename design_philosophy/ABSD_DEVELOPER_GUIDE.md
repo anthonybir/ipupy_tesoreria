@@ -40,11 +40,9 @@ Create a new file `my-dashboard.html`:
     <script src="/js/absd-components.js"></script>
     <script src="/js/absd-data-pipeline.js"></script>
     <script src="/js/absd-state-manager.js"></script>
-    <script src="/js/absd-accessibility.js"></script>
+    <!-- Accessibility helper removed September 22, 2025 -->
 </head>
 <body class="theme-light density-normal">
-    <!-- Skip Navigation -->
-    <a href="#main" class="sr-only">Skip to content</a>
 
     <!-- Container -->
     <div class="absd-container">
@@ -82,8 +80,7 @@ Create a new file `my-dashboard.html`:
             document.getElementById('total').textContent =
                 ABSD.Core.formatCurrency(data.total);
 
-            // Announce to screen readers
-            ABSD.a11y.announce('Dashboard loaded');
+            // Accessibility announcer removed September 22, 2025
         });
     </script>
 </body>
@@ -144,19 +141,8 @@ ABSD.state.subscribe('form.*', (data) => {
 });
 ```
 
-### 4. Accessibility Built-in
-Every interaction is keyboard and screen-reader friendly:
-
-```javascript
-// Announce important changes
-ABSD.a11y.announce('Data saved successfully');
-
-// Trap focus in modals
-const trap = ABSD.a11y.createFocusTrap(modalElement);
-
-// Keyboard shortcuts work automatically
-// Press Alt+/ to see all shortcuts
-```
+### 4. Accessibility Built-in (Removed September 22, 2025)
+The prior accessibility helpers (screen reader announcements, modal focus traps, and keyboard shortcut registry) were removed from the ABSD runtime. Implement any required accessibility behaviour directly in your feature code or adopt an alternative utility library.
 
 ---
 
@@ -175,8 +161,7 @@ async function loadDashboard() {
         // Update UI
         updateDashboard(data);
 
-        // Announce success
-        ABSD.a11y.announce('Dashboard updated');
+        // Accessibility announcer removed September 22, 2025
     } catch (error) {
         // Errors handled automatically (offline queue)
     }
@@ -309,7 +294,7 @@ window.dispatchEvent(new Event('online'));
 <script src="/js/absd-data-pipeline.js"></script>  <!-- For API calls -->
 <script src="/js/absd-state-manager.js"></script>   <!-- For persistence -->
 <script src="/js/absd-charts.js"></script>          <!-- For charts -->
-<script src="/js/absd-accessibility.js"></script>   <!-- For a11y -->
+<!-- Accessibility helper removed September 22, 2025 -->
 ```
 
 ### Global Objects Available
@@ -319,8 +304,8 @@ window.ABSD = {
     pipeline,       // Data fetching
     state,          // State management
     preferences,    // User preferences
-    Charts,         // Chart configuration
-    a11y           // Accessibility
+    Charts          // Chart configuration
+    // Accessibility helper removed September 22, 2025
 };
 ```
 
@@ -330,13 +315,11 @@ window.ABSD = {
 
 Before deploying:
 
-- [ ] Test all keyboard shortcuts (Alt+/)
 - [ ] Verify offline functionality
 - [ ] Check skeleton states appear
-- [ ] Test with screen reader
-- [ ] Validate ARIA labels
 - [ ] Test on mobile devices
 - [ ] Check theme switching
+- [ ] Re-evaluate accessibility coverage once a replacement module is defined
 - [ ] Verify Spanish translations
 - [ ] Test slow network (throttle to 3G)
 - [ ] Check error states
@@ -360,14 +343,9 @@ Before deploying:
     <script src="/js/absd-data-pipeline.js"></script>
     <script src="/js/absd-state-manager.js"></script>
     <script src="/js/absd-charts.js"></script>
-    <script src="/js/absd-accessibility.js"></script>
+    <!-- Accessibility helper removed September 22, 2025 -->
 </head>
 <body class="theme-light density-normal absd-disclosure-basic">
-    <!-- Skip Links -->
-    <nav class="sr-only">
-        <a href="#main">Skip to content</a>
-        <a href="#nav">Skip to navigation</a>
-    </nav>
 
     <!-- Header -->
     <header class="gradient-bg text-white">
@@ -427,8 +405,7 @@ Before deploying:
                 // Setup interactions
                 this.setupInteractions();
 
-                // Announce ready
-                ABSD.a11y.announce('Application ready');
+                // Accessibility announcer removed September 22, 2025
             }
 
             setupState() {
@@ -472,15 +449,12 @@ Before deploying:
             }
 
             setupInteractions() {
-                // Register shortcuts
-                ABSD.a11y.registerShortcut('Alt+R', () => {
-                    this.refresh();
-                }, 'Refresh data');
+                // Accessibility shortcut helpers removed September 22, 2025
             }
 
             async refresh() {
                 await this.loadData();
-                ABSD.a11y.announce('Data refreshed');
+                // Accessibility announcer removed September 22, 2025
             }
 
             applyFilters(filters) {

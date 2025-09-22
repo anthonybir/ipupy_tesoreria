@@ -11,7 +11,6 @@
     <script src="/js/absd-data-pipeline.js"></script>
     <script src="/js/absd-state-manager.js"></script>
     <script src="/js/absd-charts.js"></script>
-    <script src="/js/absd-accessibility.js"></script>
     <!-- Google Sign-In Library -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <style>
@@ -1743,6 +1742,16 @@
                 .replace(/'/g, '&#39;');
         }
 
+        function extractChurches(data) {
+            if (Array.isArray(data)) {
+                return data;
+            }
+            if (data && Array.isArray(data.churches)) {
+                return data.churches;
+            }
+            return [];
+        }
+
         function focusElementById(id) {
             const el = document.getElementById(id);
             if (!el) return;
@@ -2011,30 +2020,6 @@
                     loadChurches();
                     break;
             }
-        }
-
-        function registerContextShortcuts() {
-            if (!ABSD?.a11y?.registerShortcut) return;
-
-            ABSD.a11y.registerShortcut('Alt+T', () => {
-                showTab('transactions');
-                setTimeout(() => focusElementById('filterTransactionFund'), 120);
-            }, 'Ir a Transacciones');
-
-            ABSD.a11y.registerShortcut('Alt+F', () => {
-                showTab('funds');
-                setTimeout(() => focusElementById('movementsFundFilter'), 120);
-            }, 'Ir a Fondos');
-
-            ABSD.a11y.registerShortcut('Alt+Shift+N', () => {
-                showTab('transactions');
-                setTimeout(() => openTransactionModal(), 120);
-            }, 'Nueva transacción');
-
-            ABSD.a11y.registerShortcut('Alt+Shift+F', () => {
-                showTab('funds');
-                setTimeout(() => openNewFundModal(), 120);
-            }, 'Nuevo fondo');
         }
 
         // Dashboard - Now with ABSD Progressive Loading
@@ -2319,7 +2304,7 @@
                     headers: { Authorization: `Bearer ${authToken}` }
                 });
 
-                const churches = response.data;
+                const churches = extractChurches(response.data);
                 const churchesListEl = document.getElementById('churchesList');
 
                 if (churches.length > 0) {
@@ -2562,7 +2547,7 @@
                 const churchSelect = document.getElementById('manualChurchId');
                 churchSelect.innerHTML = '<option value="">Seleccionar iglesia...</option>';
 
-                response.data.forEach(church => {
+                extractChurches(response.data).forEach(church => {
                     const option = document.createElement('option');
                     option.value = church.id;
                     option.textContent = `${church.name} - ${church.city}`;
@@ -2714,7 +2699,7 @@
                     const placeholder = select.id === 'transactionChurch' ? 'Seleccionar iglesia...' : 'Todas las iglesias';
                     select.innerHTML = `<option value="">${placeholder}</option>`;
 
-                    response.data.forEach(church => {
+                    extractChurches(response.data).forEach(church => {
                         const option = document.createElement('option');
                         option.value = church.id;
                         option.textContent = `${church.name} - ${church.city}`;
@@ -3415,7 +3400,7 @@
                 const churchSelect = document.getElementById('ledgerChurch');
                 churchSelect.innerHTML = '<option value="">Seleccionar Iglesia</option>';
 
-                response.data.churches.forEach(church => {
+                extractChurches(response.data).forEach(church => {
                     const option = document.createElement('option');
                     option.value = church.id;
                     option.textContent = `${church.name} - ${church.city}`;
@@ -4581,13 +4566,6 @@
 
         function exportMonthlyReport() {
             showToast('Información', 'Función en desarrollo: Exportar reporte', 'info');
-        }
-
-        // Setup contextual shortcuts once accessibility layer is ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', registerContextShortcuts);
-        } else {
-            registerContextShortcuts();
         }
 
         // Start the application
