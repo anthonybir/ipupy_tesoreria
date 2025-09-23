@@ -1,4 +1,5 @@
-import type { Metadata } from 'next';
+'use client';
+
 import dynamic from 'next/dynamic';
 
 const ReportsView = dynamic(() => import('@/components/Reports/ReportsView'), {
@@ -12,11 +13,6 @@ const ReportsView = dynamic(() => import('@/components/Reports/ReportsView'), {
     </div>
   )
 });
-
-export const metadata: Metadata = {
-  title: 'Informes • IPU PY Tesorería',
-  description: 'Consulta los reportes congregacionales registrados en el sistema nacional.'
-};
 
 export default function ReportsPage() {
   return <ReportsView />;
