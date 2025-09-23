@@ -1,5 +1,6 @@
 # General
 .DS_Store
+Thumbs.db
 *.log
 *.tmp
 *.tar.gz
@@ -7,10 +8,7 @@
 
 # Environment
 .env
-.env.local
-.env.production
-.env.development
-.env.test
+.env.*
 .vercel/
 
 # Databases & local data
@@ -29,8 +27,34 @@ __pycache__/
 venv/
 pytest_cache/
 
-# Node / JavaScript
+# Node / Next.js
 node_modules/
+.npm-cache/
+.next/
+out/
+build/
+coverage/
+*.tsbuildinfo
+
+# Package manager caches
+/.pnp
+.pnp.*
+.yarn/
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Assets & keys
+*.pem
+
+# Cloud gateway legacy
 cloud-gateway/node_modules/
 cloud-gateway/.env
 cloud-gateway/.env.*
@@ -39,11 +63,6 @@ cloud-gateway/.env.*
 tests/fixtures/
 tests/tmp/
 
-# Build/Cache (if any)
+# Tooling
 .vscode/
 .idea/
-
-# OS
-Thumbs.db
-
-.vercel

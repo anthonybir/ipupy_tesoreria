@@ -84,38 +84,31 @@ NODE_ENV=production
 ## 🏗️ Arquitectura del Sistema
 
 ### Stack Tecnológico
-- **Frontend**: HTML5, CSS3, JavaScript ES6+
-- **Backend**: Node.js 20.x con Express
+- **Frontend & Backend**: Next.js 15 (App Router) con React 19 y Tailwind CSS
+- **APIs**: Route Handlers de Next.js sobre Node.js 20 en Vercel
 - **Base de Datos**: PostgreSQL 16 (Supabase)
 - **Autenticación**: JWT + Google OAuth
-- **Despliegue**: Vercel Serverless Functions
+- **Despliegue**: Vercel (Edge/Serverless) + Docker opcional
 - **Moneda**: Guaraní Paraguayo (PYG)
 
 ### Estructura del Proyecto
 
 ```
 ipupy-tesoreria/
-├── api/                    # 10 Serverless Functions
-│   ├── auth.js            # Autenticación JWT/Google OAuth
-│   ├── churches.js        # Gestión de iglesias
-│   ├── church-transactions.js  # Transacciones por iglesia
-│   ├── dashboard.js       # Dashboard y métricas
-│   ├── export.js         # Exportación Excel
-│   ├── families.js       # Gestión de familias
-│   ├── import.js         # Importación Excel
-│   ├── members.js        # Gestión de miembros
-│   ├── reports.js        # Reportes financieros
-│   └── transactions.js   # Transacciones generales
 ├── src/
-│   ├── lib/              # Librerías compartidas
-│   │   ├── db.js         # Abstracción de base de datos
-│   │   ├── db-supabase.js # Implementación PostgreSQL
-│   │   └── cors.js       # Configuración CORS
-│   └── server.js         # Servidor de desarrollo
-├── migrations/           # Migraciones de base de datos
-├── public/              # Frontend estático
-├── docs/               # Documentación técnica
-└── scripts/            # Scripts de utilidad
+│   ├── app/              # App Router (pages) + API Route Handlers
+│   ├── components/       # Componentes reutilizables
+│   ├── lib/              # Clientes de Supabase, helpers y validaciones
+│   └── types/            # Tipos compartidos
+├── public/               # Activos estáticos (manifest, íconos, SW)
+├── config/               # Configuración ESLint, Tailwind y utilidades
+├── scripts/              # Scripts operativos para Supabase y migraciones
+├── migrations/           # Migraciones de base de datos PostgreSQL
+├── docs/                 # Documentación técnica
+├── design_philosophy/    # Principios de diseño y UX
+├── vercel.json           # Configuración de despliegue en Vercel
+├── package.json          # Configuración principal del proyecto Next.js
+└── Dockerfile            # Imagen de despliegue opcional
 ```
 
 ### API Endpoints (10 Funciones Consolidadas)
