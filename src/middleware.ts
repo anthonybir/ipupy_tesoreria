@@ -3,40 +3,55 @@ import { updateSession } from "@/lib/supabase/middleware";
 
 // Define public routes that don't require authentication
 const publicRoutes = [
-  '/login',
-  '/auth/callback',
-  '/api/auth/callback'
+  "/login",
+  "/auth/callback",
+  "/api/auth/callback",
 ];
+
+const copyAuthCookies = (source: NextResponse, target: NextResponse) => {
+  source.cookies.getAll().forEach((cookie) => {
+    target.cookies.set(cookie);
+  });
+};
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Update user session and get user
-  const { response, user } = await updateSession(request);
+  const { response, user, session } = await updateSession(request);
 
-  // Log for debugging
-  console.log('[Middleware] Path:', pathname, 'User:', user?.email || 'none');
+  const userEmail = user?.email ?? "none";
+  console.log(
+    "[Middleware] Path:",
+    pathname,
+    "User:",
+    userEmail,
+    "Session expires:",
+    session?.expires_at ?? "unknown",
+  );
 
   // Allow public routes without auth check
-  if (publicRoutes.some(route => pathname.startsWith(route))) {
+  if (publicRoutes.some((route) => pathname.startsWith(route))) {
     return response;
   }
 
   // Check if user is authenticated using the actual user object
-  if (!user && !publicRoutes.includes(pathname)) {
-    // Redirect to login if not authenticated
-    if (pathname.startsWith('/api/')) {
-      // For API routes, return 401
-      return NextResponse.json(
-        { error: 'Autenticación requerida' },
-        { status: 401 }
+  if (!user) {
+    if (pathname.startsWith("/api/")) {
+      const unauthorized = NextResponse.json(
+        { error: "Autenticación requerida" },
+        { status: 401 },
       );
+      copyAuthCookies(response, unauthorized);
+      return unauthorized;
     }
 
-    // For pages, redirect to login
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('from', pathname);
-    return NextResponse.redirect(loginUrl);
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("from", pathname);
+
+    const redirectResponse = NextResponse.redirect(loginUrl);
+    copyAuthCookies(response, redirectResponse);
+    return redirectResponse;
   }
 
   return response;
@@ -45,6 +60,6 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     // Match all routes except static files and images
-    '/((?!_next/static|_next/image|favicon.ico|public/|.*\\..*$).*)'
-  ]
+    "/((?!_next/static|_next/image|favicon.ico|public/|.*\\..*$).*)",
+  ],
 };

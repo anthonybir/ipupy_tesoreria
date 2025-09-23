@@ -1,6 +1,6 @@
 export type RawNumeric = number | string | null | undefined;
 
-const toNumber = (value: RawNumeric, fallback = 0): number => {
+export const toNumber = (value: RawNumeric, fallback = 0): number => {
   const parsed = typeof value === 'string' ? Number.parseFloat(value) : Number(value ?? fallback);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
