@@ -11,20 +11,19 @@ const publicRoutes = [
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Update user session
-  const response = await updateSession(request);
+  // Update user session and get user
+  const { response, user } = await updateSession(request);
+
+  // Log for debugging
+  console.log('[Middleware] Path:', pathname, 'User:', user?.email || 'none');
 
   // Allow public routes without auth check
   if (publicRoutes.some(route => pathname.startsWith(route))) {
     return response;
   }
 
-  // For protected routes, check if user is authenticated
-  // The updateSession function will have refreshed the session if needed
-  // We can check for the presence of Supabase auth cookies
-  const hasSession = request.cookies.has('sb-' + process.env.NEXT_PUBLIC_SUPABASE_URL!.split('//')[1].split('.')[0] + '-auth-token');
-
-  if (!hasSession && !publicRoutes.includes(pathname)) {
+  // Check if user is authenticated using the actual user object
+  if (!user && !publicRoutes.includes(pathname)) {
     // Redirect to login if not authenticated
     if (pathname.startsWith('/api/')) {
       // For API routes, return 401

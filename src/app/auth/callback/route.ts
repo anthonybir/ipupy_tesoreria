@@ -29,7 +29,13 @@ export async function GET(request: NextRequest) {
       }
     );
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { error, data } = await supabase.auth.exchangeCodeForSession(code);
+
+    console.log('[Auth Callback] Exchange result:', {
+      error: error?.message || 'none',
+      user: data?.user?.email || 'none',
+      next
+    });
 
     if (!error) {
       return NextResponse.redirect(`${origin}${next}`);
