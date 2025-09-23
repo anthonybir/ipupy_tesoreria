@@ -50,7 +50,7 @@ export function ReportsDashboard({ reports, churches }: ReportsDashboardProps) {
 
   return (
     <div className="grid gap-6">
-      <section className="grid gap-4 md:grid-cols-4">
+      <section className="dashboard-grid">
         {[
           {
             label: 'Iglesias activas',
@@ -76,7 +76,7 @@ export function ReportsDashboard({ reports, churches }: ReportsDashboardProps) {
         ].map((card) => (
           <article
             key={card.label}
-            className="rounded-2xl border border-slate-200 bg-white p-5 shadow-lg shadow-slate-900/[0.04]"
+            className="dashboard-card dashboard-span-minimal p-5"
           >
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{card.label}</p>
             <p className="mt-3 text-2xl font-semibold text-slate-900">{card.value}</p>
@@ -95,7 +95,7 @@ export function ReportsDashboard({ reports, churches }: ReportsDashboardProps) {
         ))}
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/[0.05]">
+      <section className="dashboard-card overflow-hidden">
         <header className="flex flex-col gap-2 border-b border-slate-200 px-6 py-5 md:flex-row md:items-center md:justify-between">
           <div>
             <h3 className="text-lg font-semibold text-slate-900">Últimos informes</h3>
@@ -103,7 +103,7 @@ export function ReportsDashboard({ reports, churches }: ReportsDashboardProps) {
           </div>
         </header>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto px-6 pb-6">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
             <thead className="bg-slate-50">
               <tr>

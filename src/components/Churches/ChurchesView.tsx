@@ -35,7 +35,7 @@ export default function ChurchesView() {
 
       <ChurchForm />
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="dashboard-card p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
           <div className="flex flex-1 flex-col">
             <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="search-churches">
@@ -62,7 +62,7 @@ export default function ChurchesView() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/[0.05]">
+      <section className="dashboard-card overflow-hidden">
         <header className="flex flex-col gap-2 border-b border-slate-200 px-6 py-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Listado de iglesias</h2>
@@ -72,7 +72,7 @@ export default function ChurchesView() {
           </div>
         </header>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto px-6 pb-6">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
             <thead className="bg-slate-50">
               <tr>

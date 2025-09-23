@@ -1,7 +1,7 @@
 'use client';
 
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { useChurches } from '@/hooks/useChurches';
 import { useReports } from '@/hooks/useReports';
@@ -49,6 +49,9 @@ const defaultFilterState: FilterState = {
   month: 'all'
 };
 
+const FILTER_STORAGE_KEY = 'reports::filters';
+const TAB_STORAGE_KEY = 'reports::tab';
+
 const buildFilters = (state: FilterState): ReportFilters => ({
   churchId: state.churchId !== 'all' ? Number(state.churchId) : undefined,
   year: state.year !== 'all' ? Number(state.year) : undefined,
@@ -63,6 +66,8 @@ export default function ReportsView() {
   const [selectedReport, setSelectedReport] = useState<ReportRecord | null>(null);
 
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const initializedFromQueryRef = useRef(false);
 
   useEffect(() => {
@@ -75,33 +80,98 @@ export default function ReportsView() {
     const monthParam = searchParams.get('month');
     const tabParam = searchParams.get('tab');
 
-    if (!churchParam && !yearParam && !monthParam && !tabParam) {
+    const hasQueryState = Boolean(churchParam || yearParam || monthParam || tabParam);
+
+    if (hasQueryState) {
+      setFilters({
+        churchId: churchParam && churchParam !== '' ? churchParam : 'all',
+        year: yearParam && yearParam !== '' ? yearParam : 'all',
+        month: monthParam && monthParam !== '' ? monthParam : 'all'
+      });
+
+      if (tabParam === 'history') {
+        setActiveTab('history');
+      }
+
+      initializedFromQueryRef.current = true;
       return;
     }
 
-    setFilters({
-      churchId: churchParam && churchParam !== '' ? churchParam : 'all',
-      year: yearParam && yearParam !== '' ? yearParam : 'all',
-      month: monthParam && monthParam !== '' ? monthParam : 'all'
-    });
+    if (typeof window !== 'undefined') {
+      try {
+        const storedFilters = window.localStorage.getItem(FILTER_STORAGE_KEY);
+        if (storedFilters) {
+          const parsed = JSON.parse(storedFilters) as FilterState;
+          setFilters({
+            churchId: parsed.churchId ?? 'all',
+            year: parsed.year ?? 'all',
+            month: parsed.month ?? 'all'
+          });
+        }
+      } catch (error) {
+        console.warn('No se pudieron restaurar los filtros almacenados', error);
+      }
 
-    if (tabParam === 'history') {
-      setActiveTab('history');
+      const storedTabRaw = window.localStorage.getItem(TAB_STORAGE_KEY);
+      const isKnownTab = tabs.some((tab) => tab.id === storedTabRaw);
+      if (storedTabRaw && isKnownTab) {
+        const nextTab = storedTabRaw as TabId;
+        if (nextTab !== activeTab) {
+          setActiveTab(nextTab);
+        }
+      }
     }
 
     initializedFromQueryRef.current = true;
-  }, [searchParams]);
+  }, [searchParams, activeTab]);
+
+  useEffect(() => {
+    if (!initializedFromQueryRef.current || typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
+  }, [filters]);
+
+  useEffect(() => {
+    if (!initializedFromQueryRef.current || typeof window === 'undefined') {
+      return;
+    }
+    window.localStorage.setItem(TAB_STORAGE_KEY, activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!initializedFromQueryRef.current) {
+      return;
+    }
+    const params = new URLSearchParams();
+    if (filters.churchId !== 'all') {
+      params.set('churchId', filters.churchId);
+    }
+    if (filters.year !== 'all') {
+      params.set('year', filters.year);
+    }
+    if (filters.month !== 'all') {
+      params.set('month', filters.month);
+    }
+    if (activeTab === 'history') {
+      params.set('tab', 'history');
+    }
+
+    const queryString = params.toString();
+    const nextUrl = queryString ? `${pathname}?${queryString}` : pathname;
+    router.replace(nextUrl, { scroll: false });
+  }, [filters, activeTab, pathname, router]);
 
   const queryFilters = useMemo(() => buildFilters(filters), [filters]);
   const historyQuery = useReports(queryFilters);
-  const reports: ReportRecord[] = useMemo(
-    () => historyQuery.data ?? [],
+  const reports = useMemo(
+    () => (historyQuery.data ?? []) as ReportRecord[],
     [historyQuery.data]
   );
 
   const summaryQuery = useReports({ limit: 200, year: currentYear });
-  const summaryReports: ReportRecord[] = useMemo(
-    () => summaryQuery.data ?? reports,
+  const summaryReports = useMemo(
+    () => (summaryQuery.data ?? reports) as ReportRecord[],
     [summaryQuery.data, reports]
   );
 
@@ -126,7 +196,7 @@ export default function ReportsView() {
 
   const HistorySection = () => (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="dashboard-card p-6">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex min-w-[190px] flex-col">
             <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="filter-church">
@@ -212,7 +282,7 @@ export default function ReportsView() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/[0.05]">
+      <section className="dashboard-card overflow-hidden">
         <header className="flex flex-col gap-2 border-b border-slate-200 px-6 py-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Resultados</h2>
@@ -224,7 +294,7 @@ export default function ReportsView() {
           </div>
         </header>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto px-6 pb-6">
           <table className="min-w-full divide-y divide-slate-200 text-sm">
             <thead className="bg-slate-50">
               <tr>

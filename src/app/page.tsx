@@ -81,18 +81,18 @@ export default async function DashboardLanding() {
           </p>
         </header>
 
-        <section className="grid gap-4 sm:grid-cols-3">
-          <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <section className="dashboard-grid">
+          <article className="dashboard-card dashboard-span-compact p-5">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Informes totales</p>
             <p className="mt-2 text-3xl font-semibold text-slate-900">{summary.totalReports}</p>
             <p className="mt-1 text-xs text-slate-500">Histórico general en la base de datos</p>
           </article>
-          <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <article className="dashboard-card dashboard-span-compact p-5">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Iglesias activas</p>
             <p className="mt-2 text-3xl font-semibold text-slate-900">{summary.totalChurches}</p>
             <p className="mt-1 text-xs text-slate-500">Con credenciales vigentes</p>
           </article>
-          <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <article className="dashboard-card dashboard-span-compact p-5">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Procesados este mes</p>
             <p className="mt-2 text-3xl font-semibold text-slate-900">{summary.processedThisMonth}</p>
             <p className="mt-1 text-xs text-slate-500">Reportes marcados como procesados</p>
@@ -100,7 +100,7 @@ export default async function DashboardLanding() {
         </section>
 
         <section className="grid gap-6 md:grid-cols-2">
-          <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <article className="dashboard-card p-6">
             <h2 className="text-lg font-semibold text-slate-900">Estado de sesión</h2>
             {user ? (
               <dl className="mt-4 space-y-2 text-sm text-slate-600">
@@ -132,7 +132,7 @@ export default async function DashboardLanding() {
             )}
           </article>
 
-          <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <article className="dashboard-card p-6">
             <h2 className="text-lg font-semibold text-slate-900">Próximos pasos</h2>
             <ol className="mt-4 space-y-3 text-sm text-slate-600">
               <li>
@@ -149,7 +149,7 @@ export default async function DashboardLanding() {
           </article>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <section className="dashboard-card p-6">
           <h2 className="text-lg font-semibold text-slate-900">Últimos informes registrados</h2>
           <div className="mt-4 overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
