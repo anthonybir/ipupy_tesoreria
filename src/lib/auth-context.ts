@@ -41,8 +41,8 @@ export const getAuthContext = async (request: NextRequest): Promise<AuthContext 
     .single();
 
   if (profile) {
-    // Update last seen timestamp
-    await supabase.rpc('update_last_seen');
+    // Update last seen timestamp (if we add this function later)
+    // await supabase.rpc('update_last_seen');
 
     return {
       userId: profile.id,

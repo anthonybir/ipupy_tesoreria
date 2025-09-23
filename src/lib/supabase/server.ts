@@ -58,13 +58,32 @@ export async function getUserProfile() {
   // Get profile data from profiles table
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('*, churches(id, name)')
+    .select(`
+      id,
+      email,
+      role,
+      church_id,
+      full_name,
+      phone,
+      is_active,
+      churches (
+        id,
+        name
+      )
+    `)
     .eq('id', user.id)
     .single();
 
   if (profileError) {
     console.error('Error getting user profile:', profileError);
-    return null;
+    // Create a basic profile if it doesn't exist
+    return {
+      ...user,
+      role: 'viewer',
+      churchId: null,
+      churchName: null,
+      isAuthenticated: true
+    };
   }
 
   // Combine auth user with profile data
@@ -73,6 +92,9 @@ export async function getUserProfile() {
     role: profile?.role || 'viewer',
     churchId: profile?.church_id,
     churchName: profile?.churches?.name,
-    isAuthenticated: profile?.is_authenticated || false
+    fullName: profile?.full_name,
+    phone: profile?.phone,
+    isAuthenticated: true,
+    isActive: profile?.is_active ?? true
   };
 }
