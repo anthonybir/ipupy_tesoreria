@@ -10,22 +10,6 @@ type UpdateSessionResult = {
 
 const logPrefix = '[Supabase middleware]';
 
-const applyCookie = (
-  target: { set: (cookie: { name: string; value: string } & CookieOptions) => void },
-  name: string,
-  value: string,
-  options: CookieOptions = {},
-) => {
-  try {
-    target.set({
-      name,
-      value,
-      ...options,
-    });
-  } catch (error) {
-    console.error(`${logPrefix} Failed setting cookie ${name}`, error);
-  }
-};
 
 export async function updateSession(request: NextRequest): Promise<UpdateSessionResult> {
   const response = NextResponse.next({
@@ -48,16 +32,21 @@ export async function updateSession(request: NextRequest): Promise<UpdateSession
         return request.cookies.get(name)?.value;
       },
       set(name: string, value: string, options: CookieOptions) {
-        applyCookie(request.cookies, name, value, options);
-        applyCookie(response.cookies, name, value, options);
+        // Only set cookies on the response
+        response.cookies.set({
+          name,
+          value,
+          ...options,
+        });
       },
       remove(name: string, options: CookieOptions) {
-        const removalOptions: CookieOptions = {
+        // Only remove cookies from the response
+        response.cookies.set({
+          name,
+          value: '',
           ...options,
           maxAge: 0,
-        };
-        applyCookie(request.cookies, name, '', removalOptions);
-        applyCookie(response.cookies, name, '', removalOptions);
+        });
       },
     },
   });
