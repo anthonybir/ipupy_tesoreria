@@ -65,11 +65,7 @@ export async function getUserProfile() {
       church_id,
       full_name,
       phone,
-      is_active,
-      churches (
-        id,
-        name
-      )
+      is_active
     `)
     .eq('id', user.id)
     .single();
@@ -86,12 +82,23 @@ export async function getUserProfile() {
     };
   }
 
+  // Get church name if user has a church_id
+  let churchName = null;
+  if (profile?.church_id) {
+    const { data: church } = await supabase
+      .from('churches')
+      .select('name')
+      .eq('id', profile.church_id)
+      .single();
+    churchName = church?.name || null;
+  }
+
   // Combine auth user with profile data
   return {
     ...user,
     role: profile?.role || 'viewer',
     churchId: profile?.church_id,
-    churchName: profile?.churches?.name,
+    churchName: churchName,
     fullName: profile?.full_name,
     phone: profile?.phone,
     isAuthenticated: true,
