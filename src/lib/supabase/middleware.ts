@@ -1,14 +1,31 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import type { Session } from '@supabase/supabase-js';
+import type { Session, User } from '@supabase/supabase-js';
 import { NextResponse, type NextRequest } from 'next/server';
 
 type UpdateSessionResult = {
   response: NextResponse;
   session: Session | null;
-  user: Session['user'] | null;
+  user: User | null;
 };
 
 const logPrefix = '[Supabase middleware]';
+
+const applyCookie = (
+  target: { set: (cookie: { name: string; value: string } & CookieOptions) => void },
+  name: string,
+  value: string,
+  options: CookieOptions = {},
+) => {
+  try {
+    target.set({
+      name,
+      value,
+      ...options,
+    });
+  } catch (error) {
+    console.error(`${logPrefix} Failed setting cookie ${name}`, error);
+  }
+};
 
 export async function updateSession(request: NextRequest): Promise<UpdateSessionResult> {
   const response = NextResponse.next({
@@ -31,19 +48,16 @@ export async function updateSession(request: NextRequest): Promise<UpdateSession
         return request.cookies.get(name)?.value;
       },
       set(name: string, value: string, options: CookieOptions) {
-        response.cookies.set({
-          name,
-          value,
-          ...options,
-        });
+        applyCookie(request.cookies, name, value, options);
+        applyCookie(response.cookies, name, value, options);
       },
       remove(name: string, options: CookieOptions) {
-        response.cookies.set({
-          name,
-          value: '',
+        const removalOptions: CookieOptions = {
           ...options,
           maxAge: 0,
-        });
+        };
+        applyCookie(request.cookies, name, '', removalOptions);
+        applyCookie(response.cookies, name, '', removalOptions);
       },
     },
   });
@@ -51,17 +65,34 @@ export async function updateSession(request: NextRequest): Promise<UpdateSession
   try {
     const {
       data: { session },
-      error,
+      error: sessionError,
     } = await supabase.auth.getSession();
 
-    if (error) {
-      console.error(`${logPrefix} Error refreshing auth session`, error);
+    if (sessionError) {
+      console.warn(`${logPrefix} Error refreshing session`, sessionError.message);
+    }
+
+    if (session?.user) {
+      return {
+        response,
+        session,
+        user: session.user,
+      };
+    }
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError) {
+      console.warn(`${logPrefix} Error fetching user after session lookup`, userError.message);
     }
 
     return {
       response,
       session: session ?? null,
-      user: session?.user ?? null,
+      user: user ?? null,
     };
   } catch (error) {
     console.error(`${logPrefix} Unexpected error retrieving auth session`, error);
