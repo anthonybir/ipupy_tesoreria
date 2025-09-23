@@ -1,5 +1,79 @@
 # CHANGELOG
 
+## [3.0.0] - 2025-09-23
+
+### Major Release: Complete Architecture Migration to Next.js 15 + Supabase
+
+This release represents a complete rewrite of the application from Express.js to Next.js 15 with Supabase Auth, providing a modern, secure, and scalable foundation.
+
+#### 🚀 Breaking Changes
+
+##### Authentication System Overhaul
+- **Removed**: JWT-based authentication system
+- **Removed**: NextAuth.js dependency
+- **Added**: Supabase Auth with Google OAuth
+- **Impact**: All users must re-authenticate via Google OAuth
+
+##### Technology Stack Migration
+- **From**: Express.js + Custom JWT
+- **To**: Next.js 15 App Router + Supabase
+- **Database**: PostgreSQL via Supabase (with RLS)
+
+#### ✨ New Features
+
+##### Enhanced User Profile System
+- 8 granular role types (up from 3)
+- Complete user profiles with 15+ fields
+- Activity tracking and audit logs
+- Profile completion tracking
+- Multi-language support preparation
+
+##### Security Improvements
+- Row Level Security (RLS) on all tables
+- Google OAuth with domain restriction (@ipupy.org.py)
+- Server-side authentication via middleware
+- httpOnly cookie sessions
+- Automatic session refresh
+
+##### System Administration
+- Single super admin: administracion@ipupy.org.py
+- Removed secondary admin accounts
+- Enhanced permission system via JSONB
+- Role assignment tracking
+
+#### 🔧 Technical Improvements
+
+- **Performance**: Server Components by default
+- **Type Safety**: TypeScript strict mode enabled
+- **Code Quality**: All linting and type errors resolved
+- **Build System**: Optimized for Vercel deployment
+- **Database**: 17+ migration files with complete schema
+
+#### 📦 Dependencies Updated
+
+- Next.js: 15.5.3
+- React: 19.1.0
+- Supabase JS: 2.57.4
+- TypeScript: 5.0
+- Tailwind CSS: 4.0
+
+#### 🗑 Removed Dependencies
+
+- express
+- jsonwebtoken
+- bcryptjs
+- next-auth
+- All JWT-related packages
+
+#### 📚 Documentation
+
+- Complete architecture documentation
+- Updated API reference for Supabase Auth
+- New setup and deployment guides
+- Migration guide from v2.0
+
+---
+
 ## [2.0.0] - 2025-09-21
 
 ### Major Release: Treasury Management System Overhaul

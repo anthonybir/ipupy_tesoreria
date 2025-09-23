@@ -1,42 +1,68 @@
 import { NextRequest } from 'next/server';
-import { getServerSession } from 'next-auth/next';
-
-import { authOptions } from '@/lib/nextauth';
-import { AuthPayload, verifyBearerToken } from '@/lib/jwt';
+import { createClient } from '@/lib/supabase/server';
 
 export type AuthContext = {
-  userId?: number;
+  userId?: string;  // Changed to string (UUID) from number
   email?: string;
   role?: string;
   churchId?: number | null;
+  fullName?: string;
+  phone?: string;
+  permissions?: Record<string, boolean | string | number>;
 };
 
-const normalizeAuthPayload = (payload: AuthPayload): AuthContext => ({
-  userId: payload.userId ? Number(payload.userId) : undefined,
-  email: payload.email ?? undefined,
-  role: typeof payload.role === 'string' ? payload.role : undefined,
-  churchId: typeof payload.churchId === 'number' ? payload.churchId : payload.churchId ?? null
-});
 
+/**
+ * Get authentication context from Supabase Auth only
+ * No more legacy JWT token support - all auth goes through Supabase
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const getAuthContext = async (request: NextRequest): Promise<AuthContext | null> => {
-  const session = await getServerSession(authOptions);
+  const supabase = await createClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
 
-  if (session?.user) {
+  if (error || !user) {
+    return null;
+  }
+
+  // Get enhanced profile data from profiles table
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select(`
+      id,
+      email,
+      role,
+      church_id,
+      full_name,
+      phone,
+      permissions
+    `)
+    .eq('id', user.id)
+    .single();
+
+  if (profile) {
+    // Update last seen timestamp
+    await supabase.rpc('update_last_seen');
+
     return {
-      userId: session.user.id ? Number(session.user.id) : undefined,
-      email: session.user.email ?? undefined,
-      role: session.user.role ?? undefined,
-      churchId: session.user.churchId ?? null
+      userId: profile.id,
+      email: profile.email,
+      role: profile.role || 'viewer',
+      churchId: profile.church_id || null,
+      fullName: profile.full_name || undefined,
+      phone: profile.phone || undefined,
+      permissions: profile.permissions || {}
     };
   }
 
-  const authorization = request.headers.get('authorization');
-  if (authorization) {
-    const payload = verifyBearerToken(authorization);
-    return normalizeAuthPayload(payload);
-  }
-
-  return null;
+  // Fallback if no profile exists yet (shouldn't happen with trigger)
+  console.error(`No profile found for authenticated user ${user.id}`);
+  return {
+    userId: user.id,
+    email: user.email || undefined,
+    role: 'viewer',
+    churchId: null
+  };
 };
 
 export const requireAuth = async (request: NextRequest): Promise<AuthContext> => {

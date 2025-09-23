@@ -49,18 +49,19 @@ const shouldRecreatePool = (): boolean => {
 };
 
 const destroyPool = async (): Promise<void> => {
-  if (!pool) {
+  const poolRef = pool;
+  if (!poolRef) {
     return;
-  }
-
-  try {
-    await pool.end();
-  } catch (error) {
-    console.error('Error ending pool', error);
   }
 
   pool = undefined;
   poolCreatedAt = undefined;
+
+  try {
+    await poolRef.end();
+  } catch (error) {
+    console.error('Error ending pool', error);
+  }
 };
 const isConnectionError = (error: unknown): boolean => {
   if (typeof error !== 'object' || !error) {

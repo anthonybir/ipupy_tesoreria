@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { getServerSession } from "next-auth";
 
 import { execute } from "@/lib/db";
-import { authOptions } from "@/lib/nextauth";
+import { getUserProfile } from "@/lib/supabase/server";
 
 type DashboardSummary = {
   totalReports: number;
@@ -59,7 +58,7 @@ const loadRecentReports = async (): Promise<RecentReport[]> => {
 };
 
 export default async function DashboardLanding() {
-  const session = await getServerSession(authOptions);
+  const user = await getUserProfile();
   const [summary, recentReports] = await Promise.all([
     loadDashboardSummary(),
     loadRecentReports()
@@ -103,20 +102,20 @@ export default async function DashboardLanding() {
         <section className="grid gap-6 md:grid-cols-2">
           <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-900">Estado de sesión</h2>
-            {session ? (
+            {user ? (
               <dl className="mt-4 space-y-2 text-sm text-slate-600">
                 <div className="flex items-center justify-between">
                   <dt className="font-medium text-slate-500">Usuario</dt>
-                  <dd>{session.user?.email ?? session.user?.name}</dd>
+                  <dd>{user.email}</dd>
                 </div>
                 <div className="flex items-center justify-between">
                   <dt className="font-medium text-slate-500">Rol</dt>
-                  <dd className="capitalize">{session.user?.role ?? "sin definir"}</dd>
+                  <dd className="capitalize">{user.role ?? "sin definir"}</dd>
                 </div>
                 <div className="flex items-center justify-between">
                   <dt className="font-medium text-slate-500">Iglesia asignada</dt>
                   <dd>
-                    {session.user?.churchName || (session.user?.churchId ? `#${session.user.churchId}` : "N/A")}
+                    {user.churchName || (user.churchId ? `#${user.churchId}` : "N/A")}
                   </dd>
                 </div>
               </dl>
@@ -125,7 +124,7 @@ export default async function DashboardLanding() {
                 <p>Inicia sesión para acceder a los reportes y paneles congregacionales.</p>
                 <Link
                   className="inline-flex items-center justify-center rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-slate-800"
-                  href="/api/auth/signin?callbackUrl=/"
+                  href="/login"
                 >
                   Ingresar con Google
                 </Link>

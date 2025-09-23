@@ -1,29 +1,36 @@
 # IPU PY Tesorería - Sistema de Tesorería Nacional
 
-[![Vercel](https://vercelbadges.com/api/anthonybirhouse/ipupy-tesoreria)](https://vercel.com/anthonybirhouse/ipupy-tesoreria)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/Node.js-20.x-green.svg)](https://nodejs.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue.svg)](https://www.postgresql.org/)
-[![Supabase](https://img.shields.io/badge/Supabase-Enabled-brightgreen.svg)](https://supabase.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-15.5-black.svg)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-Auth-green.svg)](https://supabase.com/)
+[![Vercel](https://img.shields.io/badge/Vercel-Deployed-black.svg)](https://vercel.com/)
 
-Sistema integral de gestión de tesorería para la **Iglesia Pentecostal Unida del Paraguay** (IPU PY). Desarrollado específicamente para administrar las finanzas de 22 iglesias locales con reportes mensuales centralizados.
+Sistema integral de gestión de tesorería para la **Iglesia Pentecostal Unida del Paraguay** (IPU PY). Plataforma moderna construida con Next.js 15 y Supabase para administrar las finanzas de 22 iglesias locales con reportes mensuales centralizados.
 
 🌐 **Producción**: [ipupytesoreria.vercel.app](https://ipupytesoreria.vercel.app)
 
 ## ✨ Características Principales
 
-- 📊 **Dashboard Centralizado** - Resumen financiero en tiempo real
-- ⛪ **Gestión de 22 Iglesias** - Base de datos completa con información pastoral
-- 📈 **Reportes Mensuales** - Sistema completo de informes financieros
-- 🔐 **Autenticación Segura** - JWT + Google OAuth para @ipupy.org.py
-- 📤 **Importación/Exportación Excel** - Compatibilidad total con formatos existentes
-- 💰 **Cálculo Automático** - Fondo nacional (10%) y balances
-- 🏦 **Control Bancario** - Seguimiento de depósitos y movimientos
-- 📱 **Interfaz Responsiva** - Optimizado para móviles y escritorio
+- 📊 **Dashboard Centralizado** - Métricas financieras en tiempo real
+- ⛪ **Gestión Multi-Iglesia** - Administración de 22 iglesias con información pastoral completa
+- 📈 **Reportes Mensuales** - Sistema integral de informes financieros
+- 🔐 **Autenticación Segura** - Google OAuth via Supabase para @ipupy.org.py
+- 📤 **Excel Compatible** - Importación/exportación con formatos existentes
+- 💰 **Cálculos Automáticos** - Fondo nacional (10%) y balances
+- 🏦 **Control Bancario** - Seguimiento de depósitos y transacciones
+- 📱 **Diseño Responsivo** - Optimizado para móviles y escritorio
+- 👥 **Sistema de Roles** - 8 niveles de acceso granular
 
 ## 🚀 Inicio Rápido
 
-### 1. Despliegue en Vercel (Recomendado)
+### Prerequisitos
+
+- Node.js 20+
+- Cuenta de Supabase
+- Cuenta de Google Cloud (para OAuth)
+- Cuenta de Vercel (para deployment)
+
+### Instalación Local
 
 ```bash
 # Clonar el repositorio
@@ -35,277 +42,181 @@ npm install
 
 # Configurar variables de entorno
 cp .env.example .env.local
-# Editar .env.local con tus credenciales
+# Editar .env.local con tus credenciales de Supabase
+
+# Ejecutar migraciones
+npm run db:migrate
+
+# Iniciar servidor de desarrollo
+npm run dev
 ```
 
-### 2. Configuración de Base de Datos
+Visitar [http://localhost:3000](http://localhost:3000)
 
-#### Opción A: Supabase (Recomendado)
-1. Crear proyecto en [supabase.com](https://supabase.com)
-2. Ir a Settings → Database → Connection string
-3. Copiar la URI de conexión (Transaction mode)
-
-#### Opción B: Vercel Postgres
-1. En tu proyecto Vercel: Storage → Create Database → Postgres
-2. Copiar la `DATABASE_URL` generada
-
-### 3. Variables de Entorno
-
-Configurar en Vercel (Settings → Environment Variables):
-
-```bash
-# Base de datos
-SUPABASE_DB_URL=postgresql://postgres:[password]@[host]:5432/postgres
-DATABASE_URL=postgresql://postgres:[password]@[host]:5432/postgres
-
-# Autenticación
-JWT_SECRET=tu_jwt_secret_muy_seguro_minimo_32_caracteres
-ADMIN_EMAIL=administracion@ipupy.org.py
-ADMIN_PASSWORD=password_inicial_muy_seguro
-
-# Configuración IPU Paraguay
-RUC_IPUPY=80017726-6
-ORGANIZATION_NAME=Iglesia Pentecostal Unida del Paraguay
-
-# Producción
-NODE_ENV=production
-```
-
-### 4. Despliegue Automático
-1. Conectar repositorio GitHub a Vercel
-2. Configurar variables de entorno
-3. Deploy automático al hacer push a `main`
-
-### 5. Inicialización del Sistema
-1. Acceder a tu dominio Vercel
-2. Ejecutar migraciones automáticas en primer acceso
-3. Configurar usuario administrador inicial
-
-## 🏗️ Arquitectura del Sistema
+## 🏗 Arquitectura
 
 ### Stack Tecnológico
-- **Frontend & Backend**: Next.js 15 (App Router) con React 19 y Tailwind CSS
-- **APIs**: Route Handlers de Next.js sobre Node.js 20 en Vercel
-- **Base de Datos**: PostgreSQL 16 (Supabase)
-- **Autenticación**: JWT + Google OAuth
-- **Despliegue**: Vercel (Edge/Serverless) + Docker opcional
-- **Moneda**: Guaraní Paraguayo (PYG)
+
+- **Frontend**: Next.js 15 (App Router), React 19, TypeScript
+- **Styling**: Tailwind CSS 4, HeadlessUI
+- **Backend**: Next.js API Routes (Serverless)
+- **Database**: PostgreSQL via Supabase
+- **Auth**: Supabase Auth con Google OAuth
+- **Hosting**: Vercel
+- **State**: Zustand, React Query
 
 ### Estructura del Proyecto
 
 ```
 ipupy-tesoreria/
 ├── src/
-│   ├── app/              # App Router (pages) + API Route Handlers
-│   ├── components/       # Componentes reutilizables
-│   ├── lib/              # Clientes de Supabase, helpers y validaciones
-│   └── types/            # Tipos compartidos
-├── public/               # Activos estáticos (manifest, íconos, SW)
-├── config/               # Configuración ESLint, Tailwind y utilidades
-├── scripts/              # Scripts operativos para Supabase y migraciones
-├── migrations/           # Migraciones de base de datos PostgreSQL
-├── docs/                 # Documentación técnica
-├── design_philosophy/    # Principios de diseño y UX
-├── vercel.json           # Configuración de despliegue en Vercel
-├── package.json          # Configuración principal del proyecto Next.js
-└── Dockerfile            # Imagen de despliegue opcional
+│   ├── app/              # Next.js 15 App Router
+│   │   ├── api/          # API routes serverless
+│   │   ├── (routes)/     # Páginas de la aplicación
+│   │   └── layout.tsx    # Layout principal
+│   ├── components/       # Componentes React
+│   ├── lib/             # Utilidades y configuración
+│   │   └── supabase/    # Cliente Supabase
+│   └── types/           # TypeScript types
+├── migrations/          # SQL migrations
+├── public/             # Assets estáticos
+└── docs/              # Documentación
 ```
 
-### API Endpoints (10 Funciones Consolidadas)
+## 🔐 Autenticación y Seguridad
 
-| Endpoint | Función | Descripción |
-|----------|---------|-------------|
-| `/api/auth` | Autenticación | Login JWT/OAuth, registro, verificación |
-| `/api/churches` | Iglesias | CRUD de 22 iglesias IPU Paraguay |
-| `/api/church-transactions` | Transacciones de Iglesia | Movimientos financieros por iglesia |
-| `/api/dashboard` | Dashboard | Métricas y resúmenes ejecutivos |
-| `/api/export` | Exportación | Generación de archivos Excel |
-| `/api/families` | Familias | Gestión de familias por iglesia |
-| `/api/import` | Importación | Procesamiento de archivos Excel |
-| `/api/members` | Miembros | Gestión de miembros de iglesias |
-| `/api/reports` | Reportes | Informes mensuales y anuales |
-| `/api/transactions` | Transacciones | Movimientos financieros generales |
+### Sistema de Autenticación
 
-## 📊 Funcionalidades del Sistema
+- **Provider**: Google OAuth via Supabase
+- **Dominio Restringido**: Solo @ipupy.org.py
+- **Admin Principal**: administracion@ipupy.org.py
 
-### Dashboard Ejecutivo
-- **Resumen Financiero**: Total de ingresos mensuales de las 22 iglesias
-- **Fondo Nacional**: Cálculo automático del 10% de diezmos y ofrendas
-- **Iglesias Activas**: Estado y última actividad de cada iglesia
-- **Métricas Clave**: Asistencia, bautismos, depósitos bancarios
+### Roles del Sistema
 
-### Gestión de Iglesias
-- **Base de Datos Completa**: 22 iglesias IPU Paraguay pre-cargadas
-- **Información Pastoral**: Datos completos de pastores, grados ministeriales
-- **Documentación Legal**: RUC, cédulas, posiciones eclesiásticas
-- **Estados**: Control de iglesias activas/inactivas
+1. **super_admin** - Control total del sistema
+2. **admin** - Administradores de plataforma
+3. **district_supervisor** - Supervisores regionales
+4. **church_admin** - Líderes de iglesia
+5. **treasurer** - Tesoreros
+6. **secretary** - Secretarios
+7. **member** - Miembros
+8. **viewer** - Solo lectura
 
-### Sistema de Reportes Mensuales
+### Seguridad
 
-#### Entradas del Mes
-- Diezmos, Ofrendas, Anexos
-- Departamentos: Caballeros, Damas, Jóvenes, Niños
-- Otros ingresos especiales
+- Row Level Security (RLS) en todas las tablas
+- Autenticación server-side con middleware
+- Cookies httpOnly para sesiones
+- HTTPS obligatorio en producción
 
-#### Salidas del Mes
-- Honorarios pastorales (con facturación legal)
-- Servicios básicos: Electricidad, Agua, Basura
-- Otros gastos operativos
+## 📊 Base de Datos
 
-#### Ofrendas Fondo Nacional
-- Misiones, Lazos de Amor, Misión Posible
-- APY, Instituto Bíblico, Diezmo Pastoral
-- Cálculo automático del 10%
+### Tablas Principales
 
-### Importación/Exportación Excel
-- **Formato Compatible**: Mantiene estructura de reportes existentes
-- **Validación Automática**: Verificación de datos antes de importar
-- **Reportes Detallados**: Exportación con formatos oficiales IPU
-- **Historial Completo**: Backup de todos los movimientos
+- `churches` - 22 iglesias con información pastoral
+- `reports` - Reportes financieros mensuales
+- `profiles` - Perfiles de usuarios con roles
+- `fund_transactions` - Transacciones de fondos
+- `donors` - Registro de donantes
+- `user_activity` - Auditoría de actividades
 
-### Control Bancario
-- **Seguimiento de Depósitos**: Números de depósito y fechas
-- **Conciliación**: Comparación entre reportado y depositado
-- **Alertas**: Identificación de discrepancias automáticas
+### Migraciones
 
-## 🔐 Seguridad y Autenticación
+Las migraciones se ejecutan automáticamente via Supabase. Para ejecutar manualmente:
 
-### Métodos de Autenticación
-- **JWT Tokens**: Sesiones seguras con expiración configurable
-- **Google OAuth**: Acceso restringido a dominio @ipupy.org.py
-- **Usuario Sistema**: `administracion@ipupy.org.py` (propietario del sistema)
-- **Validación de Roles**: Admin/Iglesia con permisos diferenciados
-
-### Medidas de Seguridad
-- **SSL/TLS**: Conexiones encriptadas a base de datos
-- **CORS Configurado**: Protección contra ataques cross-origin
-- **Validación de Entrada**: Sanitización de todos los datos
-- **Variables Seguras**: Configuración mediante variables de entorno
-- **Rate Limiting**: Protección contra ataques DDoS
-
-## 💾 Base de Datos PostgreSQL
-
-### Esquema Principal
-```sql
--- 8 Tablas principales
-├── churches (22 iglesias IPU Paraguay)
-├── reports (informes mensuales)
-├── users (sistema de autenticación)
-├── members (miembros de iglesias)
-├── families (grupos familiares)
-├── transactions (movimientos financieros)
-├── fund_categories (categorías de fondos)
-└── worship_records (registros de cultos)
-```
-
-### Datos Pre-cargados
-- **22 Iglesias IPU Paraguay** con información completa
-- **Pastores y Ministerio**: Grados, posiciones, documentos legales
-- **Estructura Financiera**: Categorías de ingresos y gastos
-- **Configuración Paraguay**: Moneda, impuestos, formato de documentos
-
-## 🛠️ Desarrollo Local
-
-### Prerequisitos
-- Node.js 20.x
-- PostgreSQL 16+ o cuenta Supabase
-- Git
-
-### Configuración
 ```bash
-# Clonar repositorio
-git clone https://github.com/anthonybirhouse/ipupy-tesoreria.git
-cd ipupy-tesoreria
-
-# Instalar dependencias
-npm install
-
-# Configurar entorno
-cp .env.example .env.local
-# Editar .env.local con credenciales reales
-
-# Ejecutar migraciones
-npm run migrate
-
-# Configurar administrador
-npm run setup:admin
-
-# Iniciar desarrollo
-npm run dev
+npm run db:migrate
 ```
 
-### Scripts Disponibles
+## 🚢 Deployment
+
+### Vercel (Recomendado)
+
+1. Fork este repositorio
+2. Importar en Vercel
+3. Configurar variables de entorno:
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_KEY`
+   - `DATABASE_URL`
+   - `GOOGLE_CLIENT_ID`
+   - `GOOGLE_CLIENT_SECRET`
+4. Deploy
+
+### Variables de Entorno
+
+Ver [`.env.example`](./.env.example) para la lista completa de variables requeridas.
+
+## 📖 Documentación
+
+- [Guía de Inicio Rápido](./docs/QUICK_START.md)
+- [Arquitectura del Sistema](./docs/ARCHITECTURE.md)
+- [Guía de Configuración](./docs/SETUP_GUIDE.md)
+- [API Reference](./docs/API_REFERENCE.md)
+- [Guía de Desarrollo](./docs/DEVELOPER_GUIDE.md)
+- [Guía de Deployment](./docs/DEPLOYMENT.md)
+
+## 🛠 Desarrollo
+
+### Comandos Disponibles
+
 ```bash
-npm run dev          # Servidor de desarrollo
-npm run build        # Preparar para producción
-npm run test         # Ejecutar pruebas
-npm run migrate      # Aplicar migraciones
-npm run health       # Verificar estado del sistema
-npm run lint         # Verificar código
+npm run dev        # Servidor de desarrollo
+npm run build      # Build de producción
+npm run start      # Servidor de producción
+npm run lint       # Linter
+npm run type-check # TypeScript check
 ```
 
-## 📚 Documentación Completa
+### Estándares de Código
 
-- **[API Reference](docs/API_REFERENCE.md)** - Documentación completa de los 10 endpoints
-- **[System Architecture](docs/architecture/SYSTEM_ARCHITECTURE.md)** - Arquitectura técnica del sistema
-- **[Vercel Deployment](docs/deployment/VERCEL_DEPLOYMENT.md)** - Guía detallada de despliegue
-- **[Migration History](docs/MIGRATION_HISTORY.md)** - Historial de consolidación de funciones
-- **[User Guide](docs/USER_GUIDE.md)** - Guía de usuario en español
-- **[Developer Guide](docs/DEVELOPER_GUIDE.md)** - Guía para desarrolladores
-- **[Database Schema](docs/architecture/DATABASE_SCHEMA.md)** - Esquema de base de datos
+- TypeScript strict mode habilitado
+- ESLint configurado
+- Prettier para formateo
+- Convenciones de nombres en español para dominio
 
-## 🚀 Historial de Consolidación
+## 📱 Características por Rol
 
-El sistema fue exitosamente **consolidado de 25 funciones a 10** para cumplir con los límites del plan Vercel Hobby:
+### Administrador (administracion@ipupy.org.py)
+- Dashboard completo con métricas
+- Gestión de todas las iglesias
+- Reportes consolidados
+- Gestión de usuarios y roles
+- Exportación de datos
 
-### Funciones Eliminadas/Consolidadas (15)
-- Endpoints redundantes combinados en funciones principales
-- Lógica de validación integrada en endpoints respectivos
-- Utilidades movidas a librerías compartidas
-- Scripts de migración automatizados
+### Tesorero de Iglesia
+- Ingreso de reportes mensuales
+- Gestión de donantes
+- Registro de transacciones
+- Vista de historial
 
-### Funciones Actuales (10)
-Cada función optimizada para máxima eficiencia y múltiples operaciones.
+### Miembro
+- Vista de reportes públicos
+- Información de la iglesia
 
-## 📞 Soporte y Contribución
+## 🤝 Contribuir
 
-### Reportar Problemas
-- **GitHub Issues**: [Crear issue](https://github.com/anthonybirhouse/ipupy-tesoreria/issues)
-- **Email**: administracion@ipupy.org.py
-- **Documentar**: Pasos detallados para reproducir errores
+1. Fork el proyecto
+2. Crear branch de feature (`git checkout -b feature/NuevaCaracteristica`)
+3. Commit cambios (`git commit -m 'feat: agregar nueva característica'`)
+4. Push al branch (`git push origin feature/NuevaCaracteristica`)
+5. Abrir Pull Request
 
-### Contribuir al Proyecto
-1. Fork del repositorio
-2. Crear rama de feature (`git checkout -b feature/nueva-funcionalidad`)
-3. Commit cambios (`git commit -m 'Agregar nueva funcionalidad'`)
-4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
-5. Crear Pull Request
+## 📄 Licencia
 
-## 🎯 Roadmap 2025
+Este proyecto es privado y propiedad de la Iglesia Pentecostal Unida del Paraguay.
 
-### Próximas Funcionalidades
-- [ ] **App Móvil Nativa** - React Native para iOS/Android
-- [ ] **Notificaciones Push** - Recordatorios de reportes mensuales
-- [ ] **Dashboard Analítico** - Gráficos avanzados con Chart.js
-- [ ] **Integración Bancaria** - API de bancos paraguayos
-- [ ] **Backup Automático** - Respaldos programados en la nube
-- [ ] **Reportes AI** - Análisis predictivo de tendencias
-- [ ] **Sistema de Alertas** - Notificaciones automáticas por discrepancias
+## 👥 Equipo
 
-### Optimizaciones Técnicas
-- [ ] **PWA Completa** - Instalación en dispositivos móviles
-- [ ] **Cache Inteligente** - Mejora de performance
-- [ ] **CDN Global** - Distribución mundial de contenido
-- [ ] **Tests Automatizados** - Cobertura del 90%+
+- **Desarrollo**: Anthony Birhouse
+- **Administración**: administracion@ipupy.org.py
+
+## 🆘 Soporte
+
+Para soporte técnico, contactar a administracion@ipupy.org.py
 
 ---
 
-## 📄 Licencia y Derechos
-
-**MIT License** - Ver [LICENSE](LICENSE) para detalles completos.
-
-**Desarrollado para:**
-**Iglesia Pentecostal Unida del Paraguay**
-Sistema de Tesorería Nacional - Versión 2.0.0 (2024)
-
-**Tecnología:** Vercel Serverless Functions | **Base de Datos:** Supabase PostgreSQL | **Desplegado en:** [ipupytesoreria.vercel.app](https://ipupytesoreria.vercel.app)
+**IPU PY** - Iglesia Pentecostal Unida del Paraguay
+Personería Jurídica N° 17028
+RUC: 80017726-6

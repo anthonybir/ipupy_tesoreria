@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { execute } from '@/lib/db';
 import { buildCorsHeaders, handleCorsPreflight } from '@/lib/cors';
-import { AuthPayload, verifyBearerToken } from '@/lib/jwt';
+import { getAuthContext, AuthContext } from '@/lib/auth-context';
 const toNumber = (value: unknown): number => {
   if (value === null || value === undefined) {
     return 0;
@@ -137,7 +137,7 @@ const loadDashboardSummary = async () => {
     statusCounts: statusCounts.rows
   };
 };
-const loadDashboardInit = async (user: AuthPayload) => {
+const loadDashboardInit = async (user: AuthContext) => {
   const queries = [
     execute<{
       total_churches: string;
@@ -228,7 +228,7 @@ const loadDashboardInit = async (user: AuthPayload) => {
     user: {
       email: user.email,
       role: user.role ?? 'user',
-      name: user.name ?? user.email,
+      name: user.fullName ?? user.email,
       churchId: user.churchId ?? null
     },
     metrics: metrics.rows[0] || {},
@@ -265,22 +265,23 @@ export async function GET(request: NextRequest) {
 
   try {
     const view = request.nextUrl.searchParams.get('view') ?? request.nextUrl.searchParams.get('mode');
-    const hasAuthHeader = Boolean(request.headers.get('authorization'));
 
-    if (view === 'summary' || !hasAuthHeader) {
+    // Check for Supabase authentication
+    const authContext = await getAuthContext(request);
+
+    if (view === 'summary' || !authContext) {
       const summary = await loadDashboardSummary();
       return jsonResponse(summary, origin);
     }
 
-    const payload = verifyBearerToken(request.headers.get('authorization'));
-    const initData = await loadDashboardInit(payload);
+    const initData = await loadDashboardInit(authContext);
     const summary = await loadDashboardSummary();
 
     return jsonResponse({ summary, init: initData }, origin);
   } catch (error) {
     console.error('Dashboard API error:', error);
     const message = error instanceof Error ? error.message : 'Unexpected error';
-    const status = message.includes('Token') ? 401 : 500;
+    const status = message.includes('autenticación') || message.includes('Autenticación') ? 401 : 500;
     return jsonError(status, message, origin);
   }
 }

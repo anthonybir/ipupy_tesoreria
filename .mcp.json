@@ -1,10 +1,8 @@
 {
   "mcpServers": {
     "supabase": {
-      "command": "npx",
+      "command": "/Users/anthonybir/.nvm/versions/node/v18.20.6/bin/mcp-server-supabase",
       "args": [
-        "-y",
-        "@supabase/mcp-server-supabase@latest",
         "--project-ref=vnxghlfrmmzvlhzhontk"
       ],
       "env": {

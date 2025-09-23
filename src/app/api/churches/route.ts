@@ -33,7 +33,9 @@ export async function GET(request: NextRequest) {
     return preflight;
   }
 
-  await requireAuth(request);
+  // Make GET endpoint public - authentication optional
+  // This allows the churches page to load without login
+  // Write operations (POST, PUT, DELETE) still require auth
 
   const result = await execute<{
     id: number;

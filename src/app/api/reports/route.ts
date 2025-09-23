@@ -759,7 +759,17 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const auth = await requireAuth(request);
+    // Make GET endpoint authentication-optional
+    // Return empty array for unauthenticated users
+    // This allows the reports page to load without login
+    const { getAuthContext } = await import('@/lib/auth-context');
+    const auth = await getAuthContext(request);
+
+    if (!auth) {
+      // Return empty array for unauthenticated users
+      return jsonResponse([], origin);
+    }
+
     const rows = await handleGetReports(request, auth);
     return jsonResponse(rows, origin);
   } catch (error) {
