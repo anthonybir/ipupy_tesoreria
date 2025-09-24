@@ -2,8 +2,6 @@
 
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { getSiteURL } from '@/lib/utils/site-url';
-
 export default function SupabaseAuth() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,11 +15,7 @@ export default function SupabaseAuth() {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${getSiteURL()}/auth/callback`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
+          redirectTo: `${typeof window !== 'undefined' ? location.origin : ''}/auth/callback`,
         },
       });
 

@@ -1,4 +1,4 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 
 export async function createClient() {
@@ -9,27 +9,11 @@ export async function createClient() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value, ...options });
-          } catch {
-            // The `set` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
-            // user sessions.
-          }
-        },
-        remove(name: string, options: CookieOptions) {
-          try {
-            cookieStore.set({ name, value: '', ...options });
-          } catch {
-            // The `delete` method was called from a Server Component.
-            // This can be ignored if you have middleware refreshing
-            // user sessions.
-          }
-        },
+        get: (name: string) => cookieStore.get(name)?.value,
+        set: (name: string, value: string, options: Record<string, unknown>) =>
+          cookieStore.set({ name, value, ...options }),
+        remove: (name: string, options: Record<string, unknown>) =>
+          cookieStore.set({ name, value: '', ...options, maxAge: 0 }),
       },
     }
   );
@@ -40,7 +24,7 @@ export async function getUser() {
   const { data: { user }, error } = await supabase.auth.getUser();
 
   if (error) {
-    console.error('Error getting user:', error);
+    console.error('[Server] Error getting user:', error);
     return null;
   }
 
@@ -52,6 +36,7 @@ export async function getUserProfile() {
   const { data: { user }, error: authError } = await supabase.auth.getUser();
 
   if (authError || !user) {
+    console.error('[Server] Error getting user for profile:', authError);
     return null;
   }
 
@@ -71,7 +56,7 @@ export async function getUserProfile() {
     .single();
 
   if (profileError) {
-    console.error('Error getting user profile:', profileError);
+    console.error('[Server] Error getting user profile:', profileError);
     // Create a basic profile if it doesn't exist
     return {
       ...user,
