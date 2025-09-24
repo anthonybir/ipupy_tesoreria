@@ -25,13 +25,35 @@ export type CreateReportPayload = {
   jovenes?: number;
   ninos?: number;
   otros?: number;
-  honorarios_pastoral?: number;
+  misiones?: number;
+  lazos_amor?: number;
+  mision_posible?: number;
+  apy?: number;
+  iba?: number;
+  energia_electrica?: number;
+  agua?: number;
+  recoleccion_basura?: number;
   servicios?: number;
+  mantenimiento?: number;
+  materiales?: number;
+  otros_gastos?: number;
+  monto_depositado?: number;
+  honorarios_pastoral?: number;
   numero_deposito?: string;
   fecha_deposito?: string;
-  monto_depositado?: number;
   observaciones?: string;
+  total_designado?: number;
+  diezmo_nacional_calculado?: number;
+  total_operativo?: number;
+  total_salidas_calculadas?: number;
+  saldo_calculado?: number;
   estado?: string;
+  aportantes?: Array<{
+    first_name: string;
+    last_name: string;
+    document: string;
+    amount: number;
+  }>;
   attachments?: {
     summary?: string;
     deposit?: string;

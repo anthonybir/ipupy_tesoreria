@@ -10,15 +10,33 @@ const currencyFormatter = new Intl.NumberFormat("es-PY", {
   maximumFractionDigits: 0
 });
 
-const breakdownLabels: Record<keyof ReportRecord["breakdown"], string> = {
-  diezmos: "Diezmos",
-  ofrendas: "Ofrendas",
-  anexos: "Anexos",
-  caballeros: "Caballeros",
-  damas: "Damas",
-  jovenes: "Jóvenes",
-  ninos: "Niños",
-  otros: "Otros"
+const congregationalLabels: Record<keyof ReportRecord['breakdown']['congregational'], string> = {
+  diezmos: 'Diezmos',
+  ofrendas: 'Ofrendas',
+  anexos: 'Anexos',
+  otros: 'Otros ingresos'
+};
+
+const designatedLabels: Record<keyof ReportRecord['breakdown']['designated'], string> = {
+  misiones: 'Misiones',
+  lazosAmor: 'Lazos de Amor',
+  misionPosible: 'Misión Posible',
+  apy: 'APY',
+  iba: 'IBA',
+  caballeros: 'Caballeros',
+  damas: 'Damas',
+  jovenes: 'Jóvenes',
+  ninos: 'Niños'
+};
+
+const expenseLabels: Record<keyof ReportRecord['expenses'], string> = {
+  energiaElectrica: 'Energía eléctrica (ANDE)',
+  agua: 'Agua',
+  recoleccionBasura: 'Recolección de basura',
+  servicios: 'Servicios (internet, telefonía, etc.)',
+  mantenimiento: 'Mantenimiento',
+  materiales: 'Materiales',
+  otrosGastos: 'Otros gastos'
 };
 
 type ReportDetailsDrawerProps = {
@@ -52,7 +70,18 @@ export function ReportDetailsDrawer({ report, onClose }: ReportDetailsDrawerProp
     return null;
   }
 
-  const breakdownEntries = Object.entries(report.breakdown) as Array<[keyof ReportRecord["breakdown"], number]>;
+  const congregationalEntries = Object.entries(report.breakdown.congregational) as Array<[
+    keyof ReportRecord['breakdown']['congregational'],
+    number
+  ]>;
+  const designatedEntries = Object.entries(report.breakdown.designated) as Array<[
+    keyof ReportRecord['breakdown']['designated'],
+    number
+  ]>;
+  const expenseEntries = Object.entries(report.expenses) as Array<[
+    keyof ReportRecord['expenses'],
+    number
+  ]>;
 
   return (
     <div className="fixed inset-0 z-40 flex">
@@ -78,21 +107,33 @@ export function ReportDetailsDrawer({ report, onClose }: ReportDetailsDrawerProp
           <section className="grid gap-4 md:grid-cols-3">
             {[
               {
-                label: "Total entradas",
-                value: currencyFormatter.format(report.totals.entries)
+                label: 'Total entradas',
+                value: report.totals.entries
               },
               {
-                label: "Fondo nacional (10%)",
-                value: currencyFormatter.format(report.totals.nationalFund)
+                label: 'Fondo nacional (10%)',
+                value: report.totals.nationalFund
               },
               {
-                label: "Saldo del mes",
-                value: currencyFormatter.format(report.totals.balance)
+                label: 'Fondos designados',
+                value: report.totals.designated
+              },
+              {
+                label: 'Gastos operativos',
+                value: report.totals.operational
+              },
+              {
+                label: 'Honorario pastoral',
+                value: report.totals.pastoralHonorarium
+              },
+              {
+                label: 'Saldo del mes',
+                value: report.totals.balance
               }
             ].map((card) => (
               <article key={card.label} className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{card.label}</p>
-                <p className="mt-2 text-lg font-semibold text-slate-900">{card.value}</p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">{currencyFormatter.format(card.value)}</p>
               </article>
             ))}
           </section>
@@ -101,10 +142,41 @@ export function ReportDetailsDrawer({ report, onClose }: ReportDetailsDrawerProp
             <header className="border-b border-slate-200 px-5 py-3">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Desglose de ingresos</h3>
             </header>
+            <div className="space-y-6 px-5 py-4">
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ingresos congregacionales</h4>
+                <div className="mt-2 grid gap-px rounded-xl bg-slate-100 sm:grid-cols-2">
+                  {congregationalEntries.map(([key, amount]) => (
+                    <div key={key} className="flex items-center justify-between bg-white px-4 py-3 text-sm text-slate-600">
+                      <span>{congregationalLabels[key]}</span>
+                      <span className="font-semibold text-slate-900">{currencyFormatter.format(amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ofrecimientos designados (100 % nacional)</h4>
+                <div className="mt-2 grid gap-px rounded-xl bg-slate-100 sm:grid-cols-2">
+                  {designatedEntries.map(([key, amount]) => (
+                    <div key={key} className="flex items-center justify-between bg-white px-4 py-3 text-sm text-slate-600">
+                      <span>{designatedLabels[key]}</span>
+                      <span className="font-semibold text-slate-900">{currencyFormatter.format(amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+            <header className="border-b border-slate-200 px-5 py-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Gastos operativos</h3>
+            </header>
             <div className="grid gap-px bg-slate-100 sm:grid-cols-2">
-              {breakdownEntries.map(([key, amount]) => (
+              {expenseEntries.map(([key, amount]) => (
                 <div key={key} className="flex items-center justify-between bg-white px-5 py-3 text-sm text-slate-600">
-                  <span>{breakdownLabels[key]}</span>
+                  <span>{expenseLabels[key]}</span>
                   <span className="font-semibold text-slate-900">{currencyFormatter.format(amount)}</span>
                 </div>
               ))}

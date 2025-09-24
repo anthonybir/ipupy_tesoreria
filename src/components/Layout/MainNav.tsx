@@ -7,7 +7,6 @@ import {
   ChartBarIcon,
   DocumentTextIcon,
   BookOpenIcon,
-  CurrencyDollarIcon,
   BanknotesIcon,
   BuildingLibraryIcon,
   ArrowDownTrayIcon,
@@ -30,11 +29,6 @@ const navigation = [
     name: "Libro Mensual",
     href: "/ledger",
     icon: BookOpenIcon,
-  },
-  {
-    name: "Transacciones",
-    href: "/transactions",
-    icon: CurrencyDollarIcon,
   },
   {
     name: "Fondos",

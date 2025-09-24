@@ -40,7 +40,7 @@ export function ReportsDashboard({ reports, churches }: ReportsDashboardProps) {
   );
 
   const totalEntries = reportsThisMonth.reduce((sum, report) => sum + report.totals.entries, 0);
-  const totalNationalFund = totalEntries * 0.1;
+  const totalNationalFund = reportsThisMonth.reduce((sum, report) => sum + report.totals.nationalFund, 0);
   const processed = reportsThisMonth.filter((report) => report.status.toLowerCase() === 'procesado').length;
   const pending = Math.max(churches.length - reportsThisMonth.length, 0);
 

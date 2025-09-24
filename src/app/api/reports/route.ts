@@ -108,6 +108,64 @@ const toIntOrZero = (value: unknown): number => {
   return parsed === null ? 0 : parsed;
 };
 
+const DESIGNATED_FORM_KEYS = [
+  'misiones',
+  'lazos_amor',
+  'mision_posible',
+  'apy',
+  'iba',
+  'caballeros',
+  'damas',
+  'jovenes',
+  'ninos'
+] as const;
+
+type DesignatedKey = typeof DESIGNATED_FORM_KEYS[number];
+
+const DESIGNATED_FIELD_MAP: Record<DesignatedKey, string> = {
+  misiones: 'ofrendas_directas_misiones',
+  lazos_amor: 'lazos_amor',
+  mision_posible: 'mision_posible',
+  apy: 'apy',
+  iba: 'instituto_biblico',
+  caballeros: 'aporte_caballeros',
+  damas: 'damas',
+  jovenes: 'jovenes',
+  ninos: 'ninos'
+};
+
+const DESIGNATED_FUND_LABELS: Record<DesignatedKey, string> = {
+  misiones: 'Misiones',
+  lazos_amor: 'Lazos de Amor',
+  mision_posible: 'Misión Posible',
+  apy: 'APY',
+  iba: 'IBA',
+  caballeros: 'Caballeros',
+  damas: 'Damas',
+  jovenes: 'Jóvenes',
+  ninos: 'Niños'
+};
+
+const EXPENSE_KEYS = [
+  'energia_electrica',
+  'agua',
+  'recoleccion_basura',
+  'servicios',
+  'mantenimiento',
+  'materiales',
+  'otros_gastos'
+] as const;
+
+type ExpenseKey = typeof EXPENSE_KEYS[number];
+
+type TransactionTotalsInput = {
+  totalEntradas: number;
+  fondoNacional: number;
+  honorariosPastoral: number;
+  gastosOperativos: number;
+  fechaDeposito?: string | null;
+};
+
 const ensureUploadsDir = async () => {
   try {
     await fs.mkdir(uploadsDir, { recursive: true });
@@ -305,7 +363,11 @@ const createTransaction = async (data: GenericRecord) => {
   }
 };
 
-const createReportTransactions = async (report: GenericRecord, totals: GenericRecord) => {
+const createReportTransactions = async (
+  report: GenericRecord,
+  totals: TransactionTotalsInput,
+  designated: Record<DesignatedKey, number>
+) => {
   try {
     const churchFund = await getOrCreateFund('Fondo General', 'nacional', 'Fondo principal de la iglesia');
     const nationalFund = await getOrCreateFund('Fondo Nacional', 'nacional', 'Fondo nacional IPU Paraguay (10%)');
@@ -313,7 +375,8 @@ const createReportTransactions = async (report: GenericRecord, totals: GenericRe
     const totalEntradas = Number(totals.totalEntradas) || 0;
     const fondoNacional = Number(totals.fondoNacional) || 0;
     const honorariosPastoral = Number(totals.honorariosPastoral) || 0;
-    const servicios = Number(totals.servicios) || 0;
+    const gastosOperativos = Number(totals.gastosOperativos) || 0;
+    const transactionDate = totals.fechaDeposito || new Date().toISOString().split('T')[0];
 
     if (totalEntradas > 0) {
       await createTransaction({
@@ -323,7 +386,7 @@ const createReportTransactions = async (report: GenericRecord, totals: GenericRe
         concept: `Ingresos del mes ${report.month}/${report.year} - Diezmos y Ofrendas`,
         amount_in: totalEntradas,
         amount_out: 0,
-        date: totals.fecha_deposito || new Date().toISOString().split('T')[0]
+        date: transactionDate
       });
     }
 
@@ -335,7 +398,7 @@ const createReportTransactions = async (report: GenericRecord, totals: GenericRe
         concept: `Transferencia fondo nacional ${report.month}/${report.year} (10%)`,
         amount_in: 0,
         amount_out: fondoNacional,
-        date: totals.fecha_deposito || new Date().toISOString().split('T')[0]
+        date: transactionDate
       });
 
       await createTransaction({
@@ -345,7 +408,36 @@ const createReportTransactions = async (report: GenericRecord, totals: GenericRe
         concept: `Ingreso fondo nacional desde ${report.church_name || 'iglesia'} ${report.month}/${report.year}`,
         amount_in: fondoNacional,
         amount_out: 0,
-        date: totals.fecha_deposito || new Date().toISOString().split('T')[0]
+        date: transactionDate
+      });
+    }
+
+    for (const key of DESIGNATED_FORM_KEYS) {
+      const amount = designated[key] ?? 0;
+      if (amount <= 0) {
+        continue;
+      }
+      const fundLabel = DESIGNATED_FUND_LABELS[key];
+      const designatedFund = await getOrCreateFund(fundLabel, 'designado', `Fondo designado ${fundLabel}`);
+
+      await createTransaction({
+        church_id: report.church_id,
+        fund_id: churchFund.id,
+        report_id: report.id,
+        concept: `Salida designada ${fundLabel} ${report.month}/${report.year}`,
+        amount_in: 0,
+        amount_out: amount,
+        date: transactionDate
+      });
+
+      await createTransaction({
+        church_id: report.church_id,
+        fund_id: designatedFund.id,
+        report_id: report.id,
+        concept: `Ingreso designado ${fundLabel} desde ${report.church_name || 'iglesia'} ${report.month}/${report.year}`,
+        amount_in: amount,
+        amount_out: 0,
+        date: transactionDate
       });
     }
 
@@ -357,19 +449,19 @@ const createReportTransactions = async (report: GenericRecord, totals: GenericRe
         concept: `Honorarios pastorales ${report.month}/${report.year}`,
         amount_in: 0,
         amount_out: honorariosPastoral,
-        date: totals.fecha_deposito || new Date().toISOString().split('T')[0]
+        date: transactionDate
       });
     }
 
-    if (servicios > 0) {
+    if (gastosOperativos > 0) {
       await createTransaction({
         church_id: report.church_id,
         fund_id: churchFund.id,
         report_id: report.id,
         concept: `Servicios y gastos operativos ${report.month}/${report.year}`,
         amount_in: 0,
-        amount_out: servicios,
-        date: totals.fecha_deposito || new Date().toISOString().split('T')[0]
+        amount_out: gastosOperativos,
+        date: transactionDate
       });
     }
   } catch (error) {
@@ -436,43 +528,55 @@ const handleGetReports = async (request: NextRequest, auth: AuthContext) => {
 };
 
 const extractReportPayload = (data: GenericRecord) => {
-  const diezmos = toNumber(data.diezmos);
-  const ofrendas = toNumber(data.ofrendas);
-  const anexos = toNumber(data.anexos);
-  const caballeros = toNumber(data.caballeros);
-  const damas = toNumber(data.damas);
-  const jovenes = toNumber(data.jovenes);
-  const ninos = toNumber(data.ninos);
+  const baseDiezmos = toNumber(data.diezmos);
+  const baseOfrendas = toNumber(data.ofrendas);
   const otros = toNumber(data.otros);
+  const anexos = toNumber(data.anexos);
 
-  const totalEntradas = diezmos + ofrendas + anexos + caballeros + damas + jovenes + ninos + otros;
-  const fondoNacional = totalEntradas * 0.1;
+  const designated: Record<DesignatedKey, number> = {} as Record<DesignatedKey, number>;
+  let totalDesignados = 0;
+  DESIGNATED_FORM_KEYS.forEach((key) => {
+    const dbColumn = DESIGNATED_FIELD_MAP[key];
+    const value = toNumber((data as GenericRecord)[key] ?? (data as GenericRecord)[dbColumn]);
+    designated[key] = value;
+    totalDesignados += value;
+  });
 
-  const honorariosPastoral = toNumber(data.honorarios_pastoral);
-  const servicios = toNumber(data.servicios);
-  const totalSalidas = honorariosPastoral + fondoNacional + servicios;
-  const saldoMes = totalEntradas - totalSalidas;
+  const expenses: Record<ExpenseKey, number> = {} as Record<ExpenseKey, number>;
+  let gastosOperativos = 0;
+  EXPENSE_KEYS.forEach((key) => {
+    const value = toNumber((data as GenericRecord)[key]);
+    expenses[key] = value;
+    gastosOperativos += value;
+  });
+
+  const congregationalBase = baseDiezmos + baseOfrendas;
+  const totalIngresos = congregationalBase + anexos + otros + totalDesignados;
+  const diezmoNacional = Math.round(congregationalBase * 0.1);
+  const honorariosPastoral = Math.max(0, totalIngresos - (totalDesignados + gastosOperativos + diezmoNacional));
+  const totalSalidas = totalDesignados + gastosOperativos + diezmoNacional + honorariosPastoral;
+  const saldoMes = totalIngresos - totalSalidas;
 
   return {
     totals: {
-      totalEntradas,
-      fondoNacional,
+      totalEntradas: totalIngresos,
+      fondoNacional: diezmoNacional,
       honorariosPastoral,
-      servicios,
+      gastosOperativos,
       totalSalidas,
       saldoMes,
-      fecha_deposito: data.fecha_deposito
+      totalDesignados,
+      congregationalBase,
+      fechaDeposito: typeof data.fecha_deposito === 'string' ? data.fecha_deposito : null
     },
     breakdown: {
-      diezmos,
-      ofrendas,
+      diezmos: baseDiezmos,
+      ofrendas: baseOfrendas,
       anexos,
-      caballeros,
-      damas,
-      jovenes,
-      ninos,
-      otros
-    }
+      otros,
+      ...designated
+    },
+    expenses
   };
 };
 
@@ -499,7 +603,47 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
     throw new BadRequestError('Ya existe un informe para este mes y año');
   }
 
-  const { totals, breakdown } = extractReportPayload(data);
+  const { totals, breakdown, expenses } = extractReportPayload(data);
+
+  const designatedDbValues = DESIGNATED_FORM_KEYS.reduce<Record<string, number>>((acc, key) => {
+    const column = DESIGNATED_FIELD_MAP[key];
+    acc[column] = breakdown[key] ?? 0;
+    return acc;
+  }, {});
+
+  const designatedForTransactions = DESIGNATED_FORM_KEYS.reduce<Record<DesignatedKey, number>>((acc, key) => {
+    acc[key] = breakdown[key] ?? 0;
+    return acc;
+  }, {} as Record<DesignatedKey, number>);
+
+  const expenseValues = EXPENSE_KEYS.reduce<Record<string, number>>((acc, key) => {
+    acc[key] = expenses[key] ?? 0;
+    return acc;
+  }, {});
+
+  const donorRowsInput = Array.isArray(data.aportantes) ? (data.aportantes as GenericRecord[]) : [];
+  const donorRows = donorRowsInput
+    .map((donor) => ({
+      first_name: String(donor.first_name ?? '').trim(),
+      last_name: String(donor.last_name ?? '').trim(),
+      document: String(donor.document ?? '').trim(),
+      amount: toNumber(donor.amount)
+    }))
+    .filter((donor) => donor.amount > 0 && (donor.first_name || donor.last_name || donor.document));
+
+  if (breakdown.diezmos > 0) {
+    const donorsTotal = donorRows.reduce((sum, donor) => sum + donor.amount, 0);
+    if (donorRows.length === 0) {
+      throw new BadRequestError('Registra al menos un aportante para los diezmos declarados.');
+    }
+    if (Math.abs(donorsTotal - breakdown.diezmos) > 1) {
+      throw new BadRequestError('La suma de los aportantes no coincide con el total de diezmos.');
+    }
+  }
+
+  const montoDepositado = data.monto_depositado !== undefined
+    ? toNumber(data.monto_depositado)
+    : totals.fondoNacional + totals.totalDesignados;
 
   const attachmentPrefix = `report-${scopedChurchId}-${reportYear}-${reportMonth}`;
   const attachments = data.attachments as { summary?: string; deposit?: string } | undefined;
@@ -514,17 +658,27 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
   const result = await execute(
     `
       INSERT INTO reports (
-        church_id, month, year, diezmos, ofrendas, anexos, caballeros, damas,
-        jovenes, ninos, otros, total_entradas, fondo_nacional, honorarios_pastoral,
-        servicios, total_salidas, saldo_mes, ofrendas_directas_misiones, lazos_amor,
-        mision_posible, aporte_caballeros, apy, instituto_biblico, diezmo_pastoral,
-        numero_deposito, fecha_deposito, monto_depositado, asistencia_visitas,
-        bautismos_agua, bautismos_espiritu, observaciones, estado,
+        church_id, month, year,
+        diezmos, ofrendas, anexos, caballeros, damas,
+        jovenes, ninos, otros,
+        total_entradas, fondo_nacional, honorarios_pastoral,
+        servicios, energia_electrica, agua, recoleccion_basura, mantenimiento, materiales, otros_gastos,
+        total_salidas, saldo_mes,
+        ofrendas_directas_misiones, lazos_amor, mision_posible, aporte_caballeros, apy, instituto_biblico,
+        numero_deposito, fecha_deposito, monto_depositado,
+        asistencia_visitas, bautismos_agua, bautismos_espiritu, observaciones, estado,
         foto_informe, foto_deposito, submission_type, submitted_by, submitted_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-        $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31,
-        $32, $33, $34, $35, $36
+        $1, $2, $3,
+        $4, $5, $6, $7, $8,
+        $9, $10, $11,
+        $12, $13, $14,
+        $15, $16, $17, $18, $19, $20, $21,
+        $22, $23,
+        $24, $25, $26, $27, $28, $29,
+        $30, $31, $32,
+        $33, $34, $35, $36, $37,
+        $38, $39, $40, $41, $42
       )
       RETURNING *
     `,
@@ -542,20 +696,25 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
       breakdown.otros,
       totals.totalEntradas,
       totals.fondoNacional,
-      toNumber(data.honorarios_pastoral),
-      toNumber(data.servicios),
+      totals.honorariosPastoral,
+      expenseValues.servicios,
+      expenseValues.energia_electrica,
+      expenseValues.agua,
+      expenseValues.recoleccion_basura,
+      expenseValues.mantenimiento,
+      expenseValues.materiales,
+      expenseValues.otros_gastos,
       totals.totalSalidas,
       totals.saldoMes,
-      toNumber(data.ofrendas_directas_misiones),
-      toNumber(data.lazos_amor),
-      toNumber(data.mision_posible),
-      toNumber(data.aporte_caballeros),
-      toNumber(data.apy),
-      toNumber(data.instituto_biblico),
-      toNumber(data.diezmo_pastoral),
+      designatedDbValues.ofrendas_directas_misiones ?? 0,
+      designatedDbValues.lazos_amor ?? 0,
+      designatedDbValues.mision_posible ?? 0,
+      designatedDbValues.aporte_caballeros ?? 0,
+      designatedDbValues.apy ?? 0,
+      designatedDbValues.instituto_biblico ?? 0,
       data.numero_deposito || null,
       data.fecha_deposito || null,
-      data.monto_depositado !== undefined ? toNumber(data.monto_depositado, totals.fondoNacional) : totals.fondoNacional,
+      montoDepositado,
       toIntOrZero(data.asistencia_visitas),
       toIntOrZero(data.bautismos_agua),
       toIntOrZero(data.bautismos_espiritu),
@@ -577,11 +736,57 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
     totalEntradas: totals.totalEntradas,
     fondoNacional: totals.fondoNacional,
     honorariosPastoral: totals.honorariosPastoral,
-    servicios: totals.servicios,
-    fecha_deposito: data.fecha_deposito
-  });
+    gastosOperativos: totals.gastosOperativos,
+    fechaDeposito: totals.fechaDeposito || (typeof data.fecha_deposito === 'string' ? data.fecha_deposito : null)
+  }, designatedForTransactions);
+
+  await replaceReportDonors(Number(report.id), scopedChurchId, donorRows);
 
   return report;
+};
+
+const replaceReportDonors = async (
+  reportId: number,
+  churchId: number,
+  donors: Array<{ first_name: string; last_name: string; document: string; amount: number }>
+) => {
+  await execute('DELETE FROM report_tithers WHERE report_id = $1', [reportId]);
+
+  if (!donors.length) {
+    return;
+  }
+
+  for (const donor of donors) {
+    await execute(
+      `
+        INSERT INTO report_tithers (report_id, church_id, first_name, last_name, document, amount)
+        VALUES ($1, $2, $3, $4, $5, $6)
+      `,
+      [
+        reportId,
+        churchId,
+        donor.first_name,
+        donor.last_name,
+        donor.document || null,
+        donor.amount
+      ]
+    );
+  }
+};
+
+const resetAutomaticTransactions = async (reportId: number) => {
+  await execute(
+    `DELETE FROM fund_movements_enhanced
+      WHERE transaction_id IN (
+        SELECT id FROM transactions WHERE report_id = $1 AND created_by = 'system'
+      )`,
+    [reportId]
+  );
+
+  await execute(
+    'DELETE FROM transactions WHERE report_id = $1 AND created_by = $2',
+    [reportId, 'system']
+  );
 };
 
 const handleUpdateReport = async (
@@ -611,7 +816,47 @@ const handleUpdateReport = async (
     throw new BadRequestError('No tiene permisos para modificar este informe');
   }
 
-  const { totals, breakdown } = extractReportPayload({ ...existing, ...data });
+  const { totals, breakdown, expenses } = extractReportPayload({ ...existing, ...data });
+
+  const designatedDbValues = DESIGNATED_FORM_KEYS.reduce<Record<string, number>>((acc, key) => {
+    const column = DESIGNATED_FIELD_MAP[key];
+    acc[column] = breakdown[key] ?? 0;
+    return acc;
+  }, {});
+
+  const designatedForTransactions = DESIGNATED_FORM_KEYS.reduce<Record<DesignatedKey, number>>((acc, key) => {
+    acc[key] = breakdown[key] ?? 0;
+    return acc;
+  }, {} as Record<DesignatedKey, number>);
+
+  const expenseValues = EXPENSE_KEYS.reduce<Record<string, number>>((acc, key) => {
+    acc[key] = expenses[key] ?? 0;
+    return acc;
+  }, {});
+
+  const donorRowsInput = Array.isArray(data.aportantes) ? (data.aportantes as GenericRecord[]) : null;
+  const donorPayloadProvided = donorRowsInput !== null;
+  const donorRows = donorPayloadProvided
+    ? donorRowsInput!
+        .map((donor) => ({
+          first_name: String(donor.first_name ?? '').trim(),
+          last_name: String(donor.last_name ?? '').trim(),
+          document: String(donor.document ?? '').trim(),
+          amount: toNumber(donor.amount)
+        }))
+        .filter((donor) => donor.amount > 0 && (donor.first_name || donor.last_name || donor.document))
+    : [];
+
+  if (donorPayloadProvided && breakdown.diezmos > 0) {
+    const donorsTotal = donorRows.reduce((sum, donor) => sum + donor.amount, 0);
+    if (donorRows.length === 0) {
+      throw new BadRequestError('Registra al menos un aportante para los diezmos declarados.');
+    }
+    if (Math.abs(donorsTotal - breakdown.diezmos) > 1) {
+      throw new BadRequestError('La suma de los aportantes no coincide con el total de diezmos.');
+    }
+  }
+
   const attachments = (data.attachments || {}) as { summary?: string | null; deposit?: string | null };
   const attachmentPrefix = `report-${existing.church_id}-${existing.year}-${existing.month}`;
 
@@ -629,6 +874,10 @@ const handleUpdateReport = async (
         : await saveBase64Attachment(attachments.deposit, `${attachmentPrefix}-deposito`);
   }
 
+  const montoDepositado = data.monto_depositado !== undefined
+    ? toNumber(data.monto_depositado)
+    : toNumber(existing.monto_depositado ?? totals.fondoNacional + totals.totalDesignados);
+
   const submissionType = data.submission_type || existing.submission_type || (auth.role === 'church' ? 'online' : 'manual');
   const estado = data.estado || existing.estado || 'pendiente';
   const previousStatus = existing.estado;
@@ -644,16 +893,47 @@ const handleUpdateReport = async (
   const updatedResult = await execute(
     `
       UPDATE reports SET
-        diezmos = $1, ofrendas = $2, anexos = $3, caballeros = $4, damas = $5,
-        jovenes = $6, ninos = $7, otros = $8, total_entradas = $9, fondo_nacional = $10,
-        honorarios_pastoral = $11, servicios = $12, total_salidas = $13, saldo_mes = $14,
-        numero_deposito = $15, fecha_deposito = $16, monto_depositado = $17,
-        asistencia_visitas = $18, bautismos_agua = $19, bautismos_espiritu = $20,
-        observaciones = $21, estado = $22,
-        foto_informe = $23, foto_deposito = $24,
-        submission_type = $25, processed_by = $26, processed_at = $27,
+        diezmos = $1,
+        ofrendas = $2,
+        anexos = $3,
+        caballeros = $4,
+        damas = $5,
+        jovenes = $6,
+        ninos = $7,
+        otros = $8,
+        total_entradas = $9,
+        fondo_nacional = $10,
+        honorarios_pastoral = $11,
+        servicios = $12,
+        energia_electrica = $13,
+        agua = $14,
+        recoleccion_basura = $15,
+        mantenimiento = $16,
+        materiales = $17,
+        otros_gastos = $18,
+        total_salidas = $19,
+        saldo_mes = $20,
+        ofrendas_directas_misiones = $21,
+        lazos_amor = $22,
+        mision_posible = $23,
+        aporte_caballeros = $24,
+        apy = $25,
+        instituto_biblico = $26,
+        numero_deposito = $27,
+        fecha_deposito = $28,
+        monto_depositado = $29,
+        asistencia_visitas = $30,
+        bautismos_agua = $31,
+        bautismos_espiritu = $32,
+        observaciones = $33,
+        estado = $34,
+        foto_informe = $35,
+        foto_deposito = $36,
+        submission_type = $37,
+        processed_by = $38,
+        processed_at = $39,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $28
+      WHERE id = $40
       RETURNING *
     `,
     [
@@ -667,15 +947,25 @@ const handleUpdateReport = async (
       breakdown.otros,
       totals.totalEntradas,
       totals.fondoNacional,
-      toNumber(data.honorarios_pastoral, parseFloat(String(existing.honorarios_pastoral || 0))),
-      toNumber(data.servicios, parseFloat(String(existing.servicios || 0))),
+      totals.honorariosPastoral,
+      expenseValues.servicios,
+      expenseValues.energia_electrica,
+      expenseValues.agua,
+      expenseValues.recoleccion_basura,
+      expenseValues.mantenimiento,
+      expenseValues.materiales,
+      expenseValues.otros_gastos,
       totals.totalSalidas,
       totals.saldoMes,
+      designatedDbValues.ofrendas_directas_misiones ?? existing.ofrendas_directas_misiones ?? 0,
+      designatedDbValues.lazos_amor ?? existing.lazos_amor ?? 0,
+      designatedDbValues.mision_posible ?? existing.mision_posible ?? 0,
+      designatedDbValues.aporte_caballeros ?? existing.aporte_caballeros ?? 0,
+      designatedDbValues.apy ?? existing.apy ?? 0,
+      designatedDbValues.instituto_biblico ?? existing.instituto_biblico ?? 0,
       data.numero_deposito !== undefined ? data.numero_deposito || null : existing.numero_deposito || null,
       data.fecha_deposito !== undefined ? data.fecha_deposito || null : existing.fecha_deposito || null,
-      data.monto_depositado !== undefined
-        ? toNumber(data.monto_depositado, totals.fondoNacional)
-        : parseFloat(String(existing.monto_depositado || totals.fondoNacional)),
+      montoDepositado,
       data.asistencia_visitas !== undefined ? toIntOrZero(data.asistencia_visitas) : existing.asistencia_visitas || 0,
       data.bautismos_agua !== undefined ? toIntOrZero(data.bautismos_agua) : existing.bautismos_agua || 0,
       data.bautismos_espiritu !== undefined ? toIntOrZero(data.bautismos_espiritu) : existing.bautismos_espiritu || 0,
@@ -691,6 +981,23 @@ const handleUpdateReport = async (
   );
 
   const updatedReport = updatedResult.rows[0];
+
+  if (donorPayloadProvided) {
+    await replaceReportDonors(reportId, existing.church_id, donorRows);
+  }
+
+  await resetAutomaticTransactions(reportId);
+  await createReportTransactions(
+    { ...existing, ...updatedReport },
+    {
+      totalEntradas: totals.totalEntradas,
+      fondoNacional: totals.fondoNacional,
+      honorariosPastoral: totals.honorariosPastoral,
+      gastosOperativos: totals.gastosOperativos,
+      fechaDeposito: totals.fechaDeposito || (typeof data.fecha_deposito === 'string' ? data.fecha_deposito : existing.fecha_deposito || null)
+    },
+    designatedForTransactions
+  );
 
   await recordReportStatus(reportId, String(previousStatus), String(updatedReport.estado), auth.email || "");
   if (previousStatus !== updatedReport.estado && updatedReport.estado === 'procesado') {
@@ -712,6 +1019,8 @@ const handleDeleteReport = async (reportId: number, auth: AuthContext) => {
   if (auth.role === 'church' && parseRequiredChurchId(auth.churchId) !== existing.church_id) {
     throw new BadRequestError('No tiene permisos para eliminar este informe');
   }
+
+  await resetAutomaticTransactions(reportId);
 
   const result = await execute('DELETE FROM reports WHERE id = $1 RETURNING id', [reportId]);
 
