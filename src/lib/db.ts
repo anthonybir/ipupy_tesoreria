@@ -18,13 +18,18 @@ const getConnectionString = (): string => {
   }
 
   let connectionString = raw;
-  if (connectionString.includes('supabase.co:6543') || connectionString.includes('pooler.supabase.com')) {
-    const url = new URL(connectionString);
-    if (!url.searchParams.has('pgbouncer')) {
-      url.searchParams.set('pgbouncer', 'true');
-    }
-    connectionString = url.toString();
+
+  // Use connection pooler for Supabase in production
+  const url = new URL(connectionString);
+
+  // Force pooler mode for Vercel deployments
+  if (process.env.VERCEL) {
+    url.searchParams.set('pgbouncer', 'true');
+    url.searchParams.set('connection_limit', '1');
+    url.searchParams.set('pool_timeout', '0');
   }
+
+  connectionString = url.toString();
 
   return connectionString;
 };
@@ -95,9 +100,9 @@ export const createConnection = (): Pool => {
     pool = new Pool({
       connectionString,
       ssl: sslRequired ? { rejectUnauthorized: false } : false,
-      connectionTimeoutMillis: 8000,
-      idleTimeoutMillis: 20000,
-      max: process.env.VERCEL ? 3 : 10,
+      connectionTimeoutMillis: 15000, // Increase timeout for Vercel cold starts
+      idleTimeoutMillis: 10000, // Reduce idle timeout to free connections faster
+      max: process.env.VERCEL ? 1 : 10, // Reduce connections on Vercel to avoid pool exhaustion
       allowExitOnIdle: true,
       application_name: 'ipupy-tesoreria'
     });
@@ -171,7 +176,7 @@ export const execute = async <T extends QueryResultRow = QueryResultRow>(
       const client = await Promise.race([
         poolRef.connect(),
         new Promise<PoolClient>((_, reject) => {
-          setTimeout(() => reject(new Error('Pool connect timeout')), 8000);
+          setTimeout(() => reject(new Error('Pool connect timeout')), 15000);
         })
       ]);
 

@@ -1,19 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthContext } from "@/lib/auth-context";
-import { execute } from "@/lib/db";
+import { createClient } from "@/lib/supabase/server";
 import { setCORSHeaders } from "@/lib/cors";
 
-interface Fund {
-  id: number;
-  name: string;
-  description: string;
-  type: string;
-  current_balance: number;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-  created_by: string;
-}
 
 interface FundCreateInput {
   name: string;
@@ -30,61 +19,54 @@ interface FundUpdateInput extends Partial<FundCreateInput> {
 // GET /api/financial/funds - Get all funds
 async function handleGet(req: NextRequest) {
   try {
+    const supabase = await createClient();
     const { searchParams } = new URL(req.url);
     const includeInactive = searchParams.get("include_inactive") === "true";
     const type = searchParams.get("type");
 
-    let query = `
-      SELECT
-        id, name, description, type,
-        current_balance,
-        is_active, created_at, updated_at, created_by
-      FROM funds
-      WHERE 1=1
-    `;
-    const params: (string | number | boolean | null)[] = [];
-    let paramCount = 0;
+    // Build query for funds
+    let fundsQuery = supabase
+      .from('funds')
+      .select('*');
 
     if (!includeInactive) {
-      query += ` AND is_active = true`;
+      fundsQuery = fundsQuery.eq('is_active', true);
     }
 
     if (type) {
-      paramCount++;
-      query += ` AND type = $${paramCount}`;
-      params.push(type);
+      fundsQuery = fundsQuery.eq('type', type);
     }
 
-    query += ` ORDER BY is_active DESC, name ASC`;
+    const { data: funds, error: fundsError } = await fundsQuery.order('is_active', { ascending: false }).order('name');
 
-    const fundsResult = await execute<Fund>(query, params);
+    if (fundsError) throw fundsError;
 
-    // Calculate actual balances from transactions for each fund
-    const fundsWithBalances = await Promise.all(
-      fundsResult.rows.map(async (fund) => {
-        const balanceResult = await execute<{ balance: string }>(
-          `SELECT
-            COALESCE(SUM(amount_in) - SUM(amount_out), 0) as balance
-          FROM transactions
-          WHERE fund_id = $1`,
-          [fund.id]
-        );
+    // Get all transactions to calculate balances
+    const { data: transactions, error: txError } = await supabase
+      .from('transactions')
+      .select('fund_id, amount_in, amount_out');
 
-        const calculatedBalance = parseFloat(balanceResult.rows[0]?.balance || '0');
+    if (txError) throw txError;
 
-        return {
-          ...fund,
-          current_balance: calculatedBalance
-        };
-      })
-    );
+    // Calculate balances for each fund
+    const fundsWithBalances = (funds || []).map(fund => {
+      const fundTransactions = transactions?.filter(t => t.fund_id === fund.id) || [];
+      const balance = fundTransactions.reduce((sum, t) => {
+        return sum + (Number(t.amount_in) || 0) - (Number(t.amount_out) || 0);
+      }, 0);
 
-    // Calculate totals with actual balances
+      return {
+        ...fund,
+        current_balance: balance
+      };
+    });
+
+    // Calculate totals
     const totals = {
       total_funds: fundsWithBalances.length,
       active_funds: fundsWithBalances.filter(f => f.is_active).length,
       total_balance: fundsWithBalances.reduce((sum, f) => sum + Number(f.current_balance || 0), 0),
-      total_target: 0 // Remove target_amount as it doesn't exist
+      total_target: 0
     };
 
     const response = NextResponse.json({
@@ -126,37 +108,36 @@ async function handlePost(req: NextRequest) {
     }
 
     // Check for duplicate name
-    const existing = await execute(
-      `SELECT id FROM funds WHERE LOWER(name) = LOWER($1)`,
-      [body.name]
-    );
+    const supabase = await createClient();
+    const { data: existing } = await supabase
+      .from('funds')
+      .select('id')
+      .ilike('name', body.name);
 
-    if (existing.rows.length > 0) {
+    if (existing && existing.length > 0) {
       const response = NextResponse.json({ error: "A fund with this name already exists" }, { status: 409 });
       setCORSHeaders(response);
       return response;
     }
 
-    const result = await execute<Fund>(
-      `INSERT INTO funds (
-        name, description, type,
-        current_balance,
-        is_active, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING *`,
-      [
-        body.name,
-        body.description || "",
-        body.type || "general",
-        body.initial_balance || 0,
-        body.is_active !== false,
-        user.email
-      ]
-    );
+    const { data: newFund, error: insertError } = await supabase
+      .from('funds')
+      .insert({
+        name: body.name,
+        description: body.description || "",
+        type: body.type || "general",
+        current_balance: body.initial_balance || 0,
+        is_active: body.is_active !== false,
+        created_by: user.email
+      })
+      .select()
+      .single();
+
+    if (insertError) throw insertError;
 
     const response = NextResponse.json({
       success: true,
-      data: result.rows[0],
+      data: newFund,
       message: "Fund created successfully"
     }, { status: 201 });
 
@@ -194,66 +175,41 @@ async function handlePut(req: NextRequest) {
 
     const body: FundUpdateInput = await req.json();
 
-    // Build dynamic update query
-    const updates: string[] = [];
-    const values: (string | number | boolean | null)[] = [];
-    let paramCount = 0;
-
-    if (body.name !== undefined) {
-      paramCount++;
-      updates.push(`name = $${paramCount}`);
-      values.push(body.name);
-    }
-
-    if (body.description !== undefined) {
-      paramCount++;
-      updates.push(`description = $${paramCount}`);
-      values.push(body.description);
-    }
-
-    if (body.type !== undefined) {
-      paramCount++;
-      updates.push(`type = $${paramCount}`);
-      values.push(body.type);
-    }
-
-    if (body.current_balance !== undefined) {
-      paramCount++;
-      updates.push(`current_balance = $${paramCount}`);
-      values.push(body.current_balance);
-    }
-
-    if (body.is_active !== undefined) {
-      paramCount++;
-      updates.push(`is_active = $${paramCount}`);
-      values.push(body.is_active);
-    }
-
-    if (updates.length === 0) {
+    if (!body.name && !body.description && body.type === undefined &&
+        body.current_balance === undefined && body.is_active === undefined) {
       const response = NextResponse.json({ error: "No fields to update" }, { status: 400 });
       setCORSHeaders(response);
       return response;
     }
 
-    updates.push(`updated_at = CURRENT_TIMESTAMP`);
+    // Build update object for Supabase
+    const updateData: Record<string, unknown> = {};
+    if (body.name !== undefined) updateData.name = body.name;
+    if (body.description !== undefined) updateData.description = body.description;
+    if (body.type !== undefined) updateData.type = body.type;
+    if (body.current_balance !== undefined) updateData.current_balance = body.current_balance;
+    if (body.is_active !== undefined) updateData.is_active = body.is_active;
 
-    paramCount++;
-    values.push(fundId);
+    const supabase = await createClient();
+    const { data: updatedFund, error: updateError } = await supabase
+      .from('funds')
+      .update(updateData)
+      .eq('id', fundId)
+      .select()
+      .single();
 
-    const result = await execute<Fund>(
-      `UPDATE funds SET ${updates.join(", ")} WHERE id = $${paramCount} RETURNING *`,
-      values
-    );
-
-    if (result.rows.length === 0) {
-      const response = NextResponse.json({ error: "Fund not found" }, { status: 404 });
-      setCORSHeaders(response);
-      return response;
+    if (updateError) {
+      if (updateError.code === 'PGRST116') {
+        const response = NextResponse.json({ error: "Fund not found" }, { status: 404 });
+        setCORSHeaders(response);
+        return response;
+      }
+      throw updateError;
     }
 
     const response = NextResponse.json({
       success: true,
-      data: result.rows[0],
+      data: updatedFund,
       message: "Fund updated successfully"
     });
 
@@ -289,18 +245,25 @@ async function handleDelete(req: NextRequest) {
       return response;
     }
 
-    // Check if fund has transactions
-    const transactions = await execute<{ count: string }>(
-      `SELECT COUNT(*) as count FROM transactions WHERE fund_id = $1`,
-      [fundId]
-    );
+    const supabase = await createClient();
 
-    if (parseInt(transactions.rows[0].count) > 0) {
+    // Check if fund has transactions
+    const { data: transactions, error: txError } = await supabase
+      .from('transactions')
+      .select('id')
+      .eq('fund_id', fundId)
+      .limit(1);
+
+    if (txError) throw txError;
+
+    if (transactions && transactions.length > 0) {
       // Soft delete - just deactivate
-      await execute(
-        `UPDATE funds SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
-        [fundId]
-      );
+      const { error: updateError } = await supabase
+        .from('funds')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('id', fundId);
+
+      if (updateError) throw updateError;
 
       const response = NextResponse.json({
         success: true,
@@ -310,7 +273,12 @@ async function handleDelete(req: NextRequest) {
       return response;
     } else {
       // Hard delete - no transactions
-      await execute(`DELETE FROM funds WHERE id = $1`, [fundId]);
+      const { error: deleteError } = await supabase
+        .from('funds')
+        .delete()
+        .eq('id', fundId);
+
+      if (deleteError) throw deleteError;
 
       const response = NextResponse.json({
         success: true,

@@ -6,13 +6,6 @@ const publicRoutes = [
   "/login",
   "/auth/callback",
   "/api/auth/callback",
-  // Temporarily allow API access without auth for debugging
-  // TODO: Remove after fixing auth
-  "/api/financial/funds",
-  "/api/financial/transactions",
-  "/api/financial/fund-movements",
-  "/api/reports",
-  "/api/churches",
 ];
 
 export async function middleware(request: NextRequest) {
