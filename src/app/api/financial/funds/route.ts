@@ -7,22 +7,20 @@ interface Fund {
   id: number;
   name: string;
   description: string;
-  category: string;
-  initial_balance: number;
+  type: string;
   current_balance: number;
-  target_amount?: number;
-  active: boolean;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
+  created_by: string;
 }
 
 interface FundCreateInput {
   name: string;
   description?: string;
-  category?: string;
+  type?: string;
   initial_balance?: number;
-  target_amount?: number;
-  active?: boolean;
+  is_active?: boolean;
 }
 
 interface FundUpdateInput extends Partial<FundCreateInput> {
@@ -34,13 +32,13 @@ async function handleGet(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const includeInactive = searchParams.get("include_inactive") === "true";
-    const category = searchParams.get("category");
+    const type = searchParams.get("type");
 
     let query = `
       SELECT
-        id, name, description, category,
-        initial_balance, current_balance, target_amount,
-        active, created_at, updated_at
+        id, name, description, type,
+        current_balance,
+        is_active, created_at, updated_at, created_by
       FROM funds
       WHERE 1=1
     `;
@@ -48,30 +46,50 @@ async function handleGet(req: NextRequest) {
     let paramCount = 0;
 
     if (!includeInactive) {
-      query += ` AND active = true`;
+      query += ` AND is_active = true`;
     }
 
-    if (category) {
+    if (type) {
       paramCount++;
-      query += ` AND category = $${paramCount}`;
-      params.push(category);
+      query += ` AND type = $${paramCount}`;
+      params.push(type);
     }
 
-    query += ` ORDER BY active DESC, name ASC`;
+    query += ` ORDER BY is_active DESC, name ASC`;
 
-    const result = await execute<Fund>(query, params);
+    const fundsResult = await execute<Fund>(query, params);
 
-    // Calculate totals
+    // Calculate actual balances from transactions for each fund
+    const fundsWithBalances = await Promise.all(
+      fundsResult.rows.map(async (fund) => {
+        const balanceResult = await execute<{ balance: string }>(
+          `SELECT
+            COALESCE(SUM(amount_in) - SUM(amount_out), 0) as balance
+          FROM transactions
+          WHERE fund_id = $1`,
+          [fund.id]
+        );
+
+        const calculatedBalance = parseFloat(balanceResult.rows[0]?.balance || '0');
+
+        return {
+          ...fund,
+          current_balance: calculatedBalance
+        };
+      })
+    );
+
+    // Calculate totals with actual balances
     const totals = {
-      total_funds: result.rows.length,
-      active_funds: result.rows.filter(f => f.active).length,
-      total_balance: result.rows.reduce((sum, f) => sum + Number(f.current_balance || 0), 0),
-      total_target: result.rows.reduce((sum, f) => sum + Number(f.target_amount || 0), 0)
+      total_funds: fundsWithBalances.length,
+      active_funds: fundsWithBalances.filter(f => f.is_active).length,
+      total_balance: fundsWithBalances.reduce((sum, f) => sum + Number(f.current_balance || 0), 0),
+      total_target: 0 // Remove target_amount as it doesn't exist
     };
 
     const response = NextResponse.json({
       success: true,
-      data: result.rows,
+      data: fundsWithBalances,
       totals
     });
 
@@ -121,19 +139,17 @@ async function handlePost(req: NextRequest) {
 
     const result = await execute<Fund>(
       `INSERT INTO funds (
-        name, description, category,
-        initial_balance, current_balance, target_amount,
-        active, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        name, description, type,
+        current_balance,
+        is_active, created_by
+      ) VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *`,
       [
         body.name,
         body.description || "",
-        body.category || "general",
+        body.type || "general",
         body.initial_balance || 0,
-        body.initial_balance || 0, // current_balance starts equal to initial
-        body.target_amount || null,
-        body.active !== false,
+        body.is_active !== false,
         user.email
       ]
     );
@@ -195,10 +211,10 @@ async function handlePut(req: NextRequest) {
       values.push(body.description);
     }
 
-    if (body.category !== undefined) {
+    if (body.type !== undefined) {
       paramCount++;
-      updates.push(`category = $${paramCount}`);
-      values.push(body.category);
+      updates.push(`type = $${paramCount}`);
+      values.push(body.type);
     }
 
     if (body.current_balance !== undefined) {
@@ -207,16 +223,10 @@ async function handlePut(req: NextRequest) {
       values.push(body.current_balance);
     }
 
-    if (body.target_amount !== undefined) {
+    if (body.is_active !== undefined) {
       paramCount++;
-      updates.push(`target_amount = $${paramCount}`);
-      values.push(body.target_amount);
-    }
-
-    if (body.active !== undefined) {
-      paramCount++;
-      updates.push(`active = $${paramCount}`);
-      values.push(body.active);
+      updates.push(`is_active = $${paramCount}`);
+      values.push(body.is_active);
     }
 
     if (updates.length === 0) {
@@ -288,7 +298,7 @@ async function handleDelete(req: NextRequest) {
     if (parseInt(transactions.rows[0].count) > 0) {
       // Soft delete - just deactivate
       await execute(
-        `UPDATE funds SET active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+        `UPDATE funds SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
         [fundId]
       );
 

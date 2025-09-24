@@ -1,42 +1,32 @@
 import type { RawNumeric } from './api';
 import { toNumber } from './api';
 
-const toNullableNumber = (value: RawNumeric): number | null => {
-  if (value === null || value === undefined || value === '') {
-    return null;
-  }
-
-  const parsed = toNumber(value, Number.NaN);
-  return Number.isFinite(parsed) ? parsed : null;
-};
 
 export type RawFundRecord = {
   id: number;
   name: string;
   description: string;
-  category: string;
-  initial_balance: RawNumeric;
+  type: string;
   current_balance: RawNumeric;
-  target_amount: RawNumeric;
-  active: boolean;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
+  created_by: string;
 };
 
 export type FundRecord = {
   id: number;
   name: string;
   description: string;
-  category: string;
+  type: string;
   balances: {
-    initial: number;
     current: number;
-    target: number | null;
   };
   status: {
-    active: boolean;
+    isActive: boolean;
     createdAt: string;
     updatedAt: string;
+    createdBy: string;
   };
 };
 
@@ -44,16 +34,15 @@ export const normalizeFundRecord = (raw: RawFundRecord): FundRecord => ({
   id: raw.id,
   name: raw.name,
   description: raw.description,
-  category: raw.category,
+  type: raw.type,
   balances: {
-    initial: toNumber(raw.initial_balance, 0),
     current: toNumber(raw.current_balance, 0),
-    target: toNullableNumber(raw.target_amount),
   },
   status: {
-    active: raw.active,
+    isActive: raw.is_active,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
+    createdBy: raw.created_by,
   },
 });
 

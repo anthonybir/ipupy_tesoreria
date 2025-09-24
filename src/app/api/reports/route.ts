@@ -786,7 +786,23 @@ export async function POST(request: NextRequest) {
 
   try {
     const auth = await requireAuth(request);
-    const body = await request.json();
+
+    // Validate request body exists and parse JSON safely
+    let body: GenericRecord;
+    try {
+      const text = await request.text();
+      if (!text || text.trim() === '') {
+        throw new BadRequestError('Request body is empty');
+      }
+      body = JSON.parse(text) as GenericRecord;
+    } catch (jsonError) {
+      if (jsonError instanceof BadRequestError) {
+        throw jsonError;
+      }
+      console.error('JSON parsing error:', jsonError);
+      throw new BadRequestError('Invalid JSON in request body');
+    }
+
     const report = await handleCreateReport(body, auth);
     return jsonResponse({ success: true, report }, origin, 201);
   } catch (error) {
@@ -804,7 +820,23 @@ export async function PUT(request: NextRequest) {
   try {
     const auth = await requireAuth(request);
     const reportId = parseReportId(request.nextUrl.searchParams.get('id'));
-    const body = await request.json();
+
+    // Validate request body exists and parse JSON safely
+    let body: GenericRecord;
+    try {
+      const text = await request.text();
+      if (!text || text.trim() === '') {
+        throw new BadRequestError('Request body is empty');
+      }
+      body = JSON.parse(text) as GenericRecord;
+    } catch (jsonError) {
+      if (jsonError instanceof BadRequestError) {
+        throw jsonError;
+      }
+      console.error('JSON parsing error:', jsonError);
+      throw new BadRequestError('Invalid JSON in request body');
+    }
+
     const report = await handleUpdateReport(reportId, body, auth);
     return jsonResponse({ success: true, report }, origin);
   } catch (error) {

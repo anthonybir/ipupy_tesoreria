@@ -7,21 +7,21 @@ interface FundMovement {
   id: number;
   report_id: number;
   church_id: number;
-  fund_id: number;
-  amount: number;
-  type: "automatic" | "manual";
-  description: string;
+  fund_category_id: number;
+  monto: number;
+  tipo_movimiento: "automatic" | "manual";
+  concepto: string;
+  fecha_movimiento: string;
   created_at: string;
-  created_by: string;
 }
 
 interface FundMovementInput {
   report_id: number;
   church_id: number;
-  fund_id: number;
-  amount: number;
-  type?: "automatic" | "manual";
-  description?: string;
+  fund_category_id: number;
+  monto: number;
+  tipo_movimiento?: "automatic" | "manual";
+  concepto?: string;
 }
 
 // GET /api/financial/fund-movements - Get fund movements
@@ -31,7 +31,7 @@ async function handleGet(req: NextRequest) {
 
     const report_id = searchParams.get("report_id");
     const church_id = searchParams.get("church_id");
-    const fund_id = searchParams.get("fund_id");
+    const fund_category_id = searchParams.get("fund_category_id");
     const month = searchParams.get("month");
     const year = searchParams.get("year");
     const limit = searchParams.get("limit") || "100";
@@ -45,54 +45,77 @@ async function handleGet(req: NextRequest) {
 
     if (report_id) {
       filterValues.push(report_id);
-      filters.push(`fm.report_id = $${filterValues.length}`);
+      filters.push(`t.report_id = $${filterValues.length}`);
     }
 
     if (church_id) {
       filterValues.push(church_id);
-      filters.push(`fm.church_id = $${filterValues.length}`);
+      filters.push(`t.church_id = $${filterValues.length}`);
     }
 
-    if (fund_id) {
-      filterValues.push(fund_id);
-      filters.push(`fm.fund_id = $${filterValues.length}`);
+    if (fund_category_id) {
+      filterValues.push(fund_category_id);
+      filters.push(`t.fund_id = $${filterValues.length}`);
     }
 
     if (month && year) {
-      filterValues.push(month);
-      filters.push(`r.month = $${filterValues.length}`);
       filterValues.push(year);
-      filters.push(`r.year = $${filterValues.length}`);
+      filters.push(`EXTRACT(YEAR FROM t.date) = $${filterValues.length}`);
+      filterValues.push(month);
+      filters.push(`EXTRACT(MONTH FROM t.date) = $${filterValues.length}`);
+    } else if (year) {
+      filterValues.push(year);
+      filters.push(`EXTRACT(YEAR FROM t.date) = $${filterValues.length}`);
     }
 
-    const whereClause = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
+    const whereClause = filters.length > 0 ? ` AND ${filters.join(" AND ")}` : "";
 
+    // Query transactions table instead of empty fund_movements
     const listQuery = `
       SELECT
-        fm.*,
+        t.id,
+        t.date as fecha_movimiento,
+        t.church_id,
         c.name as church_name,
+        t.fund_id as fund_category_id,
         f.name as fund_name,
+        t.concept as concepto,
+        CASE
+          WHEN t.amount_in > 0 THEN t.amount_in
+          ELSE -t.amount_out
+        END as monto,
+        CASE
+          WHEN t.amount_in > 0 THEN 'ingreso'
+          ELSE 'egreso'
+        END as tipo_movimiento,
+        t.report_id,
         r.month as report_month,
-        r.year as report_year
-      FROM fund_movements fm
-      LEFT JOIN churches c ON fm.church_id = c.id
-      LEFT JOIN funds f ON fm.fund_id = f.id
-      LEFT JOIN reports r ON fm.report_id = r.id
-      ${whereClause}
-      ORDER BY fm.created_at DESC
+        r.year as report_year,
+        t.created_at,
+        t.created_by
+      FROM transactions t
+      LEFT JOIN churches c ON t.church_id = c.id
+      LEFT JOIN funds f ON t.fund_id = f.id
+      LEFT JOIN reports r ON t.report_id = r.id
+      WHERE 1=1
+    `;
+
+    // Update the final query with where clause
+    const finalQuery = listQuery + whereClause + `
+      ORDER BY t.created_at DESC
       LIMIT $${filterValues.length + 1}
       OFFSET $${filterValues.length + 2}
     `;
 
-    const result = await execute(listQuery, [...filterValues, limitNumber, offsetNumber]);
+    const result = await execute(finalQuery, [...filterValues, limitNumber, offsetNumber]);
 
     const totalsQuery = `
       SELECT
         COUNT(*) as total_count,
-        COALESCE(SUM(amount), 0) as total_amount
-      FROM fund_movements fm
-      LEFT JOIN reports r ON fm.report_id = r.id
-      ${whereClause}
+        COALESCE(SUM(CASE WHEN amount_in > 0 THEN amount_in ELSE -amount_out END), 0) as total_amount
+      FROM transactions t
+      LEFT JOIN reports r ON t.report_id = r.id
+      WHERE 1=1 ${whereClause}
     `;
 
     const totals = await execute<{ total_count: string; total_amount: string }>(totalsQuery, filterValues);
@@ -165,7 +188,7 @@ async function handlePost(req: NextRequest) {
 
         movement = movementRaw as FundMovementInput;
 
-        if (!movement.report_id || !movement.church_id || !movement.fund_id || !movement.amount) {
+        if (!movement.report_id || !movement.church_id || !movement.fund_category_id || !movement.monto) {
           errors.push({
             movement,
             error: "Missing required fields"
@@ -176,44 +199,43 @@ async function handlePost(req: NextRequest) {
         // Create fund movement record
         const result = await execute<FundMovement>(
           `INSERT INTO fund_movements (
-            report_id, church_id, fund_id,
-            amount, type, description, created_by
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+            report_id, church_id, fund_category_id,
+            monto, tipo_movimiento, concepto, fecha_movimiento
+          ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE)
           RETURNING *`,
           [
             movement.report_id,
             movement.church_id,
-            movement.fund_id,
-            movement.amount,
-            movement.type ?? "manual",
-            movement.description ?? "",
-            user.email || ""
+            movement.fund_category_id,
+            movement.monto,
+            movement.tipo_movimiento ?? "manual",
+            movement.concepto ?? ""
           ]
         );
 
-        // Create corresponding transaction
+        // Create corresponding transaction (using fund_category_id as fund_id for now)
         await execute(
           `INSERT INTO transactions (
             date, fund_id, church_id, report_id,
             concept, amount_in, amount_out, created_by
           ) VALUES (CURRENT_DATE, $1, $2, $3, $4, $5, 0, $6)`,
           [
-            movement.fund_id,
+            movement.fund_category_id,
             movement.church_id,
             movement.report_id,
-            movement.description ?? "Movimiento de fondo",
-            movement.amount,
+            movement.concepto ?? "Movimiento de fondo",
+            movement.monto,
             user.email || ""
           ]
         );
 
-        // Update fund balance
+        // Update fund balance (using fund_category_id as fund id)
         await execute(
           `UPDATE funds
            SET current_balance = current_balance + $1,
                updated_at = CURRENT_TIMESTAMP
            WHERE id = $2`,
-          [movement.amount, movement.fund_id]
+          [movement.monto, movement.fund_category_id]
         );
 
         results.push(result.rows[0]);
@@ -335,16 +357,15 @@ async function processReportMovements(reportId: number, userEmail: string) {
     if (report.diezmos && parseFloat(report.diezmos) > 0) {
       const diezmoMovement = await execute(
         `INSERT INTO fund_movements (
-          report_id, church_id, fund_id, amount, type, description, created_by
-        ) VALUES ($1, $2, $3, $4, 'automatic', $5, $6)
+          report_id, church_id, fund_category_id, monto, tipo_movimiento, concepto, fecha_movimiento
+        ) VALUES ($1, $2, $3, $4, 'automatic', $5, CURRENT_DATE)
         RETURNING *`,
         [
           reportId,
           report.church_id,
           fundMap["Diezmos"],
           report.diezmos,
-          `Diezmos - ${report.church_name} (${report.month}/${report.year})`,
-          userEmail
+          `Diezmos - ${report.church_name} (${report.month}/${report.year})`
         ]
       );
 
@@ -376,16 +397,15 @@ async function processReportMovements(reportId: number, userEmail: string) {
     if (report.ofrendas && parseFloat(report.ofrendas) > 0) {
       const ofrendaMovement = await execute(
         `INSERT INTO fund_movements (
-          report_id, church_id, fund_id, amount, type, description, created_by
-        ) VALUES ($1, $2, $3, $4, 'automatic', $5, $6)
+          report_id, church_id, fund_category_id, monto, tipo_movimiento, concepto, fecha_movimiento
+        ) VALUES ($1, $2, $3, $4, 'automatic', $5, CURRENT_DATE)
         RETURNING *`,
         [
           reportId,
           report.church_id,
           fundMap["Ofrendas"],
           report.ofrendas,
-          `Ofrendas - ${report.church_name} (${report.month}/${report.year})`,
-          userEmail
+          `Ofrendas - ${report.church_name} (${report.month}/${report.year})`
         ]
       );
 
@@ -417,16 +437,15 @@ async function processReportMovements(reportId: number, userEmail: string) {
     if (report.fondo_nacional && parseFloat(report.fondo_nacional) > 0) {
       const fondoMovement = await execute(
         `INSERT INTO fund_movements (
-          report_id, church_id, fund_id, amount, type, description, created_by
-        ) VALUES ($1, $2, $3, $4, 'automatic', $5, $6)
+          report_id, church_id, fund_category_id, monto, tipo_movimiento, concepto, fecha_movimiento
+        ) VALUES ($1, $2, $3, $4, 'automatic', $5, CURRENT_DATE)
         RETURNING *`,
         [
           reportId,
           report.church_id,
           fundMap["Fondo Nacional"],
           report.fondo_nacional,
-          `Fondo Nacional 10% - ${report.church_name} (${report.month}/${report.year})`,
-          userEmail
+          `Fondo Nacional 10% - ${report.church_name} (${report.month}/${report.year})`
         ]
       );
 
@@ -509,16 +528,16 @@ async function handleDelete(req: NextRequest) {
     // Delete the movement
     await execute(`DELETE FROM fund_movements WHERE id = $1`, [movementId]);
 
-    // Reverse the fund balance
+    // Reverse the fund balance (using fund_category_id)
     await execute(
       `UPDATE funds SET current_balance = current_balance - $1 WHERE id = $2`,
-      [mov.amount, mov.fund_id]
+      [mov.monto, mov.fund_category_id]
     );
 
     // Delete related transaction if exists
     await execute(
       `DELETE FROM transactions WHERE report_id = $1 AND fund_id = $2 AND amount_in = $3`,
-      [mov.report_id, mov.fund_id, mov.amount]
+      [mov.report_id, mov.fund_category_id, mov.monto]
     );
 
     const response = NextResponse.json({

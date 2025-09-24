@@ -36,19 +36,17 @@ type FundFormState = {
   id?: number;
   name: string;
   description: string;
-  category: string;
-  initialBalance: string;
-  targetAmount: string;
-  active: boolean;
+  type: string;
+  currentBalance: string;
+  isActive: boolean;
 };
 
 const defaultFormState: FundFormState = {
   name: '',
   description: '',
-  category: 'general',
-  initialBalance: '0',
-  targetAmount: '',
-  active: true,
+  type: 'general',
+  currentBalance: '0',
+  isActive: true,
 };
 export default function FundsView() {
   const [includeInactive, setIncludeInactive] = useState(false);
@@ -67,7 +65,7 @@ export default function FundsView() {
       if (!current) {
         return current;
       }
-      if (!includeInactive && !current.status.active) {
+      if (!includeInactive && !current.status.isActive) {
         return null;
       }
       return current;
@@ -87,11 +85,11 @@ export default function FundsView() {
         ),
       },
       {
-        id: 'category',
-        header: 'Categoría',
+        id: 'type',
+        header: 'Tipo',
         render: (fund: FundRecord) => (
           <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-600">
-            {fund.category}
+            {fund.type}
           </span>
         ),
       },
@@ -106,27 +104,17 @@ export default function FundsView() {
         ),
       },
       {
-        id: 'target',
-        header: 'Meta',
-        align: 'right' as const,
-        render: (fund: FundRecord) => (
-          <span className="text-sm text-slate-600">
-            {fund.balances.target ? formatCurrency(fund.balances.target) : '—'}
-          </span>
-        ),
-      },
-      {
         id: 'status',
         header: 'Estado',
         render: (fund: FundRecord) => (
           <span
             className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
-              fund.status.active
+              fund.status.isActive
                 ? 'bg-emerald-50 text-emerald-600'
                 : 'bg-slate-100 text-slate-500'
             }`}
           >
-            {fund.status.active ? 'Activo' : 'Inactivo'}
+            {fund.status.isActive ? 'Activo' : 'Inactivo'}
           </span>
         ),
       },
@@ -153,10 +141,9 @@ export default function FundsView() {
       id: fund.id,
       name: fund.name,
       description: fund.description,
-      category: fund.category,
-      initialBalance: String(fund.balances.initial),
-      targetAmount: fund.balances.target ? String(fund.balances.target) : '',
-      active: fund.status.active,
+      type: fund.type,
+      currentBalance: String(fund.balances.current),
+      isActive: fund.status.isActive,
     });
     setIsFormOpen(true);
   };
@@ -172,8 +159,6 @@ export default function FundsView() {
       return;
     }
 
-    const targetAmount = state.targetAmount ? Number(state.targetAmount) : undefined;
-
     try {
       if (formMode === 'create') {
         await fetchJson('/api/financial/funds', {
@@ -184,10 +169,9 @@ export default function FundsView() {
           body: JSON.stringify({
             name: state.name,
             description: state.description,
-            category: state.category,
-            initial_balance: Number(state.initialBalance) || 0,
-            target_amount: targetAmount ?? null,
-            active: state.active,
+            type: state.type,
+            initial_balance: Number(state.currentBalance) || 0,
+            is_active: state.isActive,
           }),
         });
         toast.success('Fondo creado correctamente');
@@ -200,10 +184,9 @@ export default function FundsView() {
           body: JSON.stringify({
             name: state.name,
             description: state.description,
-            category: state.category,
-            current_balance: Number(state.initialBalance) || 0,
-            target_amount: targetAmount ?? null,
-            active: state.active,
+            type: state.type,
+            current_balance: Number(state.currentBalance) || 0,
+            is_active: state.isActive,
           }),
         });
         toast.success('Fondo actualizado');
@@ -224,11 +207,11 @@ export default function FundsView() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          active: !fund.status.active,
+          is_active: !fund.status.isActive,
         }),
       });
       toast.success(
-        fund.status.active ? 'Fondo desactivado' : 'Fondo activado',
+        fund.status.isActive ? 'Fondo desactivado' : 'Fondo activado',
       );
       refreshFunds();
     } catch (error) {
@@ -508,8 +491,8 @@ function FundFormModal({ open, mode, data, onChange, onClose, onSubmit }: FundFo
                     <label className="flex flex-col gap-2 text-xs font-semibold text-slate-600">
                       Categoría
                       <select
-                        value={data.category}
-                        onChange={handleFieldChange('category')}
+                        value={data.type}
+                        onChange={handleFieldChange('type')}
                         className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                       >
                         <option value="general">General</option>
@@ -525,32 +508,19 @@ function FundFormModal({ open, mode, data, onChange, onClose, onSubmit }: FundFo
                         type="number"
                         min="0"
                         step="1"
-                        value={data.initialBalance}
-                        onChange={handleFieldChange('initialBalance')}
+                        value={data.currentBalance}
+                        onChange={handleFieldChange('currentBalance')}
                         className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                         placeholder="0"
                       />
                     </label>
                   </div>
 
-                  <label className="flex flex-col gap-2 text-xs font-semibold text-slate-600">
-                    Meta económica (opcional)
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={data.targetAmount}
-                      onChange={handleFieldChange('targetAmount')}
-                      className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                      placeholder="0"
-                    />
-                  </label>
-
                   <label className="inline-flex items-center gap-3 text-sm font-medium text-slate-600">
                     <input
                       type="checkbox"
-                      checked={data.active}
-                      onChange={handleFieldChange('active')}
+                      checked={data.isActive}
+                      onChange={handleFieldChange('isActive')}
                       className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
                     />
                     Fondo activo
@@ -648,7 +618,7 @@ function FundDetailsSheet({ fund, onClose, onEdit, onToggleActive, onDelete }: F
                         <dl className="grid grid-cols-1 gap-4 rounded-xl border border-slate-100 bg-slate-50/60 p-4 text-xs text-slate-600">
                           <div className="flex justify-between">
                             <dt>Categoría</dt>
-                            <dd className="font-semibold text-slate-800">{fund.category}</dd>
+                            <dd className="font-semibold text-slate-800">{fund.type}</dd>
                           </div>
                           <div className="flex justify-between">
                             <dt>Saldo actual</dt>
@@ -657,21 +627,9 @@ function FundDetailsSheet({ fund, onClose, onEdit, onToggleActive, onDelete }: F
                             </dd>
                           </div>
                           <div className="flex justify-between">
-                            <dt>Saldo inicial</dt>
-                            <dd className="font-semibold text-slate-800">
-                              {formatCurrency(fund.balances.initial)}
-                            </dd>
-                          </div>
-                          <div className="flex justify-between">
-                            <dt>Meta</dt>
-                            <dd className="font-semibold text-slate-800">
-                              {fund.balances.target ? formatCurrency(fund.balances.target) : 'Sin definir'}
-                            </dd>
-                          </div>
-                          <div className="flex justify-between">
                             <dt>Estado</dt>
                             <dd className="font-semibold text-slate-800">
-                              {fund.status.active ? 'Activo' : 'Inactivo'}
+                              {fund.status.isActive ? 'Activo' : 'Inactivo'}
                             </dd>
                           </div>
                         </dl>
@@ -703,7 +661,7 @@ function FundDetailsSheet({ fund, onClose, onEdit, onToggleActive, onDelete }: F
                             onClick={() => onToggleActive(fund)}
                             className="w-full rounded-full border border-indigo-500 px-4 py-2 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-50"
                           >
-                            {fund.status.active ? 'Desactivar' : 'Activar'}
+                            {fund.status.isActive ? 'Desactivar' : 'Activar'}
                           </button>
                           <button
                             type="button"
