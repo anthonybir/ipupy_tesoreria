@@ -1,17 +1,16 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import type { Session, User } from '@supabase/supabase-js';
+import type { User } from '@supabase/supabase-js';
 import { NextResponse, type NextRequest } from 'next/server';
 
 type UpdateSessionResult = {
   response: NextResponse;
-  session: Session | null;
   user: User | null;
 };
 
 const logPrefix = '[Supabase middleware]';
 
-
 export async function updateSession(request: NextRequest): Promise<UpdateSessionResult> {
+  // Create a response object that we'll modify with cookies
   const response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -23,7 +22,7 @@ export async function updateSession(request: NextRequest): Promise<UpdateSession
 
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error(`${logPrefix} Missing Supabase environment variables`);
-    return { response, session: null, user: null };
+    return { response, user: null };
   }
 
   const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
@@ -32,7 +31,7 @@ export async function updateSession(request: NextRequest): Promise<UpdateSession
         return request.cookies.get(name)?.value;
       },
       set(name: string, value: string, options: CookieOptions) {
-        // Only set cookies on the response
+        // Set cookie on the response to send to browser
         response.cookies.set({
           name,
           value,
@@ -40,7 +39,7 @@ export async function updateSession(request: NextRequest): Promise<UpdateSession
         });
       },
       remove(name: string, options: CookieOptions) {
-        // Only remove cookies from the response
+        // Remove cookie by setting empty value with maxAge 0
         response.cookies.set({
           name,
           value: '',
@@ -52,39 +51,28 @@ export async function updateSession(request: NextRequest): Promise<UpdateSession
   });
 
   try {
-    const {
-      data: { session },
-      error: sessionError,
-    } = await supabase.auth.getSession();
-
-    if (sessionError) {
-      console.warn(`${logPrefix} Error refreshing session`, sessionError.message);
-    }
-
-    if (session?.user) {
-      return {
-        response,
-        session,
-        user: session.user,
-      };
-    }
-
+    // IMPORTANT: Always use getUser() in middleware for security
+    // This makes a request to Supabase Auth to verify the token
     const {
       data: { user },
-      error: userError,
+      error,
     } = await supabase.auth.getUser();
 
-    if (userError) {
-      console.warn(`${logPrefix} Error fetching user after session lookup`, userError.message);
+    if (error) {
+      console.warn(`${logPrefix} Error getting user:`, error.message);
+      return { response, user: null };
+    }
+
+    if (user) {
+      console.log(`${logPrefix} User authenticated:`, user.email);
     }
 
     return {
       response,
-      session: session ?? null,
-      user: user ?? null,
+      user: user || null,
     };
   } catch (error) {
-    console.error(`${logPrefix} Unexpected error retrieving auth session`, error);
-    return { response, session: null, user: null };
+    console.error(`${logPrefix} Unexpected error:`, error);
+    return { response, user: null };
   }
 }

@@ -8,52 +8,42 @@ const publicRoutes = [
   "/api/auth/callback",
 ];
 
-const copyAuthCookies = (source: NextResponse, target: NextResponse) => {
-  source.cookies.getAll().forEach((cookie) => {
-    target.cookies.set(cookie);
-  });
-};
-
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  console.log("[Middleware] Processing path:", pathname);
+
   // Update user session and get user
-  const { response, user, session } = await updateSession(request);
+  const { response, user } = await updateSession(request);
 
   const userEmail = user?.email ?? "none";
-  console.log(
-    "[Middleware] Path:",
-    pathname,
-    "User:",
-    userEmail,
-    "Session expires:",
-    session?.expires_at ?? "unknown",
-  );
+  console.log("[Middleware] Path:", pathname, "User:", userEmail);
 
   // Allow public routes without auth check
   if (publicRoutes.some((route) => pathname.startsWith(route))) {
+    console.log("[Middleware] Public route - allowing access");
     return response;
   }
 
-  // Check if user is authenticated using the actual user object
+  // Check if user is authenticated
   if (!user) {
+    console.log("[Middleware] No user - redirecting to login");
+
     if (pathname.startsWith("/api/")) {
-      const unauthorized = NextResponse.json(
+      // For API routes, return 401
+      return NextResponse.json(
         { error: "Autenticación requerida" },
-        { status: 401 },
+        { status: 401 }
       );
-      copyAuthCookies(response, unauthorized);
-      return unauthorized;
     }
 
+    // For page routes, redirect to login
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("from", pathname);
-
-    const redirectResponse = NextResponse.redirect(loginUrl);
-    copyAuthCookies(response, redirectResponse);
-    return redirectResponse;
+    return NextResponse.redirect(loginUrl);
   }
 
+  console.log("[Middleware] User authenticated - allowing access");
   return response;
 }
 
