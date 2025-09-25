@@ -960,6 +960,49 @@ const getMetrics = () => {
 };
 ```
 
+## 2025 Updates · Manual Reports & Reconciliation
+
+### Schema Changes (Migration 021)
+| Columna | Tabla | Tipo | Descripción |
+|---------|-------|------|-------------|
+| `submission_source` | `reports` | `TEXT` (enum) | Origen normalizado del informe (`church_online`, `pastor_manual`, `admin_manual`, `admin_import`). |
+| `manual_report_source` | `reports` | `TEXT` (enum) | Medio por el cual llegó un informe manual (`paper`, `whatsapp`, `email`, `phone`, `in_person`, `other`). |
+| `manual_report_notes` | `reports` | `TEXT` | Detalles capturados por el tesorero (ej. “Pastor entregó en Congreso”). |
+| `entered_by` / `entered_at` | `reports` | `TEXT` / `TIMESTAMP` | Auditoría de quién registró el informe manual y cuándo. |
+
+> Las migraciones poblaron `submission_source` automáticamente según el histórico `submission_type`.
+
+### Report Submission Flow
+1. **Iglesia en línea** (`church_online`)
+   - `/api/reports` calcula 10% y distribuciones designadas.
+   - Requiere `aportantes` si `diezmos > 0`.
+2. **Tesorería (manual)** (`pastor_manual` / `admin_manual`)
+   - `ManualReportForm` envía `manual_report_source`, `manual_report_notes` y arreglo `aportantes`.
+   - El backend marca `estado = 'pendiente_admin'`, asigna `entered_by` y deja el reporte listo para aprobación.
+3. **Aprobación**
+   - `/api/admin/reports/approve` genera transacciones automáticas, marca `transactions_created = true` y graba `transactions_created_by`.
+
+Donor validation (tithers) es compartida entre la interfaz pastoral y el formulario manual mediante `replaceReportDonors`. Toda mutación elimina aportantes previos y recrea filas para garantizar integridad.
+
+### Libro Mensual Command Center
+- **Procesar informes**: Query `useAdminReports` + `approveReport`; usa conexión vía pool (`execute`) para evitar restricciones RLS y mostrar importaciones heredadas.
+- **Transacciones externas**: `ExternalTransactionForm` publica a `/api/admin/transactions`; la tabla muestra últimos 100 movimientos manuales.
+- **Conciliación**: `/api/admin/reconciliation` recalcula balances vs. `funds.current_balance`, etiqueta `balanced`/`review` y expone `last_transaction`.
+
+### Reconciliation Transactions (2024-12-31)
+Para igualar los saldos oficiales:
+```sql
+INSERT INTO transactions (fund_id, concept, amount_in, amount_out, date, created_by)
+VALUES
+  -- ejemplo APY
+  (6, 'Ajuste de saldo - Reconciliación Excel', 385000, 0, '2024-12-31', 'system-reconciliation'),
+  -- resto de fondos...
+;
+```
+Después de insertar, se ejecuta `UPDATE funds SET current_balance = ...` para recalcular saldos. Estos movimientos aparecen en el Libro Diario como `manual` y pueden filtrarse usando `created_by`.
+
+> El script completo de ajustes se documenta en `docs/planning/2024-12-31_reconciliation.md` para replicarlo en staging o producción cuando sea necesario.
+
 ## Recursos y Referencias
 
 ### Documentación Técnica
@@ -1012,6 +1055,6 @@ Esta guía proporciona todo lo necesario para contribuir efectivamente al Sistem
 
 ---
 
-**Última actualización**: Diciembre 2024
-**Versión**: 2.0.0
+**Última actualización**: Septiembre 2025
+**Versión**: 3.0.1
 **Autor**: Equipo Técnico IPU PY

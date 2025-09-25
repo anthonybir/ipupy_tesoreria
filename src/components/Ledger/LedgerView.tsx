@@ -1,2 +1,2 @@
-// Re-export the new Church Ledger View
-export { default } from './ChurchLedgerView';
+export { LibroMensualTabs as default } from '@/components/LibroMensual/LibroMensualTabs';
+export { default as ChurchLedgerView } from './ChurchLedgerView';

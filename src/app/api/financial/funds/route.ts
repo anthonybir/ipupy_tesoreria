@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthContext } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/server";
 import { setCORSHeaders } from "@/lib/cors";
+import { fetchFundBalances } from "@/lib/db-admin";
 
 
 interface FundCreateInput {
@@ -19,53 +20,33 @@ interface FundUpdateInput extends Partial<FundCreateInput> {
 // GET /api/financial/funds - Get all funds
 async function handleGet(req: NextRequest) {
   try {
-    const supabase = await createClient();
     const { searchParams } = new URL(req.url);
     const includeInactive = searchParams.get("include_inactive") === "true";
     const type = searchParams.get("type");
 
-    // Build query for funds
-    let fundsQuery = supabase
-      .from('funds')
-      .select('*');
+    const fundRows = await fetchFundBalances({ includeInactive, type });
 
-    if (!includeInactive) {
-      fundsQuery = fundsQuery.eq('is_active', true);
-    }
+    const fundsWithBalances = fundRows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      type: row.type,
+      current_balance: row.calculated_balance,
+      is_active: row.is_active,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      created_by: row.created_by,
+      total_in: row.total_in,
+      total_out: row.total_out
+    }));
 
-    if (type) {
-      fundsQuery = fundsQuery.eq('type', type);
-    }
+    const totalBalance = fundRows.reduce((sum, row) => sum + Number(row.calculated_balance || 0), 0);
+    const activeFunds = fundRows.filter((row) => row.is_active).length;
 
-    const { data: funds, error: fundsError } = await fundsQuery.order('is_active', { ascending: false }).order('name');
-
-    if (fundsError) throw fundsError;
-
-    // Get all transactions to calculate balances
-    const { data: transactions, error: txError } = await supabase
-      .from('transactions')
-      .select('fund_id, amount_in, amount_out');
-
-    if (txError) throw txError;
-
-    // Calculate balances for each fund
-    const fundsWithBalances = (funds || []).map(fund => {
-      const fundTransactions = transactions?.filter(t => t.fund_id === fund.id) || [];
-      const balance = fundTransactions.reduce((sum, t) => {
-        return sum + (Number(t.amount_in) || 0) - (Number(t.amount_out) || 0);
-      }, 0);
-
-      return {
-        ...fund,
-        current_balance: balance
-      };
-    });
-
-    // Calculate totals
     const totals = {
-      total_funds: fundsWithBalances.length,
-      active_funds: fundsWithBalances.filter(f => f.is_active).length,
-      total_balance: fundsWithBalances.reduce((sum, f) => sum + Number(f.current_balance || 0), 0),
+      total_funds: fundRows.length,
+      active_funds: activeFunds,
+      total_balance: totalBalance,
       total_target: 0
     };
 

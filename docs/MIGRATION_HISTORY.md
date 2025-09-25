@@ -1,6 +1,29 @@
-# Historial de Consolidación de Funciones - IPU PY Tesorería
+# Historial de Migraciones y Consolidaciones - IPU PY Tesorería
 
-## Resumen Ejecutivo
+## 2025-09-25 · Manual Report Audit Trail & Fund Reconciliation
+
+### Migration 021 · Manual Report Metadata
+- **Objetivo**: permitir que los tesoreros registren informes entregados en papel/WhatsApp y preservar una auditoría completa.
+- **Tabla afectada**: `reports`
+- **Columnas nuevas**:
+  - `submission_source` (`pastor_manual`, `church_online`, `admin_import`, `admin_manual`) con `DEFAULT 'church_online'`.
+  - `manual_report_source` (`paper`, `whatsapp`, `email`, `phone`, `in_person`, `other`).
+  - `manual_report_notes` (`TEXT`).
+  - `entered_by` (`TEXT`) y `entered_at` (`TIMESTAMP`).
+- **Backfill**: se normalizó la columna heredada `submission_type` para poblar `submission_source` en registros históricos.
+- **Uso**: el API `/api/reports` establece automáticamente estos campos según el rol del actor y el origen del documento.
+
+### Ajuste de saldos 2024-12-31
+- **Contexto**: el saldo total de fondos nacionales debía coincidir con la planilla oficial (`Gs. 18.840.572`).
+- **Acción**: se registraron 9 transacciones de conciliación con `created_by = 'system-reconciliation'` el **31/12/2024**.
+- **Impacto**: todos los fondos (APY, Caballeros, Damas, General, IBA, Lazos de Amor, Misión Posible, Misiones, Niños) ahora reflejan exactamente los saldos del libro Excel.
+- **Auditoría**: el dashboard de conciliación marca estos movimientos como manuales y mantiene el historial previo.
+
+---
+
+## 2024-09 · Consolidación de Funciones Serverless
+
+### Resumen Ejecutivo
 
 El Sistema de Tesorería IPU PY experimentó una **consolidación exitosa de 25 funciones a 10** para cumplir con los límites del plan Vercel Hobby, manteniendo toda la funcionalidad y mejorando la eficiencia operacional.
 

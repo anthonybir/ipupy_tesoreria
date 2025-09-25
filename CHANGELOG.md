@@ -1,5 +1,24 @@
 # CHANGELOG
 
+## [3.0.1] - 2025-09-25
+
+### Treasury Admin Enhancements & Reconciliation
+
+#### ✨ Features
+- **Manual Report Entry for Treasurers**: Admins can capture paper/WhatsApp submissions with full donor breakdown, source tracking, and automatic status `pendiente_admin`.
+- **Libro Mensual Command Center**: Three coordinated tabs (Procesar informes, Transacciones externas, Conciliación) streamline approvals, external postings, and balance audits.
+- **Enhanced Reconciliation Dashboard**: Fund discrepancies vs. ledger are surfaced with status tags, last-movement metadata, and fund filters.
+
+#### 🔧 Fixes & Improvements
+- **Fund Balance Reset**: Added December 31, 2024 reconciliation transactions aligning all national funds with the official saldos (Gs. 18.840.572 net).
+- **RLS-safe Admin Queries**: Libro Mensual and admin endpoints fetch data via the pooled connection, ensuring legacy imports remain visible to treasury roles.
+- **Validation Parity**: Manual reports now enforce aportante identity + amount checks matching the pastor portal, preventing orphaned diezmo totals.
+
+#### 📚 Documentation
+- Updated developer, API, and user guides to cover the manual workflow, donor requirements, reconciliation steps, and new schema fields (`submission_source`, `manual_report_*`, `entered_*`).
+
+---
+
 ## [3.0.0] - 2025-09-23
 
 ### Major Release: Complete Architecture Migration to Next.js 15 + Supabase

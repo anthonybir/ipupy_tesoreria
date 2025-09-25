@@ -581,12 +581,21 @@ const extractReportPayload = (data: GenericRecord) => {
 };
 
 const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
+  // Check if user is admin/super_admin
+  const isAdminRole = auth.role === 'admin' || auth.role === 'super_admin';
+
   const scopedChurchId = auth.role === 'church'
     ? parseRequiredChurchId(auth.churchId)
     : parseRequiredChurchId(data.church_id);
 
+  // Church users can only submit for their own church
   if (auth.role === 'church' && data.church_id && parseRequiredChurchId(data.church_id) !== scopedChurchId) {
     throw new BadRequestError('No puede registrar informes para otra iglesia');
+  }
+
+  // Admin users can submit for any church
+  if (!isAdminRole && auth.role !== 'church') {
+    throw new BadRequestError('No tiene permisos para crear informes');
   }
 
   const reportMonth = parseRequiredMonth(data.month);
@@ -650,10 +659,34 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
   const fotoInforme = await saveBase64Attachment(attachments?.summary, `${attachmentPrefix}-resumen`);
   const fotoDeposito = await saveBase64Attachment(attachments?.deposit, `${attachmentPrefix}-deposito`);
 
-  const submissionType = data.submission_type || (auth.role === 'church' ? 'online' : 'manual');
+  const isChurchSubmission = auth.role === 'church';
+  const isAdminSubmission = isAdminRole;
+
+  // Determine submission source based on role and data
+  let submissionSource = 'church_online';
+  if (isAdminSubmission && data.submission_source) {
+    submissionSource = String(data.submission_source); // Allow admin to specify source
+  } else if (isAdminSubmission && data.manual_report_source) {
+    submissionSource = 'pastor_manual'; // Admin entering on behalf of pastor
+  } else if (isAdminSubmission) {
+    submissionSource = 'admin_manual'; // Admin manual entry
+  } else if (isChurchSubmission) {
+    submissionSource = 'church_online'; // Church online submission
+  }
+
+  const submissionType = data.submission_type || (isChurchSubmission ? 'online' : 'manual');
   const submittedBy = auth.email || data.submitted_by || null;
   const submittedAt = new Date();
-  const estado = data.estado || 'pendiente';
+
+  // For admin manual entries on behalf of pastors, default to pendiente_admin
+  const initialEstado = data.estado ?? (
+    isChurchSubmission ? 'pendiente_admin' :
+    (submissionSource === 'pastor_manual' ? 'pendiente_admin' : 'importado_excel')
+  );
+
+  // Track who entered manual reports
+  const enteredBy = (isAdminSubmission && submissionSource !== 'admin_import') ? auth.email : null;
+  const enteredAt = enteredBy ? new Date() : null;
 
   const result = await execute(
     `
@@ -667,7 +700,8 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
         ofrendas_directas_misiones, lazos_amor, mision_posible, aporte_caballeros, apy, instituto_biblico,
         numero_deposito, fecha_deposito, monto_depositado,
         asistencia_visitas, bautismos_agua, bautismos_espiritu, observaciones, estado,
-        foto_informe, foto_deposito, submission_type, submitted_by, submitted_at
+        foto_informe, foto_deposito, submission_type, submitted_by, submitted_at,
+        submission_source, manual_report_source, manual_report_notes, entered_by, entered_at
       ) VALUES (
         $1, $2, $3,
         $4, $5, $6, $7, $8,
@@ -678,7 +712,8 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
         $24, $25, $26, $27, $28, $29,
         $30, $31, $32,
         $33, $34, $35, $36, $37,
-        $38, $39, $40, $41, $42
+        $38, $39, $40, $41, $42,
+        $43, $44, $45, $46, $47
       )
       RETURNING *
     `,
@@ -719,26 +754,50 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
       toIntOrZero(data.bautismos_agua),
       toIntOrZero(data.bautismos_espiritu),
       data.observaciones || '',
-      estado,
+      initialEstado,
       fotoInforme,
       fotoDeposito,
       submissionType,
       submittedBy,
-      submittedAt
+      submittedAt,
+      submissionSource,
+      data.manual_report_source || null,
+      data.manual_report_notes || null,
+      enteredBy,
+      enteredAt
     ]
   );
 
   const report = result.rows[0];
-  await recordReportStatus(Number(report.id), null, String(report.estado), auth.email || "");
-  await queueReportNotification(report, auth.email);
 
-  await createReportTransactions(report, {
-    totalEntradas: totals.totalEntradas,
-    fondoNacional: totals.fondoNacional,
-    honorariosPastoral: totals.honorariosPastoral,
-    gastosOperativos: totals.gastosOperativos,
-    fechaDeposito: totals.fechaDeposito || (typeof data.fecha_deposito === 'string' ? data.fecha_deposito : null)
-  }, designatedForTransactions);
+  await recordReportStatus(Number(report.id), null, String(report.estado), auth.email || "");
+
+  const shouldAutoGenerateTransactions = !isChurchSubmission && String(report.estado) === 'procesado';
+
+  if (shouldAutoGenerateTransactions) {
+    await createReportTransactions(report, {
+      totalEntradas: totals.totalEntradas,
+      fondoNacional: totals.fondoNacional,
+      honorariosPastoral: totals.honorariosPastoral,
+      gastosOperativos: totals.gastosOperativos,
+      fechaDeposito: totals.fechaDeposito || (typeof data.fecha_deposito === 'string' ? data.fecha_deposito : null)
+    }, designatedForTransactions);
+
+    await execute(
+      `
+        UPDATE reports
+        SET transactions_created = TRUE,
+            transactions_created_at = NOW(),
+            transactions_created_by = $1
+        WHERE id = $2
+      `,
+      [auth.email || 'system', report.id]
+    );
+
+    await queueReportNotification(report, auth.email, 'processed');
+  } else {
+    await queueReportNotification(report, auth.email, 'submission');
+  }
 
   await replaceReportDonors(Number(report.id), scopedChurchId, donorRows);
 
@@ -878,16 +937,25 @@ const handleUpdateReport = async (
     ? toNumber(data.monto_depositado)
     : toNumber(existing.monto_depositado ?? totals.fondoNacional + totals.totalDesignados);
 
-  const submissionType = data.submission_type || existing.submission_type || (auth.role === 'church' ? 'online' : 'manual');
-  const estado = data.estado || existing.estado || 'pendiente';
+  const isChurchUpdate = auth.role === 'church';
+  const submissionType = data.submission_type || existing.submission_type || (isChurchUpdate ? 'online' : 'manual');
+
+  let estado = data.estado || existing.estado || (isChurchUpdate ? 'pendiente_admin' : 'importado_excel');
   const previousStatus = existing.estado;
+
+  if (isChurchUpdate) {
+    estado = 'pendiente_admin';
+  }
 
   let processedBy = existing.processed_by;
   let processedAt = existing.processed_at ? new Date(String(existing.processed_at)) : null;
 
-  if (estado === 'procesado' && previousStatus !== 'procesado') {
+  if (estado === 'procesado') {
     processedBy = auth.email || processedBy || null;
     processedAt = new Date();
+  } else if (previousStatus === 'procesado' && estado !== 'procesado') {
+    processedBy = null;
+    processedAt = null;
   }
 
   const updatedResult = await execute(
@@ -986,18 +1054,46 @@ const handleUpdateReport = async (
     await replaceReportDonors(reportId, existing.church_id, donorRows);
   }
 
+  const existingTransactionsCreated = Boolean(existing.transactions_created);
+  const shouldGenerateTransactions = existingTransactionsCreated || estado === 'procesado';
+
   await resetAutomaticTransactions(reportId);
-  await createReportTransactions(
-    { ...existing, ...updatedReport },
-    {
-      totalEntradas: totals.totalEntradas,
-      fondoNacional: totals.fondoNacional,
-      honorariosPastoral: totals.honorariosPastoral,
-      gastosOperativos: totals.gastosOperativos,
-      fechaDeposito: totals.fechaDeposito || (typeof data.fecha_deposito === 'string' ? data.fecha_deposito : existing.fecha_deposito || null)
-    },
-    designatedForTransactions
-  );
+
+  if (shouldGenerateTransactions) {
+    await createReportTransactions(
+      { ...existing, ...updatedReport },
+      {
+        totalEntradas: totals.totalEntradas,
+        fondoNacional: totals.fondoNacional,
+        honorariosPastoral: totals.honorariosPastoral,
+        gastosOperativos: totals.gastosOperativos,
+        fechaDeposito: totals.fechaDeposito || (typeof data.fecha_deposito === 'string' ? data.fecha_deposito : existing.fecha_deposito || null)
+      },
+      designatedForTransactions
+    );
+
+    await execute(
+      `
+        UPDATE reports
+        SET transactions_created = TRUE,
+            transactions_created_at = NOW(),
+            transactions_created_by = $1
+        WHERE id = $2
+      `,
+      [auth.email || existing.transactions_created_by || 'system', reportId]
+    );
+  } else {
+    await execute(
+      `
+        UPDATE reports
+        SET transactions_created = FALSE,
+            transactions_created_at = NULL,
+            transactions_created_by = NULL
+        WHERE id = $1
+      `,
+      [reportId]
+    );
+  }
 
   await recordReportStatus(reportId, String(previousStatus), String(updatedReport.estado), auth.email || "");
   if (previousStatus !== updatedReport.estado && updatedReport.estado === 'procesado') {

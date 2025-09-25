@@ -188,24 +188,100 @@ Obtiene reportes financieros mensuales.
 ```
 
 #### POST `/api/reports`
-Crea un nuevo reporte mensual.
+Crea un nuevo reporte mensual (desde iglesias o cargado manualmente por el tesorero nacional).
 
 **Autorización**: Requiere rol `treasurer`, `church_admin`, `admin`, o `super_admin`
 
-**Request Body:**
+**Request Body (ejemplo iglesia en línea):**
 ```json
 {
-  "church_id": 1,
-  "month": 9,
+  "church_id": 12,
+  "month": 8,
   "year": 2025,
-  "diezmos": 5000000,
-  "ofrendas": 3000000,
-  "numero_deposito": "DEP-001",
-  "fecha_deposito": "2025-09-15"
+  "diezmos": 4500000,
+  "ofrendas": 2350000,
+  "misiones": 600000,
+  "lazos_amor": 150000,
+  "mision_posible": 120000,
+  "apy": 80000,
+  "iba": 55000,
+  "caballeros": 110000,
+  "damas": 90000,
+  "jovenes": 65000,
+  "ninos": 45000,
+  "servicios": 320000,
+  "energia_electrica": 280000,
+  "agua": 95000,
+  "recoleccion_basura": 55000,
+  "mantenimiento": 110000,
+  "materiales": 45000,
+  "otros_gastos": 25000,
+  "numero_deposito": "DEP-0825-001",
+  "fecha_deposito": "2025-08-28",
+  "aportantes": [
+    { "first_name": "María", "last_name": "Gómez", "document": "5123456", "amount": 2500000 },
+    { "first_name": "Carlos", "last_name": "López", "document": "4022333", "amount": 2000000 }
+  ]
 }
 ```
 
-*Nota: El fondo_nacional se calcula automáticamente como 10% del total*
+**Request Body (ejemplo tesorero nacional cargando informe manual):**
+```json
+{
+  "church_id": 7,
+  "month": 7,
+  "year": 2025,
+  "diezmos": 3800000,
+  "ofrendas": 2100000,
+  "otros": 500000,
+  "misiones": 450000,
+  "manual_report_source": "whatsapp",
+  "manual_report_notes": "Foto de informe enviada por Pr. Duarte",
+  "aportantes": [
+    { "first_name": "Lucía", "last_name": "Medina", "document": "1234567", "amount": 1800000 },
+    { "first_name": "Pedro", "last_name": "Vera", "document": "", "amount": 2000000 }
+  ],
+  "submission_source": "pastor_manual"
+}
+```
+
+**Campos calculados automáticamente**
+- `fondo_nacional` → 10% de (diezmos + ofrendas)
+- `honorarios_pastoral` → ingreso neto restante después de designados, gastos y 10%
+- `total_designado`, `total_operativo`, `total_salidas_calculadas`, `saldo_mes`
+- `submission_source`, `manual_report_source`, `entered_by`, `entered_at` se establecen según el rol autenticado si no se envían explícitamente.
+
+**Validaciones clave**
+- Si `diezmos > 0`, el arreglo `aportantes` debe incluir al menos un registro con `amount > 0` y la suma debe coincidir (±1 Gs) con el total de diezmos.
+- Cada aportante debe tener al menos nombre, apellido o documento informado.
+- Admins pueden registrar fuentes manuales (`paper`, `whatsapp`, etc.) para auditar la recepción.
+
+**Response (parcial):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": 812,
+    "church_id": 7,
+    "month": 7,
+    "year": 2025,
+    "estado": "pendiente_admin",
+    "submission_source": "pastor_manual",
+    "manual_report_source": "whatsapp",
+    "manual_report_notes": "Foto de informe enviada por Pr. Duarte",
+    "entered_by": "administracion@ipupy.org.py",
+    "entered_at": "2025-09-25T02:41:33.421Z",
+    "totals": {
+      "totalEntradas": 6400000,
+      "fondoNacional": 590000,
+      "honorariosPastoral": 1850000,
+      "totalDesignado": 450000,
+      "totalOperativo": 865000,
+      "saldoMes": 0
+    }
+  }
+}
+```
 
 #### PUT `/api/reports`
 Actualiza un reporte existente.

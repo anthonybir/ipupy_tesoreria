@@ -4,6 +4,16 @@
 
 Esta guía está diseñada para tesoreros, pastores y administradores de las iglesias de la **Iglesia Pentecostal Unida del Paraguay** que utilizarán el sistema de tesorería centralizado.
 
+### Tabla de Contenidos
+- [Acceso al Sistema](#acceso-al-sistema)
+- [Dashboard Principal](#dashboard-principal)
+- [Gestión de Iglesias](#gestión-de-iglesias)
+- [Sistema de Reportes Mensuales](#sistema-de-reportes-mensuales)
+- [Libro Mensual – Centro de Control](#libro-mensual--centro-de-control)
+- [Registrar Informe Manual (Tesorería Nacional)](#registrar-informe-manual-tesorería-nacional)
+- [Conciliación de Fondos](#conciliación-de-fondos)
+- [Preguntas Frecuentes](#preguntas-frecuentes)
+
 ## Acceso al Sistema
 
 ### 🌐 URL del Sistema
@@ -85,112 +95,102 @@ Al ingresar verá:
 
 ## Sistema de Reportes Mensuales
 
-### 📄 Crear Nuevo Reporte
+### 📄 Crear Nuevo Reporte (Portal de Iglesias)
 
-#### Paso 1: Seleccionar Iglesia y Período
-1. Menú → "Reportes" → "Nuevo Reporte"
-2. Seleccionar iglesia de la lista
-3. Seleccionar mes y año
-4. El sistema verificará si ya existe un reporte
+1. Menú → `Reportes` → `Nuevo Reporte`.
+2. Selecciona tu iglesia, mes y año. El sistema bloqueará meses que ya tienen informe aprobado.
+3. Completa los campos de ingresos (diezmos, ofrendas, departamentos, anexos y otros). Todo se registra en guaraníes.
+4. Declara las ofrendas designadas (Misiones, Lazos de Amor, Misión Posible, APY, IBA, Caballeros, Damas, Jóvenes, Niños). Estas cifras pasan 100% al nivel nacional y se reflejan en la sección de salidas automáticamente.
+5. Registra los gastos operativos (energía eléctrica, agua, basura, servicios, mantenimiento, materiales, otros gastos). No es necesario escribir el honorario pastoral: el sistema lo calcula como el remanente para que el saldo del mes sea cero.
+6. Ingresa datos del depósito (número, fecha y monto). El monto debe coincidir con el 10% nacional + ofrendas designadas transferidas.
+7. Adjunta fotos (opcional pero recomendado): resumen firmado y comprobante de depósito.
+8. Completa estadísticas pastorales (asistencia, bautismos) y observaciones.
+9. Revisa el panel "Resumen Calculado". Si `Saldo del Mes` aparece en verde (Gs. 0), el informe está balanceado.
+10. Presiona `Enviar`. El estado inicial será `pendiente_admin` y la tesorería nacional recibirá una notificación.
 
-#### Paso 2: Entradas del Mes
-Complete todos los campos en **Guaraníes**:
+### 🧾 Registro de Aportantes (Diezmos)
+- Botón `Agregar aportante` para cada donante.
+- Se exige al menos uno cuando `diezmos > 0`.
+- La suma de los montos debe coincidir exactamente con el total de diezmos (tolerancia ±1 Gs para redondeo).
+- Se debe informar **nombre** o **apellido** o **documento** por aportante.
 
-**Ingresos Principales**
-- **Diezmos**: Diezmos regulares de miembros
-- **Ofrendas**: Ofrendas generales de cultos
-- **Anexos**: Ingresos de obras anexas
+### Validaciones Automáticas
+- 10% nacional calculado sobre `diezmos + ofrendas`.
+- Honorario pastoral = ingresos totales – (diezmo nacional + designados + gastos operativos).
+- No se permite saldo negativo o diferencia entre aportantes y diezmos.
+- Se bloquean reportes duplicados por iglesia/mes/año.
 
-**Departamentos de la Iglesia**
-- **Caballeros**: Aportes del departamento masculino
-- **Damas**: Aportes del departamento femenino
-- **Jóvenes**: Aportes del departamento juvenil
-- **Niños**: Aportes del departamento infantil
+### Estados del Reporte
+| Estado | Quién lo establece | Significado |
+|--------|-------------------|-------------|
+| `pendiente_admin` | Iglesia / Tesorería | Informe listo para revisión nacional. |
+| `procesado` | Tesorería | Aprobado y con transacciones generadas. |
+| `rechazado_admin` | Tesorería | Requiere correcciones; se incluye comentario. |
+| `importado_excel` | Script | Registros históricos migrados. |
 
-**Otros Ingresos**
-- **Otros**: Ingresos especiales o extraordinarios
-
-> 💡 **Tip**: El sistema calculará automáticamente el "Total de Entradas"
-
-#### Paso 3: Salidas del Mes
-
-**Honorarios Pastorales**
-- **Monto**: Cantidad pagada al pastor
-- **Número de Factura**: Factura legal requerida
-- **RUC del Pastor**: Verificación automática
-
-**Servicios Básicos**
-- **Energía Eléctrica**: Factura de ANDE
-- **Agua**: Factura de ESSAP o cooperativa
-- **Recolección de Basura**: Servicio municipal
-
-**Otros Gastos**
-- **Otros Gastos**: Gastos operativos diversos
-
-> ⚠️ **Importante**: Todos los gastos requieren comprobantes legales
-
-#### Paso 4: Ofrendas Directas Fondo Nacional
-
-Estas ofrendas van **100% al Fondo Nacional**:
-- **Misiones**: Ofrenda para misiones mundiales
-- **Lazos de Amor**: Ayuda social
-- **Misión Posible**: Proyectos evangelísticos
-- **Aporte Caballeros**: Contribución especial masculina
-- **APY**: Apoyo a pastores y esposas
-- **Instituto Bíblico**: Educación ministerial
-- **Diezmo Pastoral**: Diezmo del pastor
-
-#### Paso 5: Existencia en Caja
-
-**Balance Anterior**
-- **Saldo Mes Anterior**: Dinero disponible del mes pasado
-
-**Entrada Local**
-- El sistema calcula automáticamente:
-- Total Entradas - Fondo Nacional (10%) = Entrada Iglesia Local
-
-**Saldo Final**
-- Automático: Saldo Anterior + Entrada Local - Total Salidas
-
-#### Paso 6: Depósito Bancario
-
-**Información del Depósito**
-- **Fecha de Depósito**: Cuándo se depositó el fondo nacional
-- **Número de Depósito**: Número del comprobante bancario
-- **Monto Depositado**: Debe coincidir con el fondo nacional
-
-> 🏦 **Cuenta Oficial**: Banco Nacional de Fomento - Cuenta IPU PY Nacional
-
-#### Paso 7: Asistencias y Bautismos
-
-**Estadísticas del Mes**
-- **Asistencia de Visitas**: Promedio de visitantes
-- **Bautismos en Agua**: Cantidad de bautismos
-- **Bautismos del Espíritu Santo**: Cantidad de bautismos
-
-#### Paso 8: Archivos y Observaciones
-
-**Documentos de Respaldo**
-- **Foto del Informe**: Subir foto del reporte físico
-- **Foto del Depósito**: Subir comprobante bancario
-- **Observaciones**: Comentarios adicionales importantes
-
-### ✅ Enviar y Aprobar Reporte
-
-#### Estados del Reporte
-- 🔄 **Pendiente**: Recién creado, en revisión
-- ✅ **Aprobado**: Revisado y aceptado
-- ❌ **Rechazado**: Requiere correcciones
-- 📝 **En Corrección**: Siendo modificado
-
-#### Proceso de Aprobación
-1. Pastor/Tesorero envía reporte
-2. Administrador Nacional revisa
-3. Si está correcto → Aprueba
-4. Si tiene errores → Rechaza con comentarios
-5. Iglesia corrige y reenvía
+### Ciclo de Aprobación
+1. La iglesia envía el informe (`pendiente_admin`).
+2. El tesorero lo revisa en **Libro Mensual → Procesar informes**.
+3. Si todo está correcto, aprueba → se crean transacciones y las tarjetas de fondos se actualizan.
+4. Si encuentra inconsistencias, lo rechaza con notas. La iglesia corrige y vuelve a enviar.
 
 ---
+
+## Libro Mensual – Centro de Control
+
+El módulo Libro Mensual reúne todas las tareas del tesorero nacional.
+
+### Tab 1 · Procesar informes
+1. Abre `Libro Mensual` → `Procesar informes`.
+2. La parte superior muestra el resumen (pendientes, total designado por aprobar).
+3. Cada fila incluye: ingreso total, designados, gastos operativos y enlaces rápidos.
+4. Acciones disponibles:
+   - `Revisar`: abre el detalle con ingresos, egresos, aportantes y fotos.
+   - `Aprobar rápido`: genera transacciones automáticas y marca el informe como `procesado`.
+   - `Rechazar`: requiere observación e informa a la iglesia.
+5. El botón `Informe Manual` abre el formulario para cargar reportes recibidos fuera de línea.
+
+### Tab 2 · Transacciones externas
+- Formulario para registrar pagos a proveedores, eventos, conferencias o transferencias entre fondos.
+- Campos clave: fondo destino, concepto, monto (entrada o salida), proveedor y documento.
+- El historial muestra los últimos 100 movimientos manuales y se actualiza al enviar una nueva transacción.
+
+### Tab 3 · Conciliación
+- Presenta cada fondo con: saldo almacenado, saldo recalculado desde transacciones, diferencia, cantidad de movimientos y fecha del último movimiento.
+- Filtro por fondo disponible (pestaña superior izquierda).
+- Indicadores
+  - `Conciliado` (verde): saldo coincidente.
+  - `Revisar` (rojo): diferencia distinta de cero; revisar transacciones asociadas.
+
+## Registrar Informe Manual (Tesorería Nacional)
+
+Cuando un pastor envía cifras por WhatsApp, papel o llamada telefónica:
+
+1. `Libro Mensual` → `Procesar informes` → botón `Informe Manual`.
+2. Selecciona la iglesia, mes y año correspondientes.
+3. En `Fuente del Informe` indica cómo se recibió (papel, WhatsApp, email, teléfono, en persona u otro) y agrega notas.
+4. Captura ingresos, designados y gastos igual que en el formulario congregacional (los cálculos son automáticos).
+5. Registra aportantes de diezmos tal como se recibieron:
+   - `Agregar aportante` por cada diezmo registrado.
+   - Asegúrate de informar al menos nombre/apellido/documento y que la suma coincida con el total de diezmos.
+6. Guarda el depósito (si ya fue entregado) o agrégalo después.
+7. El informe queda en `pendiente_admin`, con auditoría (`entered_by`) del tesorero que lo digitó.
+8. Regresa a la lista y aprueba cuando verifiques la documentación. El sistema generará: transferencia 10%, movimientos designados y honorario pastoral.
+
+> Nota: Si el pastor aún no realizó el depósito, conserva el estado `pendiente_admin` y agrega la nota correspondiente en `Observaciones`.
+
+## Conciliación de Fondos
+
+Utiliza la pestaña `Conciliación` después de cierres mensuales o ajustes especiales.
+
+1. Verifica la columna `Diferencia`.
+2. Si aparece un valor distinto de cero:
+   - Abre `Transacciones externas` para confirmar si falta registrar un pago.
+   - Observa `último movimiento` para identificar el día con desbalance.
+3. Los ajustes del 31/12/2024 aparecen como "Ajuste de saldo - Reconciliación Excel". No eliminarlos: sirven como base oficial 2025.
+4. Si realizas un ajuste manual nuevo, registra el motivo en el campo `Concepto` y conserva comprobantes.
+
+> Consejo: exporta el libro diario mensual antes de cerrar para mantener respaldo fuera del sistema.
 
 ## Importación desde Excel
 
@@ -513,6 +513,25 @@ El sistema acepta archivos Excel (.xlsx) con:
 
 ---
 
+## Preguntas Frecuentes
+
+**¿Por qué aparece un error con los diezmos?**
+> Revisa que la suma de los aportantes coincida con el total de diezmos. El sistema no permite enviar el informe si existe diferencia.
+
+**¿Puedo enviar el informe sin comprobante de depósito?**
+> Sí, pero quedará `pendiente_admin`. Cuando tengas el comprobante, edita el informe o agrega la nota correspondiente.
+
+**¿Qué pasa si el pastor entrega cifras en papel?**
+> El tesorero nacional debe cargarlas con `Informe Manual`, registrar la fuente (`paper`, `whatsapp`, etc.) y mantener las fotos para respaldo.
+
+**¿Cómo detecto diferencias en los fondos?**
+> Usa la pestaña `Conciliación`. Si un fondo aparece en rojo, revisa el libro diario del mismo día o busca transacciones manuales pendientes.
+
+**¿Se puede editar un informe aprobado?**
+> Solo la administración nacional puede revertir un informe aprobado. Solicita la reapertura indicando el motivo.
+
+---
+
 ## Glosario de Términos
 
 ### 📖 Términos Técnicos y Financieros
@@ -541,19 +560,28 @@ El sistema acepta archivos Excel (.xlsx) con:
 
 ### 🔄 Historial de Versiones
 
-**Versión 2.0.0 (Diciembre 2024)**
-- ✅ Consolidación de 25 a 10 funciones
-- ✅ Mejora de rendimiento (27% más rápido)
-- ✅ Nueva interfaz de usuario
-- ✅ Optimizaciones para móviles
-- ✅ Sistema de cache inteligente
+**Versión 3.0.1 (Septiembre 2025)**
+- ✅ Registro manual de informes con trazabilidad (`submission_source`, `manual_report_source`, `entered_by`).
+- ✅ Centro de control en Libro Mensual (procesar informes, transacciones externas, conciliación).
+- ✅ Ajustes de saldos 31/12/2024 para igualar Excel oficial.
+- ✅ Validaciones de aportantes sincronizadas entre portal pastoral y tesorería.
 
-**Próximas Actualizaciones (2025)**
-- 📱 App móvil nativa
-- 🔔 Notificaciones push
-- 📊 Dashboard con gráficos avanzados
-- 🏦 Integración con bancos paraguayos
-- 🤖 Asistente inteligente para reportes
+**Versión 3.0.0 (Septiembre 2025)**
+- Migración completa a Next.js 15 + Supabase.
+- Nuevo sistema de roles y autenticación Google.
+- Dashboard renovado y API consolidada.
+
+**Versión 2.0.0 (Diciembre 2024)**
+- Consolidación de 25 a 10 funciones serverless.
+- Mejora de rendimiento (27% más rápido).
+- Nueva interfaz de usuario (v2) y optimizaciones móviles.
+
+**Próximas Actualizaciones (Q4 2025)**
+- 📱 App móvil nativa (modo offline treasurer).
+- 🔔 Notificaciones push.
+- 📊 Dashboard con gráficos avanzados.
+- 🏦 Integración bancaria automatizada.
+- 🤖 Asistente inteligente para revisiones.
 
 ### 📢 Mantenerse Informado
 - **Email**: Notificaciones automáticas de actualizaciones
@@ -562,7 +590,7 @@ El sistema acepta archivos Excel (.xlsx) con:
 
 ---
 
-**© 2024 Iglesia Pentecostal Unida del Paraguay**
-*Sistema de Tesorería Nacional - Guía de Usuario v2.0*
+**© 2025 Iglesia Pentecostal Unida del Paraguay**
+*Sistema de Tesorería Nacional - Guía de Usuario v3.0.1*
 
 *Para más información y soporte, contactar: administracion@ipupy.org.py*
