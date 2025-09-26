@@ -7,7 +7,6 @@ import {
   UserCircleIcon,
   ArrowRightOnRectangleIcon,
   Cog6ToothIcon,
-  UserIcon,
 } from "@heroicons/react/24/outline";
 
 export default function UserMenu() {
