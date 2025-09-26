@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { execute } from "@/lib/db";
+import { executeWithContext } from "@/lib/db";
 import { getUserProfile } from "@/lib/supabase/server";
 import { formatCurrencyDisplay } from "@/lib/utils/currency";
 import {
@@ -39,8 +39,8 @@ type RecentReport = {
   estado: string;
 };
 
-const loadDashboardSummary = async (): Promise<DashboardSummary> => {
-  const summary = await execute<{ total_reports: string; total_churches: string; processed: string }>(
+const loadDashboardSummary = async (auth: { userId?: string; role?: string; churchId?: number | null } | null): Promise<DashboardSummary> => {
+  const summary = await executeWithContext<{ total_reports: string; total_churches: string; processed: string }>(auth,
     `
       SELECT
         (SELECT COUNT(*) FROM reports) AS total_reports,
@@ -62,13 +62,13 @@ const loadDashboardSummary = async (): Promise<DashboardSummary> => {
   };
 };
 
-const loadPipelineHealth = async (): Promise<PipelineHealth> => {
-  const result = await execute<{
+const loadPipelineHealth = async (auth: { userId?: string; role?: string; churchId?: number | null } | null): Promise<PipelineHealth> => {
+  const result = await executeWithContext<{
     pending_admin: string | null;
     awaiting_deposits: string | null;
     awaiting_transactions: string | null;
     rejected: string | null;
-  }>(
+  }>(auth,
     `
       SELECT
         COUNT(*) FILTER (
@@ -109,13 +109,13 @@ const loadPipelineHealth = async (): Promise<PipelineHealth> => {
   };
 };
 
-const loadFinancialSnapshot = async (): Promise<FinancialSnapshot> => {
-  const result = await execute<{
+const loadFinancialSnapshot = async (auth: { userId?: string; role?: string; churchId?: number | null } | null): Promise<FinancialSnapshot> => {
+  const result = await executeWithContext<{
     current_total: string | null;
     previous_total: string | null;
     reporting_churches: string | null;
     pending_churches: string | null;
-  }>(
+  }>(auth,
     `
       SELECT
         COALESCE(SUM(CASE
@@ -156,8 +156,8 @@ const loadFinancialSnapshot = async (): Promise<FinancialSnapshot> => {
   };
 };
 
-const loadRecentReports = async (): Promise<RecentReport[]> => {
-  const result = await execute<RecentReport>(
+const loadRecentReports = async (auth: { userId?: string; role?: string; churchId?: number | null } | null): Promise<RecentReport[]> => {
+  const result = await executeWithContext<RecentReport>(auth,
     `
       SELECT r.id, c.name as church_name, r.month, r.year, r.total_entradas, r.estado
       FROM reports r
@@ -174,11 +174,16 @@ const loadRecentReports = async (): Promise<RecentReport[]> => {
 
 export default async function DashboardLanding() {
   const user = await getUserProfile();
+  const auth = user ? {
+    userId: user.id,
+    role: user.role || 'viewer',
+    churchId: user.churchId || null
+  } : null;
   const [summary, recentReports, pipeline, financial] = await Promise.all([
-    loadDashboardSummary(),
-    loadRecentReports(),
-    loadPipelineHealth(),
-    loadFinancialSnapshot(),
+    loadDashboardSummary(auth),
+    loadRecentReports(auth),
+    loadPipelineHealth(auth),
+    loadFinancialSnapshot(auth),
   ]);
 
   const averageTicket =
