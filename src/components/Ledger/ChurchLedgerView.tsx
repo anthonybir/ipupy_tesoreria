@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/Shared/EmptyState';
 import { DataTable } from '@/components/Shared/DataTable';
 import { createClient } from '@/lib/supabase/client';
 import { useQuery } from '@tanstack/react-query';
+import { formatCurrencyDisplay } from '@/lib/utils/currency';
 
 const monthLabels = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -46,12 +47,7 @@ const defaultFilters: FilterState = {
   fundId: 'all'
 };
 
-const formatCurrency = (value: number): string =>
-  new Intl.NumberFormat('es-PY', {
-    style: 'currency',
-    currency: 'PYG',
-    maximumFractionDigits: 0
-  }).format(value);
+const formatCurrency = (value: number): string => formatCurrencyDisplay(value);
 
 export default function ChurchLedgerView() {
   const [filters, setFilters] = useState<FilterState>(defaultFilters);

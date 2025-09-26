@@ -19,16 +19,13 @@ import {
   Toolbar,
 } from '@/components/Shared';
 import { Button } from '@/components/ui/button';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { formatCurrencyDisplay, rawValueToNumber } from '@/lib/utils/currency';
 import type { FundCollection, FundRecord } from '@/types/financial';
 
-const formatCurrency = (value: number): string =>
-  new Intl.NumberFormat('es-PY', {
-    style: 'currency',
-    currency: 'PYG',
-    maximumFractionDigits: 0,
-  }).format(value);
+const formatCurrency = (value: number): string => formatCurrencyDisplay(value);
 
 const formatDate = (value: string): string => {
   const date = new Date(value);
@@ -162,6 +159,8 @@ export default function FundsView() {
     }
 
     try {
+      const balanceValue = rawValueToNumber(state.currentBalance);
+
       if (formMode === 'create') {
         await fetchJson('/api/financial/funds', {
           method: 'POST',
@@ -172,7 +171,7 @@ export default function FundsView() {
             name: state.name,
             description: state.description,
             type: state.type,
-            initial_balance: Number(state.currentBalance) || 0,
+            initial_balance: balanceValue,
             is_active: state.isActive,
           }),
         });
@@ -187,7 +186,7 @@ export default function FundsView() {
             name: state.name,
             description: state.description,
             type: state.type,
-            current_balance: Number(state.currentBalance) || 0,
+            current_balance: balanceValue,
             is_active: state.isActive,
           }),
         });
@@ -429,6 +428,13 @@ function FundFormModal({ open, mode, data, onChange, onClose, onSubmit }: FundFo
       });
     };
 
+  const handleBalanceChange = (rawValue: string) => {
+    onChange({
+      ...data,
+      currentBalance: rawValue,
+    });
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
@@ -516,12 +522,9 @@ function FundFormModal({ open, mode, data, onChange, onClose, onSubmit }: FundFo
 
                     <label className="flex flex-col gap-2 text-xs font-semibold text-slate-600">
                       {balanceLabel}
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
+                      <CurrencyInput
                         value={data.currentBalance}
-                        onChange={handleFieldChange('currentBalance')}
+                        onValueChange={handleBalanceChange}
                         className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                         placeholder="0"
                       />

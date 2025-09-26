@@ -5,9 +5,11 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { FormField, FormSection, SectionCard } from '@/components/Shared';
 import { Button } from '@/components/ui/button';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { formatCurrencyDisplay, rawValueToNumber } from '@/lib/utils/currency';
 interface Church {
   id: number;
   name: string;
@@ -30,23 +32,7 @@ const MANUAL_SOURCES = [
   { value: 'other', label: 'Otro' },
 ] as const;
 
-const amountPattern = /^\d*(?:[\.,]\d{0,2})?$/;
-
-const parseAmount = (value: string) => {
-  if (!value) {
-    return 0;
-  }
-  const normalized = value.replace(/,/g, '.');
-  const parsed = Number.parseFloat(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat('es-PY', {
-    style: 'currency',
-    currency: 'PYG',
-    maximumFractionDigits: 0,
-  }).format(value);
+const formatCurrency = (value: number) => formatCurrencyDisplay(value);
 const blankDonor = (id: number) => ({
   id,
   firstName: '',
@@ -183,7 +169,7 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
     });
   }, [formData]);
   const donorsTotal = useMemo(
-    () => donors.reduce((sum, donor) => sum + parseAmount(donor.amount), 0),
+    () => donors.reduce((sum, donor) => sum + rawValueToNumber(donor.amount), 0),
     [donors],
   );
 
@@ -201,20 +187,15 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
   };
 
   const handleDonorChange = (id: number, field: keyof DonorRow) => (event: ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
+    const { value } = event.target;
     setDonors((prev) =>
-      prev.map((donor) => {
-        if (donor.id !== id) {
-          return donor;
-        }
-        if (field === 'amount') {
-          if (value === '' || amountPattern.test(value)) {
-            return { ...donor, amount: value };
-          }
-          return donor;
-        }
-        return { ...donor, [field]: value };
-      }),
+      prev.map((donor) => (donor.id === id ? { ...donor, [field]: value } : donor)),
+    );
+  };
+
+  const handleDonorAmountChange = (id: number) => (rawValue: string) => {
+    setDonors((prev) =>
+      prev.map((donor) => (donor.id === id ? { ...donor, amount: rawValue } : donor)),
     );
   };
   const handleNumberChange = (field: keyof typeof formData) => (event: ChangeEvent<HTMLInputElement>) => {
@@ -222,6 +203,13 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
     setFormData((prev) => ({
       ...prev,
       [field]: Number.isFinite(value) ? value : 0,
+    }));
+  };
+
+  const handleCurrencyFieldChange = (field: keyof typeof formData) => (rawValue: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: rawValueToNumber(rawValue),
     }));
   };
 
@@ -283,7 +271,8 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
       return;
     }
 
-    const donorsWithAmount = formData.diezmos > 0 ? donors.filter((donor) => parseAmount(donor.amount) > 0) : [];
+    const donorsWithAmount =
+      formData.diezmos > 0 ? donors.filter((donor) => rawValueToNumber(donor.amount) > 0) : [];
 
     if (formData.diezmos > 0) {
       if (donorsWithAmount.length === 0) {
@@ -310,7 +299,7 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
       first_name: donor.firstName.trim(),
       last_name: donor.lastName.trim(),
       document: donor.document.trim(),
-      amount: parseAmount(donor.amount),
+      amount: rawValueToNumber(donor.amount),
     }));
 
     await createReport.mutateAsync({
@@ -413,12 +402,11 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
         <div className="grid gap-4 md:grid-cols-4">
           {congregationalFields.map(({ key, label }) => (
             <FormField key={key} htmlFor={`income-${key}`} label={label}>
-              <Input
+              <CurrencyInput
                 id={`income-${key}`}
-                type="number"
-                min={0}
-                value={formData[key] as number}
-                onChange={handleNumberChange(key)}
+                value={String(formData[key] ?? 0)}
+                onValueChange={handleCurrencyFieldChange(key)}
+                placeholder="0"
               />
             </FormField>
           ))}
@@ -431,12 +419,11 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
         <div className="grid gap-4 md:grid-cols-3">
           {designatedFields.map(({ key, label }) => (
             <FormField key={key} htmlFor={`designated-${key}`} label={label}>
-              <Input
+              <CurrencyInput
                 id={`designated-${key}`}
-                type="number"
-                min={0}
-                value={formData[key] as number}
-                onChange={handleNumberChange(key)}
+                value={String(formData[key] ?? 0)}
+                onValueChange={handleCurrencyFieldChange(key)}
+                placeholder="0"
               />
             </FormField>
           ))}
@@ -449,12 +436,11 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
         <div className="grid gap-4 md:grid-cols-4">
           {expenseFields.map(({ key, label }) => (
             <FormField key={key} htmlFor={`expense-${key}`} label={label}>
-              <Input
+              <CurrencyInput
                 id={`expense-${key}`}
-                type="number"
-                min={0}
-                value={formData[key] as number}
-                onChange={handleNumberChange(key)}
+                value={String(formData[key] ?? 0)}
+                onValueChange={handleCurrencyFieldChange(key)}
+                placeholder="0"
               />
             </FormField>
           ))}
@@ -527,10 +513,9 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
                         />
                       </td>
                       <td className="px-4 py-3">
-                        <Input
+                        <CurrencyInput
                           value={donor.amount}
-                          onChange={handleDonorChange(donor.id, 'amount')}
-                          inputMode="decimal"
+                          onValueChange={handleDonorAmountChange(donor.id)}
                           placeholder="0"
                           className="text-right"
                         />

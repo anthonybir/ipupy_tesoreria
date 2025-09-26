@@ -8,6 +8,7 @@ import { useReports } from '@/hooks/useReports';
 import { ReportForm } from '@/components/Reports/ReportForm';
 import { ReportsDashboard } from '@/components/Reports/ReportsDashboard';
 import { ReportDetailsDrawer } from '@/components/Reports/ReportDetailsDrawer';
+import { formatCurrencyDisplay } from '@/lib/utils/currency';
 import type { ReportFilters, ReportRecord } from '@/types/api';
 import {
   DataTable,
@@ -222,11 +223,7 @@ export default function ReportsView() {
         align: 'right' as const,
         render: (report: ReportRecord) => (
           <span className="font-semibold text-[var(--absd-ink)]">
-            {new Intl.NumberFormat('es-PY', {
-              style: 'currency',
-              currency: 'PYG',
-              maximumFractionDigits: 0,
-            }).format(report.totals.entries)}
+            {formatCurrencyDisplay(report.totals.entries)}
           </span>
         ),
       },

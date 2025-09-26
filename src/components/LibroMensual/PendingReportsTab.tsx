@@ -28,11 +28,7 @@ import {
   useApproveReport,
   useUpdateReport,
 } from '@/hooks/useAdminData';
-const currencyFormatter = new Intl.NumberFormat('es-PY', {
-  style: 'currency',
-  currency: 'PYG',
-  maximumFractionDigits: 0,
-});
+import { formatCurrencyDisplay } from '@/lib/utils/currency';
 
 const monthNames = [
   '',
@@ -60,7 +56,8 @@ type ChurchOption = {
   city: string;
   pastor?: string;
 };
-const formatCurrency = (value: number | null | undefined) => currencyFormatter.format(value ?? 0);
+const formatCurrency = (value: number | null | undefined) =>
+  formatCurrencyDisplay(value ?? 0);
 
 const friendlyLabel = (key: string) =>
   key

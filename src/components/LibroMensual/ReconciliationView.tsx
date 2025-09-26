@@ -16,12 +16,7 @@ import {
   Toolbar,
 } from '@/components/Shared';
 import { useAdminFunds, useAdminReconciliation } from '@/hooks/useAdminData';
-
-const currencyFormatter = new Intl.NumberFormat('es-PY', {
-  style: 'currency',
-  currency: 'PYG',
-  maximumFractionDigits: 0
-});
+import { formatCurrencyDisplay } from '@/lib/utils/currency';
 
 type ReconciliationRow = {
   id: number;
@@ -75,7 +70,7 @@ export function ReconciliationView() {
   const metrics = [
     {
       label: 'Diferencia total',
-      value: currencyFormatter.format(discrepancyTotal),
+      value: formatCurrencyDisplay(discrepancyTotal),
       description: 'Saldo almacenado vs. calculado',
       tone: discrepancyTotal === 0 ? ('success' as const) : ('danger' as const),
     },
@@ -176,17 +171,17 @@ export function ReconciliationView() {
                 <tr key={row.id} className="transition hover:bg-[color-mix(in_oklab,var(--absd-authority) 6%,white)]">
                   <td className="px-4 py-3 text-sm font-semibold text-[var(--absd-ink)]">{row.name}</td>
                   <td className="px-4 py-3 text-right text-sm text-[rgba(15,23,42,0.7)]">
-                    {currencyFormatter.format(Number(row.stored_balance ?? 0))}
+                    {formatCurrencyDisplay(Number(row.stored_balance ?? 0))}
                   </td>
                   <td className="px-4 py-3 text-right text-sm text-[rgba(15,23,42,0.7)]">
-                    {currencyFormatter.format(Number(row.calculated_balance ?? 0))}
+                    {formatCurrencyDisplay(Number(row.calculated_balance ?? 0))}
                   </td>
                   <td
                     className={`px-4 py-3 text-right text-sm font-semibold ${
                       Number(row.difference ?? 0) === 0 ? 'text-[var(--absd-success)]' : 'text-[var(--absd-error)]'
                     }`}
                   >
-                    {currencyFormatter.format(Number(row.difference ?? 0))}
+                    {formatCurrencyDisplay(Number(row.difference ?? 0))}
                   </td>
                   <td className="px-4 py-3 text-xs text-[rgba(15,23,42,0.55)]">
                     {row.transaction_count ?? 0} movimientos — último{' '}

@@ -10,12 +10,7 @@ import { ErrorState } from '@/components/Shared/ErrorState';
 import { LoadingState } from '@/components/Shared/LoadingState';
 import ExternalTransactionForm from '@/components/Treasury/ExternalTransactionForm';
 import { useAdminTransactions } from '@/hooks/useAdminData';
-
-const currencyFormatter = new Intl.NumberFormat('es-PY', {
-  style: 'currency',
-  currency: 'PYG',
-  maximumFractionDigits: 0
-});
+import { formatCurrencyDisplay } from '@/lib/utils/currency';
 
 type ExternalTransactionsTabProps = {
   funds: Array<{ id: number; name: string }>;
@@ -156,10 +151,10 @@ export function ExternalTransactionsTab({ funds }: ExternalTransactionsTabProps)
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-600">{txn.fund_name ?? 'N/D'}</td>
                     <td className="px-4 py-3 text-right text-sm font-semibold text-emerald-600">
-                      {txn.amount_in > 0 ? currencyFormatter.format(Number(txn.amount_in)) : '—'}
+                      {txn.amount_in > 0 ? formatCurrencyDisplay(Number(txn.amount_in)) : '—'}
                     </td>
                     <td className="px-4 py-3 text-right text-sm font-semibold text-rose-600">
-                      {txn.amount_out > 0 ? currencyFormatter.format(Number(txn.amount_out)) : '—'}
+                      {txn.amount_out > 0 ? formatCurrencyDisplay(Number(txn.amount_out)) : '—'}
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-500">
                       {txn.created_by ?? '—'}

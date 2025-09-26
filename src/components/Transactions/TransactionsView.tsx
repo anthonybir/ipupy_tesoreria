@@ -13,6 +13,8 @@ import { DataTable } from '@/components/Shared/DataTable';
 import { LoadingState } from '@/components/Shared/LoadingState';
 import { ErrorState } from '@/components/Shared/ErrorState';
 import { EmptyState } from '@/components/Shared/EmptyState';
+import { CurrencyInput } from '@/components/ui/currency-input';
+import { formatCurrencyDisplay, rawValueToNumber } from '@/lib/utils/currency';
 import {
   type FundRecord,
   type TransactionFilters,
@@ -59,12 +61,7 @@ type TransactionFormData = {
   amount: string;
 };
 
-const formatCurrency = (value: number): string =>
-  new Intl.NumberFormat('es-PY', {
-    style: 'currency',
-    currency: 'PYG',
-    maximumFractionDigits: 0,
-  }).format(value);
+const formatCurrency = (value: number): string => formatCurrencyDisplay(value);
 
 const formatDate = (value: string): string => {
   const date = new Date(value);
@@ -216,7 +213,9 @@ export default function TransactionsView() {
       return;
     }
 
-    if (!payload.amount || Number(payload.amount) <= 0) {
+    const amountValue = rawValueToNumber(payload.amount);
+
+    if (amountValue <= 0) {
       toast.error('El monto debe ser mayor a cero.');
       return;
     }
@@ -228,8 +227,8 @@ export default function TransactionsView() {
       concept: payload.concept,
       provider: payload.provider || undefined,
       document_number: payload.documentNumber || undefined,
-      amount_in: payload.type === 'income' ? Number(payload.amount) : 0,
-      amount_out: payload.type === 'expense' ? Number(payload.amount) : 0,
+      amount_in: payload.type === 'income' ? amountValue : 0,
+      amount_out: payload.type === 'expense' ? amountValue : 0,
     };
 
     try {
@@ -683,6 +682,13 @@ function TransactionFormModal({
       });
     };
 
+  const handleAmountChange = (rawValue: string) => {
+    onChange({
+      ...data,
+      amount: rawValue,
+    });
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     try {
@@ -777,12 +783,9 @@ function TransactionFormModal({
 
                     <label className="flex flex-col gap-2 text-xs font-semibold text-slate-600">
                       Monto
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
+                      <CurrencyInput
                         value={data.amount}
-                        onChange={handleFieldChange('amount')}
+                        onValueChange={handleAmountChange}
                         className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                         placeholder="0"
                         required

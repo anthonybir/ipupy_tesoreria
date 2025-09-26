@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 
 import { ErrorState, FormField, LoadingState, MetricCard, PageHeader, Toolbar } from '@/components/Shared';
 import { useAdminFunds, useAdminFundsSummary } from '@/hooks/useAdminData';
+import { formatCurrencyDisplay } from '@/lib/utils/currency';
 
 import { ExternalTransactionsTab } from './ExternalTransactionsTab';
 import { LedgerTab } from './LedgerTab';
@@ -24,12 +25,6 @@ const monthLabels = [
   'Noviembre',
   'Diciembre'
 ];
-
-const currencyFormatter = new Intl.NumberFormat('es-PY', {
-  style: 'currency',
-  currency: 'PYG',
-  maximumFractionDigits: 0
-});
 
 type ActiveTab = 'pending' | 'external' | 'ledger';
 
@@ -59,7 +54,7 @@ export function LibroMensualTabs() {
   const metrics = [
     {
       label: 'Saldo total fondos',
-      value: currencyFormatter.format(fundsSummary.totalBalance),
+      value: formatCurrencyDisplay(fundsSummary.totalBalance),
       description: `${fundsSummary.fundCount} fondos activos`,
       tone: 'neutral' as const,
     },

@@ -4,6 +4,9 @@ import { useState } from 'react';
 import { format } from 'date-fns';
 import { PlusIcon, MinusIcon } from '@heroicons/react/24/outline';
 
+import { CurrencyInput } from '@/components/ui/currency-input';
+import { rawValueToNumber } from '@/lib/utils/currency';
+
 interface ExternalTransactionFormProps {
   funds: Array<{ id: number; name: string }>;
   onSubmit: (data: TransactionData) => Promise<void>;
@@ -72,12 +75,12 @@ export default function ExternalTransactionForm({
     }
   };
 
-  const handleAmountChange = (value: string) => {
-    const amount = parseFloat(value) || 0;
+  const handleAmountChange = (rawValue: string) => {
+    const amount = rawValueToNumber(rawValue);
     if (isIncome) {
-      setFormData(prev => ({ ...prev, amount_in: amount, amount_out: 0 }));
+      setFormData((prev) => ({ ...prev, amount_in: amount, amount_out: 0 }));
     } else {
-      setFormData(prev => ({ ...prev, amount_out: amount, amount_in: 0 }));
+      setFormData((prev) => ({ ...prev, amount_out: amount, amount_in: 0 }));
     }
   };
 
@@ -150,17 +153,15 @@ export default function ExternalTransactionForm({
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Monto (₲)
           </label>
-          <input
-            type="number"
-            value={isIncome ? formData.amount_in : formData.amount_out}
-            onChange={(e) => handleAmountChange(e.target.value)}
+          <CurrencyInput
+            value={String(isIncome ? formData.amount_in : formData.amount_out)}
+            onValueChange={handleAmountChange}
             className={`w-full px-3 py-2 border rounded-lg focus:ring-2 ${
               isIncome
                 ? 'border-emerald-300 focus:ring-emerald-500'
                 : 'border-rose-300 focus:ring-rose-500'
             }`}
-            min="0"
-            step="1000"
+            placeholder="0"
             required
           />
         </div>

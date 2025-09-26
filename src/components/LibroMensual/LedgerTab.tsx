@@ -16,11 +16,7 @@ import {
 } from '@/components/Shared';
 import type { DataTableColumn } from '@/components/Shared/DataTable';
 import { useAdminTransactions } from '@/hooks/useAdminData';
-const currencyFormatter = new Intl.NumberFormat('es-PY', {
-  style: 'currency',
-  currency: 'PYG',
-  maximumFractionDigits: 0,
-});
+import { formatCurrencyDisplay } from '@/lib/utils/currency';
 
 type LedgerTabProps = {
   filters: { year: string; month: string };
@@ -162,7 +158,7 @@ export function LedgerTab({ filters, funds }: LedgerTabProps) {
         align: 'right',
         render: (txn) => (
           <span className="text-sm font-semibold text-[var(--absd-success)]">
-            {txn.amount_in > 0 ? currencyFormatter.format(txn.amount_in) : '—'}
+            {txn.amount_in > 0 ? formatCurrencyDisplay(txn.amount_in) : '—'}
           </span>
         ),
       },
@@ -172,7 +168,7 @@ export function LedgerTab({ filters, funds }: LedgerTabProps) {
         align: 'right',
         render: (txn) => (
           <span className="text-sm font-semibold text-[var(--absd-error)]">
-            {txn.amount_out > 0 ? currencyFormatter.format(txn.amount_out) : '—'}
+            {txn.amount_out > 0 ? formatCurrencyDisplay(txn.amount_out) : '—'}
           </span>
         ),
       },
@@ -191,19 +187,19 @@ export function LedgerTab({ filters, funds }: LedgerTabProps) {
     () => [
       {
         label: 'Entradas registradas',
-        value: currencyFormatter.format(aggregates.income),
+        value: formatCurrencyDisplay(aggregates.income),
         description: 'Total de movimientos ingresados',
         tone: 'success' as const,
       },
       {
         label: 'Salidas registradas',
-        value: currencyFormatter.format(aggregates.expense),
+        value: formatCurrencyDisplay(aggregates.expense),
         description: 'Total de egresos ejecutados',
         tone: 'danger' as const,
       },
       {
         label: 'Saldo neto',
-        value: currencyFormatter.format(aggregates.income - aggregates.expense),
+        value: formatCurrencyDisplay(aggregates.income - aggregates.expense),
         description: 'Resultado del periodo',
         tone: aggregates.income - aggregates.expense >= 0 ? ('success' as const) : ('warning' as const),
       },

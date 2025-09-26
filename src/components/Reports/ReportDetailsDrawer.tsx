@@ -3,13 +3,8 @@
 import { useMemo } from "react";
 
 import { Drawer } from "@/components/Shared";
+import { formatCurrencyDisplay } from "@/lib/utils/currency";
 import type { ReportRecord } from "@/types/api";
-
-const currencyFormatter = new Intl.NumberFormat("es-PY", {
-  style: "currency",
-  currency: "PYG",
-  maximumFractionDigits: 0,
-});
 
 const congregationalLabels: Record<keyof ReportRecord["breakdown"]["congregational"], string> = {
   diezmos: "Diezmos",
@@ -108,7 +103,7 @@ export function ReportDetailsDrawer({ report, onClose }: ReportDetailsDrawerProp
                   {card.label}
                 </p>
                 <p className="mt-2 text-lg font-semibold text-[var(--absd-ink)]">
-                  {currencyFormatter.format(card.value)}
+                  {formatCurrencyDisplay(card.value)}
                 </p>
               </article>
             ))}
@@ -132,7 +127,7 @@ export function ReportDetailsDrawer({ report, onClose }: ReportDetailsDrawerProp
                       className="flex items-center justify-between bg-[var(--absd-surface)] px-4 py-3 text-sm text-[rgba(15,23,42,0.7)]"
                     >
                       <span>{congregationalLabels[key]}</span>
-                      <span className="font-semibold text-[var(--absd-ink)]">{currencyFormatter.format(amount)}</span>
+                      <span className="font-semibold text-[var(--absd-ink)]">{formatCurrencyDisplay(amount)}</span>
                     </div>
                   ))}
                 </div>
@@ -149,7 +144,7 @@ export function ReportDetailsDrawer({ report, onClose }: ReportDetailsDrawerProp
                       className="flex items-center justify-between bg-[var(--absd-surface)] px-4 py-3 text-sm text-[rgba(15,23,42,0.7)]"
                     >
                       <span>{designatedLabels[key]}</span>
-                      <span className="font-semibold text-[var(--absd-ink)]">{currencyFormatter.format(amount)}</span>
+                      <span className="font-semibold text-[var(--absd-ink)]">{formatCurrencyDisplay(amount)}</span>
                     </div>
                   ))}
                 </div>
@@ -170,7 +165,7 @@ export function ReportDetailsDrawer({ report, onClose }: ReportDetailsDrawerProp
                   className="flex items-center justify-between bg-[var(--absd-surface)] px-5 py-3 text-sm text-[rgba(15,23,42,0.7)]"
                 >
                   <span>{expenseLabels[key]}</span>
-                  <span className="font-semibold text-[var(--absd-ink)]">{currencyFormatter.format(amount)}</span>
+                  <span className="font-semibold text-[var(--absd-ink)]">{formatCurrencyDisplay(amount)}</span>
                 </div>
               ))}
             </div>
@@ -221,7 +216,7 @@ export function ReportDetailsDrawer({ report, onClose }: ReportDetailsDrawerProp
                 <dt className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">
                   Monto depositado
                 </dt>
-                <dd>{currencyFormatter.format(report.submission.depositAmount)}</dd>
+                <dd>{formatCurrencyDisplay(report.submission.depositAmount)}</dd>
               </div>
               <div className="space-y-1 md:col-span-2">
                 <dt className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">

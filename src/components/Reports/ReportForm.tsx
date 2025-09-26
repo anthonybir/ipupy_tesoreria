@@ -4,11 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { Button } from '@/components/ui/button';
+import { CurrencyInput } from '@/components/ui/currency-input';
 import { useCreateReport } from '@/hooks/useReportMutations';
 import { useChurches } from '@/hooks/useChurches';
 import { useLastReport } from '@/hooks/useReports';
 import type { CreateReportPayload } from '@/hooks/useReportMutations';
 import { FormField, FormSection } from '@/components/Shared';
+import { formatCurrencyDisplay, rawValueToNumber } from '@/lib/utils/currency';
 
 const initialNumericState = {
   diezmos: '',
@@ -83,11 +85,6 @@ const monthOptions = [
   'Diciembre',
 ];
 
-const currencyFormatter = new Intl.NumberFormat('es-PY', {
-  style: 'currency',
-  currency: 'PYG',
-  maximumFractionDigits: 0,
-});
 
 const designatedIncomeFields: NumericField[] = [
   'misiones',
@@ -141,15 +138,15 @@ const toNumberOrUndefined = (value: string): number | undefined => {
   if (!value) {
     return undefined;
   }
-  const parsed = Number.parseFloat(value.replace(/,/g, '.'));
+  const parsed = rawValueToNumber(value);
   return Number.isFinite(parsed) ? parsed : undefined;
 };
 
-const toNumber = (value: string): number => toNumberOrUndefined(value) ?? 0;
+const toNumber = (value: string): number => rawValueToNumber(value);
 
 const roundTwo = (value: number): number => Math.round((value + Number.EPSILON) * 100) / 100;
 
-const formatCurrency = (value: number): string => currencyFormatter.format(roundTwo(value));
+const formatCurrency = (value: number): string => formatCurrencyDisplay(roundTwo(value));
 
 const InputBaseClasses =
   'rounded-xl border border-[var(--absd-border)] bg-white px-4 py-3 text-sm text-[var(--absd-ink)] shadow-sm focus:border-[var(--absd-authority)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_oklab,var(--absd-authority) 40%,white)]';
@@ -298,13 +295,9 @@ export function ReportForm() {
       setForm((prev) => ({ ...prev, [field]: event.target.value }));
     };
 
-  const handleNumericChange = (field: NumericField) =>
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const value = event.target.value;
-      if (value === '' || /^\d*(?:[\.,]\d{0,2})?$/.test(value)) {
-        setForm((prev) => ({ ...prev, [field]: value }));
-      }
-    };
+  const handleCurrencyChange = (field: NumericField) => (rawValue: string) => {
+    setForm((prev) => ({ ...prev, [field]: rawValue }));
+  };
 
   const readFileAsDataUrl = (file: File) =>
     new Promise<string>((resolve, reject) => {
@@ -501,27 +494,48 @@ export function ReportForm() {
     }
   };
 
-  const renderNumericInput = (field: NumericField, options: { readOnly?: boolean; helperText?: string } = {}) => {
+  const renderNumericInput = (
+    field: NumericField,
+    options: { readOnly?: boolean; helperText?: string } = {}
+  ) => {
     const { readOnly = false, helperText } = options;
-    const inputProps = {
-      id: `field-${field}`,
-      value: readOnly ? formatCurrency(toNumber(form[field])) : form[field],
-      readOnly,
-      disabled: createReport.isPending || readOnly,
-      onChange: readOnly ? undefined : handleNumericChange(field),
-      className: `${InputBaseClasses} ${readOnly ? 'bg-[var(--absd-subtle)]' : ''}`,
-      inputMode: 'decimal' as const,
-      placeholder: '0',
-    };
+    const fieldId = `field-${field}`;
+
+    if (readOnly) {
+      return (
+        <FormField
+          key={field}
+          htmlFor={fieldId}
+          label={fieldLabels[field] ?? field.replace('_', ' ')}
+          hint={helperText}
+        >
+          <input
+            id={fieldId}
+            type="text"
+            value={formatCurrency(toNumber(form[field]))}
+            readOnly
+            disabled
+            className={`${InputBaseClasses} bg-[var(--absd-subtle)]`}
+          />
+        </FormField>
+      );
+    }
 
     return (
       <FormField
         key={field}
-        htmlFor={`field-${field}`}
+        htmlFor={fieldId}
         label={fieldLabels[field] ?? field.replace('_', ' ')}
         hint={helperText}
       >
-        <input {...inputProps} />
+        <CurrencyInput
+          id={fieldId}
+          value={form[field]}
+          onValueChange={handleCurrencyChange(field)}
+          disabled={createReport.isPending}
+          className={InputBaseClasses}
+          placeholder="0"
+        />
       </FormField>
     );
   };
@@ -688,16 +702,9 @@ export function ReportForm() {
                       />
                     </td>
                     <td className="px-3 py-2">
-                      <input
-                        type="text"
-                        inputMode="decimal"
+                      <CurrencyInput
                         value={donor.amount}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          if (value === '' || /^\d*(?:[\.,]\d{0,2})?$/.test(value)) {
-                            updateDonor(donor.id, 'amount', value);
-                          }
-                        }}
+                        onValueChange={(rawValue) => updateDonor(donor.id, 'amount', rawValue)}
                         placeholder="0"
                         className={`${InputBaseClasses} text-right`}
                         disabled={createReport.isPending}

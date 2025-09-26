@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import toast from "react-hot-toast";
 
 import { useDeleteReport, useUpdateReport } from "@/hooks/useReportMutations";
+import { formatCurrencyDisplay } from "@/lib/utils/currency";
 import type { ReportRecord } from "@/types/api";
 
 const statusLabels: Record<string, string> = {
@@ -19,12 +20,6 @@ const statusBadges: Record<string, string> = {
   enviado: "bg-sky-100 text-sky-700",
   borrador: "bg-slate-100 text-slate-600"
 };
-
-const currencyFormatter = new Intl.NumberFormat("es-PY", {
-  style: "currency",
-  currency: "PYG",
-  maximumFractionDigits: 0
-});
 
 type ReportRowProps = {
   report: ReportRecord;
@@ -82,9 +77,9 @@ export function ReportRow({ report, onView }: ReportRowProps) {
         <div className="text-xs text-slate-500">{report.metadata.city || "Ciudad no registrada"}</div>
       </td>
       <td className="px-4 py-3 text-slate-700">{periodLabel}</td>
-      <td className="px-4 py-3 text-right text-slate-700">{currencyFormatter.format(report.totals.entries)}</td>
-      <td className="px-4 py-3 text-right text-slate-700">{currencyFormatter.format(report.totals.exits)}</td>
-      <td className="px-4 py-3 text-right text-slate-900 font-semibold">{currencyFormatter.format(report.totals.balance)}</td>
+      <td className="px-4 py-3 text-right text-slate-700">{formatCurrencyDisplay(report.totals.entries)}</td>
+      <td className="px-4 py-3 text-right text-slate-700">{formatCurrencyDisplay(report.totals.exits)}</td>
+      <td className="px-4 py-3 text-right text-slate-900 font-semibold">{formatCurrencyDisplay(report.totals.balance)}</td>
       <td className="px-4 py-3">
         <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold capitalize ${statusClass}`}>
           {statusLabel}

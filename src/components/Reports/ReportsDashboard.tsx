@@ -1,11 +1,6 @@
 import type { ChurchRecord, ReportRecord } from '@/types/api';
 import { SectionCard, StatCard, StatusPill } from '@/components/Shared';
-
-const currency = new Intl.NumberFormat('es-PY', {
-  style: 'currency',
-  currency: 'PYG',
-  maximumFractionDigits: 0,
-});
+import { formatCurrencyDisplay } from '@/lib/utils/currency';
 
 const monthLabels = [
   'Enero',
@@ -62,12 +57,12 @@ export function ReportsDashboard({ reports, churches }: ReportsDashboardProps) {
     },
     {
       label: 'Entradas del mes',
-      value: currency.format(totalEntries),
+      value: formatCurrencyDisplay(totalEntries),
       description: `${reportsThisMonth.length} informes registrados`,
     },
     {
       label: 'Fondo nacional (10 %)',
-      value: currency.format(totalNationalFund),
+      value: formatCurrencyDisplay(totalNationalFund),
       description: 'Calculado automáticamente',
     },
     {
@@ -132,7 +127,7 @@ export function ReportsDashboard({ reports, churches }: ReportsDashboardProps) {
                     </td>
                     <td className="px-4 py-3 text-[var(--absd-ink)]">{formatPeriod(report)}</td>
                     <td className="px-4 py-3 text-right text-[var(--absd-ink)] font-semibold">
-                      {currency.format(report.totals.entries)}
+                      {formatCurrencyDisplay(report.totals.entries)}
                     </td>
                     <td className="px-4 py-3">
                       <StatusPill tone={report.status.toLowerCase() === 'procesado' ? 'success' : 'warning'}>
