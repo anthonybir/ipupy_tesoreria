@@ -623,7 +623,7 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
         title="Resumen calculado"
         description="Estos valores se actualizan automáticamente con los montos ingresados."
       >
-        <div className="absd-grid">
+        <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
           {[
             {
               label: 'Total entradas',

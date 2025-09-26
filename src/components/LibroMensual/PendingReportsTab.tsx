@@ -341,7 +341,7 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps) {
         </Toolbar>
 
         <SectionCard title="Resumen general">
-          <div className="absd-grid">
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
             {summaryMetrics.map((metric) => (
               <MetricCard
                 key={metric.label}
@@ -433,7 +433,7 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps) {
         </Toolbar>
 
         <SectionCard title="Resumen general" padding="md">
-          <div className="absd-grid">
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
             {summaryMetrics.map((metric) => (
               <MetricCard
                 key={metric.label}
@@ -517,7 +517,7 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps) {
               </span>
             </div>
 
-            <div className="absd-grid">
+            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {detailMetrics.map((metric) => (
                 <MetricCard
                   key={metric.label}

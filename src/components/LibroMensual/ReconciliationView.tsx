@@ -114,7 +114,7 @@ export function ReconciliationView() {
         subtitle="Conciliación del tesoro nacional"
       />
 
-      <div className="absd-grid">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
         {metrics.map((metric) => (
           <MetricCard
             key={metric.label}

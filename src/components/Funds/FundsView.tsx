@@ -324,7 +324,7 @@ export default function FundsView() {
         </div>
       </Toolbar>
 
-      <div className="absd-grid">
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
         {metrics.map((metric) => (
           <MetricCard
             key={metric.label}

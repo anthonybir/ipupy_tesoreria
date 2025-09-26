@@ -276,7 +276,7 @@ export function LedgerTab({ filters, funds }: LedgerTabProps) {
         title="Resumen del periodo"
         description={`Movimientos registrados para ${periodLabel}`}
       >
-        <div className="absd-grid">
+        <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
           {summaryMetrics.map((metric) => (
             <MetricCard
               key={metric.label}
