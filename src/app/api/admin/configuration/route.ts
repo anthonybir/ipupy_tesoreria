@@ -43,6 +43,139 @@ export async function GET(req: NextRequest) {
       configuration[row.section][row.key] = row.value;
     });
 
+    const shouldIncludeSection = (target: string) => !section || section === target;
+
+    if (shouldIncludeSection('funds')) {
+      try {
+        const fundsResult = await executeWithContext<{
+          id: number;
+          name: string;
+          type: string | null;
+          is_active: boolean;
+        }>(auth, `SELECT id, name, type, is_active FROM funds ORDER BY name`);
+
+        const fundsConfig = (configuration.funds ?? {}) as Record<string, unknown>;
+        const metaArray = Array.isArray(fundsConfig.defaultFunds)
+          ? (fundsConfig.defaultFunds as Array<Record<string, unknown>>)
+          : [];
+
+        const metaMap = new Map<string, Record<string, unknown>>();
+        metaArray.forEach((item) => {
+          const metaName = typeof item?.name === 'string' ? item.name.toLowerCase() : undefined;
+          if (metaName) {
+            metaMap.set(metaName, item);
+          }
+        });
+
+        const derivedDefaults = fundsResult.rows.map((fund) => {
+          const meta = metaMap.get(fund.name.toLowerCase());
+          const toBool = (value: unknown, fallback: boolean) =>
+            typeof value === 'boolean' ? value : fallback;
+          const toNumber = (value: unknown, fallback: number) =>
+            typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+
+          const isNational = fund.name.toLowerCase() === 'fondo nacional';
+
+          return {
+            name: typeof meta?.name === 'string' ? (meta.name as string) : fund.name,
+            percentage: toNumber(meta?.percentage, isNational ? 10 : 0),
+            required: toBool(meta?.required, isNational),
+            autoCalculate: toBool(meta?.autoCalculate, isNational),
+            fundId: fund.id,
+            fundType: fund.type ?? undefined,
+            isActive: fund.is_active,
+          };
+        });
+
+        configuration.funds = {
+          ...fundsConfig,
+          defaultFunds: derivedDefaults,
+          liveFunds: fundsResult.rows,
+        };
+      } catch (fundError) {
+        console.error('Error enriching fund configuration:', fundError);
+      }
+    }
+
+    if (shouldIncludeSection('roles')) {
+      try {
+        const rolesConfig = (configuration.roles ?? {}) as Record<string, unknown>;
+        const definitionArray = Array.isArray(rolesConfig.definitions)
+          ? (rolesConfig.definitions as Array<Record<string, unknown>>)
+          : Array.isArray(rolesConfig.roles)
+            ? (rolesConfig.roles as Array<Record<string, unknown>>)
+            : [];
+
+        const definitionMap = new Map<string, Record<string, unknown>>();
+        definitionArray.forEach((definition) => {
+          const id = typeof definition?.id === 'string' ? definition.id : undefined;
+          if (id) {
+            definitionMap.set(id, definition);
+          }
+        });
+
+        const rolePermissions = await executeWithContext<{
+          role: string;
+          permission: string;
+          scope: string | null;
+        }>(auth, `SELECT role, permission, scope FROM role_permissions ORDER BY role, permission`);
+
+        const permissionsMap = new Map<string, string[]>();
+        rolePermissions.rows.forEach((row) => {
+          const key = row.role;
+          if (!permissionsMap.has(key)) {
+            permissionsMap.set(key, []);
+          }
+          permissionsMap.get(key)!.push(row.permission);
+        });
+
+        const titleCase = (value: string) =>
+          value
+            .split('_')
+            .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+            .join(' ');
+
+        const rolesList = Array.from(definitionMap.entries()).map(([roleId, definition]) => ({
+          id: roleId,
+          name:
+            typeof definition.name === 'string'
+              ? (definition.name as string)
+              : titleCase(roleId),
+          description:
+            typeof definition.description === 'string'
+              ? (definition.description as string)
+              : '',
+          editable:
+            typeof definition.editable === 'boolean'
+              ? (definition.editable as boolean)
+              : roleId !== 'admin',
+          permissions: permissionsMap.get(roleId) ??
+            (Array.isArray(definition.permissions)
+              ? (definition.permissions as string[])
+              : []),
+        }));
+
+        permissionsMap.forEach((permissions, roleId) => {
+          if (!definitionMap.has(roleId)) {
+            rolesList.push({
+              id: roleId,
+              name: titleCase(roleId),
+              description: '',
+              editable: roleId !== 'admin',
+              permissions,
+            });
+          }
+        });
+
+        configuration.roles = {
+          roles: rolesList,
+          permissionMatrix: rolePermissions.rows,
+        };
+      } catch (rolesError) {
+        console.error('Error enriching role configuration:', rolesError);
+      }
+    }
+
     const response = NextResponse.json({
       success: true,
       data: configuration

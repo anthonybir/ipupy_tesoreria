@@ -88,6 +88,16 @@ type DefaultFund = {
   percentage: number;
   required: boolean;
   autoCalculate: boolean;
+  fundId?: number | string;
+  fundType?: string;
+  isActive?: boolean;
+};
+
+type FundRecord = {
+  id: number | string;
+  name: string;
+  type?: string;
+  is_active?: boolean;
 };
 
 type FundsConfig = {
@@ -97,6 +107,7 @@ type FundsConfig = {
   trackFundHistory: boolean;
   allowInterFundTransfers: boolean;
   requireTransferApproval: boolean;
+  liveFunds?: FundRecord[];
 };
 
 type RoleDefinition = {
@@ -109,6 +120,11 @@ type RoleDefinition = {
 
 type RolesConfig = {
   roles: RoleDefinition[];
+  permissionMatrix?: Array<{
+    role: string;
+    permission: string;
+    scope?: string | null;
+  }>;
 };
 
 type IntegrationConfig = {
@@ -238,13 +254,19 @@ const ConfigurationPage = () => {
       { name: 'Fondo Nacional', percentage: 10, required: true, autoCalculate: true },
       { name: 'Misiones', percentage: 0, required: false, autoCalculate: false },
       { name: 'Instituto Bíblico', percentage: 0, required: false, autoCalculate: false },
-      { name: 'Construcción', percentage: 0, required: false, autoCalculate: false },
+      { name: 'Caballeros', percentage: 0, required: false, autoCalculate: false },
+      { name: 'Damas', percentage: 0, required: false, autoCalculate: false },
+      { name: 'Niños', percentage: 0, required: false, autoCalculate: false },
+      { name: 'APY', percentage: 0, required: false, autoCalculate: false },
+      { name: 'Lazos de Amor', percentage: 0, required: false, autoCalculate: false },
+      { name: 'Misión Posible', percentage: 0, required: false, autoCalculate: false },
     ],
     allowCustomFunds: true,
     maxCustomFunds: 10,
     trackFundHistory: true,
     allowInterFundTransfers: true,
     requireTransferApproval: true,
+    liveFunds: [],
   });
 
   // Roles & Permissions Configuration
@@ -826,18 +848,22 @@ const ConfigurationPage = () => {
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 {fundsConfig.defaultFunds.map((fund, index) => (
-                  <div key={index} className="grid grid-cols-4 gap-4 items-end">
+                  <div key={fund.fundId ?? `${fund.name}-${index}`} className="grid grid-cols-4 gap-4 items-end">
                     <div className="space-y-2">
                       <Label>Nombre del Fondo</Label>
-                      <Input
-                        value={fund.name}
-                        onChange={(e) => {
-                          const newFunds = [...fundsConfig.defaultFunds];
-                          newFunds[index].name = e.target.value;
-                          setFundsConfig({ ...fundsConfig, defaultFunds: newFunds });
-                        }}
-                        disabled={fund.required}
-                      />
+                      <Input value={fund.name} readOnly disabled />
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        {fund.fundType ? (
+                          <Badge variant="outline" className="uppercase">
+                            {fund.fundType.replace(/_/g, ' ').toUpperCase()}
+                          </Badge>
+                        ) : null}
+                        {typeof fund.isActive === 'boolean' ? (
+                          <Badge variant={fund.isActive ? 'success' : 'secondary'}>
+                            {fund.isActive ? 'Activo' : 'Inactivo'}
+                          </Badge>
+                        ) : null}
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label>Porcentaje (%)</Label>
@@ -849,7 +875,6 @@ const ConfigurationPage = () => {
                           newFunds[index].percentage = Number(e.target.value);
                           setFundsConfig({ ...fundsConfig, defaultFunds: newFunds });
                         }}
-                        disabled={fund.required}
                       />
                     </div>
                     <div className="flex items-center space-x-2">
@@ -863,8 +888,8 @@ const ConfigurationPage = () => {
                       />
                       <Label>Auto-calcular</Label>
                     </div>
-                    <Badge variant={fund.required ? "default" : "outline"}>
-                      {fund.required ? "Obligatorio" : "Opcional"}
+                    <Badge variant={fund.required ? 'default' : 'outline'}>
+                      {fund.required ? 'Obligatorio' : 'Opcional'}
                     </Badge>
                   </div>
                 ))}
