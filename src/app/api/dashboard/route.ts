@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { execute } from '@/lib/db';
+import { executeWithContext } from '@/lib/db';
 import { buildCorsHeaders, handleCorsPreflight } from '@/lib/cors';
 import { getAuthContext, AuthContext } from '@/lib/auth-context';
 const toNumber = (value: unknown): number => {
@@ -12,15 +12,16 @@ const toNumber = (value: unknown): number => {
 };
 
 const toInt = (value: unknown): number => Math.trunc(toNumber(value));
-const loadDashboardSummary = async () => {
+const loadDashboardSummary = async (auth: AuthContext | null) => {
   const [churches, reports, recentReports, fundOverview, statusCounts, monthlySummary] = await Promise.all([
-    execute<{ count: string }>('SELECT COUNT(*) as count FROM churches'),
-    execute<{
+    executeWithContext<{ count: string }>(auth, 'SELECT COUNT(*) as count FROM churches'),
+    executeWithContext<{
       total: string;
       total_tithes: string | null;
       total_offerings: string | null;
       total_national_fund: string | null;
     }>(
+      auth,
       `
         SELECT
           COUNT(*) as total,
@@ -30,7 +31,7 @@ const loadDashboardSummary = async () => {
         FROM reports
       `
     ),
-    execute<{
+    executeWithContext<{
       church_name: string;
       church_city: string;
       diezmos: string | null;
@@ -38,6 +39,7 @@ const loadDashboardSummary = async () => {
       fondo_nacional: string | null;
       [key: string]: unknown;
     }>(
+      auth,
       `
         SELECT
           r.*,
@@ -49,14 +51,15 @@ const loadDashboardSummary = async () => {
         LIMIT 5
       `
     ),
-    execute<{ name: string; current_balance: string | null }>('SELECT name, current_balance FROM funds ORDER BY name'),
-    execute<{ estado: string; count: string }>('SELECT estado, COUNT(*) AS count FROM reports GROUP BY estado'),
-    execute<{
+    executeWithContext<{ name: string; current_balance: string | null }>(auth, 'SELECT name, current_balance FROM funds ORDER BY name'),
+    executeWithContext<{ estado: string; count: string }>(auth, 'SELECT estado, COUNT(*) AS count FROM reports GROUP BY estado'),
+    executeWithContext<{
       year: number;
       month: number;
       total_entradas: string | null;
       total_fondo_nacional: string | null;
     }>(
+      auth,
       `
         SELECT
           year,
@@ -75,12 +78,13 @@ const loadDashboardSummary = async () => {
   const currentYear = currentDate.getFullYear();
 
   const [currentMonthStats, reportedChurches] = await Promise.all([
-    execute<{
+    executeWithContext<{
       reports_this_month: string;
       tithes_this_month: string | null;
       offerings_this_month: string | null;
       national_fund_this_month: string | null;
     }>(
+      auth,
       `
         SELECT
           COUNT(*) as reports_this_month,
@@ -92,7 +96,8 @@ const loadDashboardSummary = async () => {
       `,
       [currentMonth, currentYear]
     ),
-    execute<{ count: string }>(
+    executeWithContext<{ count: string }>(
+      auth,
       `
         SELECT COUNT(DISTINCT church_id) as count
         FROM reports
@@ -137,15 +142,16 @@ const loadDashboardSummary = async () => {
     statusCounts: statusCounts.rows
   };
 };
-const loadDashboardInit = async (user: AuthContext) => {
+const loadDashboardInit = async (auth: AuthContext) => {
   const queries = [
-    execute<{
+    executeWithContext<{
       total_churches: string;
       total_reports: string;
       current_month_reports: string;
       current_month_total: string | null;
       average_amount: string | null;
     }>(
+      auth,
       `
         SELECT
           COUNT(DISTINCT c.id) as total_churches,
@@ -159,7 +165,8 @@ const loadDashboardInit = async (user: AuthContext) => {
         LEFT JOIN reports r ON c.id = r.church_id
       `
     ),
-    execute(
+    executeWithContext(
+      auth,
       `
         SELECT
           r.id, r.church_id, r.month, r.year,
@@ -172,7 +179,8 @@ const loadDashboardInit = async (user: AuthContext) => {
         LIMIT 10
       `
     ),
-    execute(
+    executeWithContext(
+      auth,
       `
         SELECT
           c.id, c.name, c.city, c.pastor, c.grado, c.posicion, c.cedula,
@@ -186,7 +194,8 @@ const loadDashboardInit = async (user: AuthContext) => {
         ORDER BY c.name
       `
     ),
-    execute(
+    executeWithContext(
+      auth,
       `
         SELECT
           EXTRACT(YEAR FROM CURRENT_DATE) as current_year,
@@ -194,7 +203,8 @@ const loadDashboardInit = async (user: AuthContext) => {
           to_char(CURRENT_DATE, 'Month YYYY') as current_period
       `
     ),
-    execute(
+    executeWithContext(
+      auth,
       `
         SELECT
           COUNT(*) as total_funds,
@@ -203,7 +213,8 @@ const loadDashboardInit = async (user: AuthContext) => {
         FROM funds
       `
     ).catch(() => ({ rows: [{ total_funds: 0, active_funds: 0, total_balance: 0 }] })),
-    execute(
+    executeWithContext(
+      auth,
       `
         SELECT
           TO_CHAR(date_trunc('month', created_at), 'Mon') as month_name,
@@ -226,10 +237,10 @@ const loadDashboardInit = async (user: AuthContext) => {
   return {
     success: true,
     user: {
-      email: user.email,
-      role: user.role ?? 'user',
-      name: user.fullName ?? user.email,
-      churchId: user.churchId ?? null
+      email: auth.email,
+      role: auth.role ?? 'user',
+      name: auth.fullName ?? auth.email,
+      churchId: auth.churchId ?? null
     },
     metrics: metrics.rows[0] || {},
     recentReports: recentReports.rows,
@@ -270,12 +281,12 @@ export async function GET(request: NextRequest) {
     const authContext = await getAuthContext(request);
 
     if (view === 'summary' || !authContext) {
-      const summary = await loadDashboardSummary();
+      const summary = await loadDashboardSummary(authContext);
       return jsonResponse(summary, origin);
     }
 
     const initData = await loadDashboardInit(authContext);
-    const summary = await loadDashboardSummary();
+    const summary = await loadDashboardSummary(authContext);
 
     return jsonResponse({ summary, init: initData }, origin);
   } catch (error) {

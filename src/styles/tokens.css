@@ -1,0 +1,40 @@
+:root {
+  /* Core palette */
+  --absd-authority: #002556;
+  --absd-prosperity: #ffc93b;
+  --absd-wisdom: #6e6a7a;
+  --absd-success: #059669;
+  --absd-warning: #f59e0b;
+  --absd-error: #ef4444;
+  --absd-info: #0ea5e9;
+  --absd-surface: #ffffff;
+  --absd-muted: #f9fafb;
+  --absd-subtle: #f3f4f6;
+  --absd-ink: #0f172a;
+  --absd-border: rgba(15, 23, 42, 0.08);
+
+  /* Elevation & spacing */
+  --absd-shadow-soft: 0 20px 40px -24px rgba(15, 23, 42, 0.25);
+  --dashboard-unit: 8px;
+  --dashboard-gutter: 1rem;
+  --dashboard-columns: 4;
+
+  /* Typography stacks */
+  --font-body-stack: var(--font-body), "Inter", system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-heading-stack: var(--font-heading), "Plus Jakarta Sans", "Inter", system-ui,
+    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /* Runtime defaults */
+  --color-background: var(--absd-surface);
+  --color-foreground: var(--absd-ink);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #050816;
+    --color-foreground: #e5e7eb;
+    --absd-border: rgba(148, 163, 184, 0.24);
+    --absd-shadow-soft: 0 24px 50px -30px rgba(14, 165, 233, 0.35);
+  }
+}

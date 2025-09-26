@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthContext } from "@/lib/auth-context";
-import { execute } from "@/lib/db";
+import { getAuthContext, type AuthContext } from "@/lib/auth-context";
+import { executeWithContext } from "@/lib/db";
 import { setCORSHeaders } from "@/lib/cors";
 
 interface FundMovement {
@@ -27,6 +27,7 @@ interface FundMovementInput {
 // GET /api/financial/fund-movements - Get fund movements
 async function handleGet(req: NextRequest) {
   try {
+    const auth = await getAuthContext(req);
     const { searchParams } = new URL(req.url);
 
     const report_id = searchParams.get("report_id");
@@ -107,7 +108,7 @@ async function handleGet(req: NextRequest) {
       OFFSET $${filterValues.length + 2}
     `;
 
-    const result = await execute(finalQuery, [...filterValues, limitNumber, offsetNumber]);
+    const result = await executeWithContext(auth, finalQuery, [...filterValues, limitNumber, offsetNumber]);
 
     const totalsQuery = `
       SELECT
@@ -118,7 +119,7 @@ async function handleGet(req: NextRequest) {
       WHERE 1=1 ${whereClause}
     `;
 
-    const totals = await execute<{ total_count: string; total_amount: string }>(totalsQuery, filterValues);
+    const totals = await executeWithContext<{ total_count: string; total_amount: string }>(auth, totalsQuery, filterValues);
 
     const response = NextResponse.json({
       success: true,
@@ -171,7 +172,7 @@ async function handlePost(req: NextRequest) {
         setCORSHeaders(response);
         return response;
       }
-      return processReportMovements(reportId, user.email || "");
+      return processReportMovements(user, reportId, user.email || "");
     }
 
     const rawMovements = Array.isArray(rawBody) ? rawBody : [rawBody];
@@ -197,7 +198,7 @@ async function handlePost(req: NextRequest) {
         }
 
         // Create fund movement record
-        const result = await execute<FundMovement>(
+        const result = await executeWithContext<FundMovement>(user,
           `INSERT INTO fund_movements (
             report_id, church_id, fund_category_id,
             monto, tipo_movimiento, concepto, fecha_movimiento
@@ -214,7 +215,7 @@ async function handlePost(req: NextRequest) {
         );
 
         // Create corresponding transaction (using fund_category_id as fund_id for now)
-        await execute(
+        await executeWithContext(user, 
           `INSERT INTO transactions (
             date, fund_id, church_id, report_id,
             concept, amount_in, amount_out, created_by
@@ -230,7 +231,7 @@ async function handlePost(req: NextRequest) {
         );
 
         // Update fund balance (using fund_category_id as fund id)
-        await execute(
+        await executeWithContext(user, 
           `UPDATE funds
            SET current_balance = current_balance + $1,
                updated_at = CURRENT_TIMESTAMP
@@ -268,10 +269,10 @@ async function handlePost(req: NextRequest) {
 }
 
 // Process automatic fund movements when a report is submitted
-async function processReportMovements(reportId: number, userEmail: string) {
+async function processReportMovements(auth: AuthContext | null, reportId: number, userEmail: string) {
   try {
     // Get report details
-    const reportResult = await execute<{
+    const reportResult = await executeWithContext<{
       id: number;
       church_id: number;
       church_name: string;
@@ -280,7 +281,7 @@ async function processReportMovements(reportId: number, userEmail: string) {
       diezmos: string;
       ofrendas: string;
       fondo_nacional: string;
-    }>(
+    }>(auth,
       `SELECT r.*, c.name as church_name
        FROM reports r
        JOIN churches c ON r.church_id = c.id
@@ -297,7 +298,7 @@ async function processReportMovements(reportId: number, userEmail: string) {
     const report = reportResult.rows[0];
 
     // Check if movements already processed
-    const existing = await execute<{ count: string }>(
+    const existing = await executeWithContext<{ count: string }>(auth,
       `SELECT COUNT(*) as count FROM fund_movements WHERE report_id = $1 AND type = 'automatic'`,
       [reportId]
     );
@@ -313,7 +314,7 @@ async function processReportMovements(reportId: number, userEmail: string) {
     const movements = [];
 
     // Get or create funds for automatic movements
-    const funds = await execute<{ id: number; name: string }>(
+    const funds = await executeWithContext<{ id: number; name: string }>(auth,
       `SELECT id, name FROM funds WHERE name IN ('Fondo Nacional', 'Diezmos', 'Ofrendas')`
     );
 
@@ -324,7 +325,7 @@ async function processReportMovements(reportId: number, userEmail: string) {
 
     // Create missing funds if needed
     if (!fundMap["Fondo Nacional"]) {
-      const result = await execute<{ id: number }>(
+      const result = await executeWithContext<{ id: number }>(auth,
         `INSERT INTO funds (name, category, initial_balance, current_balance, active, created_by)
          VALUES ('Fondo Nacional', 'automatic', 0, 0, true, $1)
          RETURNING id`,
@@ -334,7 +335,7 @@ async function processReportMovements(reportId: number, userEmail: string) {
     }
 
     if (!fundMap["Diezmos"]) {
-      const result = await execute<{ id: number }>(
+      const result = await executeWithContext<{ id: number }>(auth,
         `INSERT INTO funds (name, category, initial_balance, current_balance, active, created_by)
          VALUES ('Diezmos', 'automatic', 0, 0, true, $1)
          RETURNING id`,
@@ -344,7 +345,7 @@ async function processReportMovements(reportId: number, userEmail: string) {
     }
 
     if (!fundMap["Ofrendas"]) {
-      const result = await execute<{ id: number }>(
+      const result = await executeWithContext<{ id: number }>(auth,
         `INSERT INTO funds (name, category, initial_balance, current_balance, active, created_by)
          VALUES ('Ofrendas', 'automatic', 0, 0, true, $1)
          RETURNING id`,
@@ -355,7 +356,7 @@ async function processReportMovements(reportId: number, userEmail: string) {
 
     // Process diezmos
     if (report.diezmos && parseFloat(report.diezmos) > 0) {
-      const diezmoMovement = await execute(
+      const diezmoMovement = await executeWithContext(auth, 
         `INSERT INTO fund_movements (
           report_id, church_id, fund_category_id, monto, tipo_movimiento, concepto, fecha_movimiento
         ) VALUES ($1, $2, $3, $4, 'automatic', $5, CURRENT_DATE)
@@ -370,7 +371,7 @@ async function processReportMovements(reportId: number, userEmail: string) {
       );
 
       // Create transaction
-      await execute(
+      await executeWithContext(auth, 
         `INSERT INTO transactions (
           date, fund_id, church_id, report_id, concept, amount_in, amount_out, created_by
         ) VALUES (CURRENT_DATE, $1, $2, $3, $4, $5, 0, $6)`,
@@ -385,7 +386,7 @@ async function processReportMovements(reportId: number, userEmail: string) {
       );
 
       // Update fund balance
-      await execute(
+      await executeWithContext(auth, 
         `UPDATE funds SET current_balance = current_balance + $1 WHERE id = $2`,
         [report.diezmos, fundMap["Diezmos"]]
       );
@@ -395,7 +396,7 @@ async function processReportMovements(reportId: number, userEmail: string) {
 
     // Process ofrendas
     if (report.ofrendas && parseFloat(report.ofrendas) > 0) {
-      const ofrendaMovement = await execute(
+      const ofrendaMovement = await executeWithContext(auth, 
         `INSERT INTO fund_movements (
           report_id, church_id, fund_category_id, monto, tipo_movimiento, concepto, fecha_movimiento
         ) VALUES ($1, $2, $3, $4, 'automatic', $5, CURRENT_DATE)
@@ -410,7 +411,7 @@ async function processReportMovements(reportId: number, userEmail: string) {
       );
 
       // Create transaction
-      await execute(
+      await executeWithContext(auth, 
         `INSERT INTO transactions (
           date, fund_id, church_id, report_id, concept, amount_in, amount_out, created_by
         ) VALUES (CURRENT_DATE, $1, $2, $3, $4, $5, 0, $6)`,
@@ -425,7 +426,7 @@ async function processReportMovements(reportId: number, userEmail: string) {
       );
 
       // Update fund balance
-      await execute(
+      await executeWithContext(auth, 
         `UPDATE funds SET current_balance = current_balance + $1 WHERE id = $2`,
         [report.ofrendas, fundMap["Ofrendas"]]
       );
@@ -435,7 +436,7 @@ async function processReportMovements(reportId: number, userEmail: string) {
 
     // Process fondo nacional (10% of total)
     if (report.fondo_nacional && parseFloat(report.fondo_nacional) > 0) {
-      const fondoMovement = await execute(
+      const fondoMovement = await executeWithContext(auth, 
         `INSERT INTO fund_movements (
           report_id, church_id, fund_category_id, monto, tipo_movimiento, concepto, fecha_movimiento
         ) VALUES ($1, $2, $3, $4, 'automatic', $5, CURRENT_DATE)
@@ -450,7 +451,7 @@ async function processReportMovements(reportId: number, userEmail: string) {
       );
 
       // Create transaction
-      await execute(
+      await executeWithContext(auth, 
         `INSERT INTO transactions (
           date, fund_id, church_id, report_id, concept, amount_in, amount_out, created_by
         ) VALUES (CURRENT_DATE, $1, $2, $3, $4, $5, 0, $6)`,
@@ -465,7 +466,7 @@ async function processReportMovements(reportId: number, userEmail: string) {
       );
 
       // Update fund balance
-      await execute(
+      await executeWithContext(auth, 
         `UPDATE funds SET current_balance = current_balance + $1 WHERE id = $2`,
         [report.fondo_nacional, fundMap["Fondo Nacional"]]
       );
@@ -512,7 +513,7 @@ async function handleDelete(req: NextRequest) {
     }
 
     // Get movement details
-    const movement = await execute(
+    const movement = await executeWithContext(user, 
       `SELECT * FROM fund_movements WHERE id = $1`,
       [movementId]
     );
@@ -526,16 +527,16 @@ async function handleDelete(req: NextRequest) {
     const mov = movement.rows[0];
 
     // Delete the movement
-    await execute(`DELETE FROM fund_movements WHERE id = $1`, [movementId]);
+    await executeWithContext(user, `DELETE FROM fund_movements WHERE id = $1`, [movementId]);
 
     // Reverse the fund balance (using fund_category_id)
-    await execute(
+    await executeWithContext(user, 
       `UPDATE funds SET current_balance = current_balance - $1 WHERE id = $2`,
       [mov.monto, mov.fund_category_id]
     );
 
     // Delete related transaction if exists
-    await execute(
+    await executeWithContext(user, 
       `DELETE FROM transactions WHERE report_id = $1 AND fund_id = $2 AND amount_in = $3`,
       [mov.report_id, mov.fund_category_id, mov.monto]
     );

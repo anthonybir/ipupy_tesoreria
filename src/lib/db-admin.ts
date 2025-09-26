@@ -1,4 +1,5 @@
-import { execute } from '@/lib/db';
+import { executeWithContext } from '@/lib/db';
+import { AuthContext } from '@/lib/auth-context';
 
 type FundBalanceRow = {
   id: number;
@@ -20,7 +21,7 @@ type FundBalanceFilters = {
   type?: string | null;
 };
 
-export async function fetchFundBalances(filters: FundBalanceFilters = {}) {
+export async function fetchFundBalances(auth: AuthContext | null, filters: FundBalanceFilters = {}) {
   const conditions: string[] = [];
   const params: unknown[] = [];
 
@@ -56,17 +57,17 @@ export async function fetchFundBalances(filters: FundBalanceFilters = {}) {
     ORDER BY f.is_active DESC, f.name;
   `;
 
-  const result = await execute<FundBalanceRow>(query, params);
+  const result = await executeWithContext<FundBalanceRow>(auth, query, params);
   return result.rows;
 }
 
 // Process report approval and create fund transactions
-export async function processReportApproval(reportId: number, approvedBy: string) {
-  await execute('BEGIN');
+export async function processReportApproval(auth: AuthContext | null, reportId: number, approvedBy: string) {
+  await executeWithContext(auth, 'BEGIN');
 
   try {
     // Get report details
-    const reportResult = await execute(`
+    const reportResult = await executeWithContext(auth, `
       SELECT r.*, c.name as church_name
       FROM reports r
       JOIN churches c ON r.church_id = c.id
@@ -98,7 +99,7 @@ export async function processReportApproval(reportId: number, approvedBy: string
       const totalBase = diezmos + ofrendas;
       const generalAmount = totalBase * 0.1;
 
-      const txn = await execute(`
+      const txn = await executeWithContext(auth, `
         INSERT INTO transactions (
           fund_id, church_id, report_id, concept,
           amount_in, amount_out, date, created_by, created_at
@@ -131,7 +132,7 @@ export async function processReportApproval(reportId: number, approvedBy: string
     for (const fund of designatedFunds) {
       const designatedAmount = toNumber(report[fund.field]);
       if (designatedAmount > 0) {
-        const txn = await execute(`
+        const txn = await executeWithContext(auth, `
           INSERT INTO transactions (
             fund_id, church_id, report_id, concept,
             amount_in, amount_out, date, created_by, created_at
@@ -152,7 +153,7 @@ export async function processReportApproval(reportId: number, approvedBy: string
     }
 
     // Update report status metadata
-    await execute(`
+    await executeWithContext(auth, `
       UPDATE reports
       SET estado = 'aprobado_admin',
           processed_by = $1,
@@ -165,7 +166,7 @@ export async function processReportApproval(reportId: number, approvedBy: string
     `, [approvedBy, reportId]);
 
     // Update fund balances
-    await execute(`
+    await executeWithContext(auth, `
       UPDATE funds f
       SET current_balance = COALESCE((
         SELECT SUM(t.amount_in - t.amount_out)
@@ -175,16 +176,16 @@ export async function processReportApproval(reportId: number, approvedBy: string
       updated_at = NOW()
     `);
 
-    await execute('COMMIT');
+    await executeWithContext(auth, 'COMMIT');
     return { success: true, transactions };
   } catch (error) {
-    await execute('ROLLBACK');
+    await executeWithContext(auth, 'ROLLBACK');
     throw error;
   }
 }
 
 // Add external transaction (treasurer manual entry)
-export async function addExternalTransaction(data: {
+export async function addExternalTransaction(auth: AuthContext | null, data: {
   fund_id: number;
   concept: string;
   amount_in: number;
@@ -193,11 +194,11 @@ export async function addExternalTransaction(data: {
   provider?: string | null;
   document_number?: string | null;
 }) {
-  await execute('BEGIN');
+  await executeWithContext(auth, 'BEGIN');
 
   try {
     // Insert transaction
-    const result = await execute(`
+    const result = await executeWithContext(auth, `
       INSERT INTO transactions (
         fund_id, concept, provider, document_number,
         amount_in, amount_out, date, created_by, created_at
@@ -215,27 +216,27 @@ export async function addExternalTransaction(data: {
     ]);
 
     // Update fund balance
-    await execute(`
+    await executeWithContext(auth, `
       UPDATE funds
       SET current_balance = current_balance + $1 - $2,
           updated_at = NOW()
       WHERE id = $3
     `, [data.amount_in, data.amount_out, data.fund_id]);
 
-    await execute('COMMIT');
+    await executeWithContext(auth, 'COMMIT');
     return result.rows[0];
   } catch (error) {
-    await execute('ROLLBACK');
+    await executeWithContext(auth, 'ROLLBACK');
     throw error;
   }
 }
 
 // Generate reconciliation report
-export async function generateReconciliation(fundId?: number) {
+export async function generateReconciliation(auth: AuthContext | null, fundId?: number) {
   const fundFilter = fundId ? 'WHERE f.id = $1' : '';
   const params = fundId ? [fundId] : [];
 
-  const result = await execute(`
+  const result = await executeWithContext(auth, `
     WITH fund_summary AS (
       SELECT
         f.id,

@@ -183,6 +183,12 @@ export const execute = async <T extends QueryResultRow = QueryResultRow>(
       const { text, params: boundParams } = normalizeStatement(statement, params);
 
       try {
+        // CRITICAL SECURITY TODO: Set RLS context before executing query
+        // This is required for Row Level Security policies to work!
+        // Without this, RLS policies cannot identify the current user.
+        // Implementation blocked: Need to pass AuthContext through execute()
+        // await setDatabaseContext(client, authContext);
+
         return await Promise.race([
           client.query<T>(text, boundParams),
           new Promise<QueryResult<T>>((_, reject) => {
@@ -214,6 +220,138 @@ export const execute = async <T extends QueryResultRow = QueryResultRow>(
   throw new Error('Unreachable execute retry loop');
 };
 export const query = execute;
+
+/**
+ * Execute a database query with RLS context
+ * This is the SECURE version that sets user context for Row Level Security
+ *
+ * @param authContext - Authentication context from auth-supabase
+ * @param statement - SQL statement to execute
+ * @param params - Query parameters
+ * @param retries - Number of retry attempts
+ */
+/**
+ * Execute multiple queries within a transaction using the same connection
+ * This ensures ACID compliance for complex operations
+ *
+ * @param authContext - Authentication context from auth-supabase
+ * @param callback - Async function that receives the client and performs queries
+ */
+export const executeTransaction = async (
+  authContext: { userId?: string; role?: string; churchId?: number | null } | null,
+  callback: (client: PoolClient) => Promise<void>
+): Promise<void> => {
+  const poolRef = createConnection();
+  const client = await Promise.race([
+    poolRef.connect(),
+    new Promise<PoolClient>((_, reject) => {
+      setTimeout(() => reject(new Error('Pool connect timeout')), 15000);
+    })
+  ]);
+
+  try {
+    // Set RLS context once for the entire transaction
+    if (authContext) {
+      await client.query("SELECT set_config('app.current_user_id', $1, true)",
+        [authContext.userId || '00000000-0000-0000-0000-000000000000']);
+      await client.query("SELECT set_config('app.current_user_role', $1, true)",
+        [authContext.role || '']);  // Empty string for unauthenticated users
+      await client.query("SELECT set_config('app.current_user_church_id', $1, true)",
+        [String(authContext.churchId || 0)]);
+    }
+
+    // Start transaction
+    await client.query('BEGIN');
+
+    // Execute the callback with the same client
+    await callback(client);
+
+    // Commit transaction
+    await client.query('COMMIT');
+  } catch (error) {
+    // Rollback on error
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    // Clear context before releasing connection
+    if (authContext) {
+      await client.query("SELECT set_config('app.current_user_id', '00000000-0000-0000-0000-000000000000', true)");
+      await client.query("SELECT set_config('app.current_user_role', '', true)");
+      await client.query("SELECT set_config('app.current_user_church_id', '0', true)");
+    }
+    client.release();
+  }
+};
+
+export const executeWithContext = async <T extends QueryResultRow = QueryResultRow>(
+  authContext: { userId?: string; role?: string; churchId?: number | null } | null,
+  statement: Statement,
+  params?: unknown,
+  retries = 3
+): Promise<QueryResult<T>> => {
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      if (shouldRecreatePool()) {
+        await destroyPool();
+      }
+
+      const poolRef = createConnection();
+      const client = await Promise.race([
+        poolRef.connect(),
+        new Promise<PoolClient>((_, reject) => {
+          setTimeout(() => reject(new Error('Pool connect timeout')), 15000);
+        })
+      ]);
+
+      const { text, params: boundParams } = normalizeStatement(statement, params);
+
+      try {
+        // Set RLS context BEFORE executing the query
+        if (authContext) {
+          await client.query("SELECT set_config('app.current_user_id', $1, true)",
+            [authContext.userId || '00000000-0000-0000-0000-000000000000']);
+          await client.query("SELECT set_config('app.current_user_role', $1, true)",
+            [authContext.role || '']);  // Empty string for unauthenticated users
+          await client.query("SELECT set_config('app.current_user_church_id', $1, true)",
+            [String(authContext.churchId || 0)]);
+        }
+
+        return await Promise.race([
+          client.query<T>(text, boundParams),
+          new Promise<QueryResult<T>>((_, reject) => {
+            setTimeout(() => reject(new Error('Query timeout')), 30000);
+          })
+        ]);
+      } finally {
+        // Clear context before releasing connection
+        if (authContext) {
+          await client.query("SELECT set_config('app.current_user_id', '00000000-0000-0000-0000-000000000000', true)");
+          await client.query("SELECT set_config('app.current_user_role', '', true)");  // Clear to empty string
+          await client.query("SELECT set_config('app.current_user_church_id', '0', true)");
+        }
+        client.release();
+      }
+    } catch (error) {
+      consecutiveErrors += 1;
+
+      if (attempt === retries) {
+        await destroyPool();
+        throw error;
+      }
+
+      if (isConnectionError(error) || (error as { message?: string }).message?.includes('timeout')) {
+        await destroyPool();
+      }
+
+      const baseDelay = attempt * 1000;
+      const jitter = Math.random() * 1000;
+      const delay = Math.min(baseDelay + jitter, 3000);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+
+  throw new Error('Unreachable execute retry loop');
+};
 
 export const batch = async (statements: Statement[]): Promise<QueryResult[]> => {
   const results: QueryResult[] = [];

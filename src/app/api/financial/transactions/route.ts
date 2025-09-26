@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthContext } from "@/lib/auth-context";
-import { execute } from "@/lib/db";
+import { executeWithContext } from "@/lib/db";
 import { setCORSHeaders } from "@/lib/cors";
 
 interface Transaction {
@@ -36,6 +36,7 @@ interface TransactionInput {
 // GET /api/financial/transactions - Get transactions with filters
 async function handleGet(req: NextRequest) {
   try {
+    const auth = await getAuthContext(req);
     const { searchParams } = new URL(req.url);
 
     const fund_id = searchParams.get("fund_id");
@@ -96,7 +97,7 @@ async function handleGet(req: NextRequest) {
       OFFSET $${filterValues.length + 2}
     `;
 
-    const result = await execute<Transaction>(listQuery, [...filterValues, limitNumber, offsetNumber]);
+    const result = await executeWithContext<Transaction>(auth, listQuery, [...filterValues, limitNumber, offsetNumber]);
 
     const totalsQuery = `
       SELECT
@@ -107,11 +108,11 @@ async function handleGet(req: NextRequest) {
       ${whereClause}
     `;
 
-    const totals = await execute<{
+    const totals = await executeWithContext<{
       total_count: string;
       total_in: string;
       total_out: string
-    }>(totalsQuery, filterValues);
+    }>(auth, totalsQuery, filterValues);
 
     const response = NextResponse.json({
       success: true,
@@ -188,7 +189,7 @@ async function handlePost(req: NextRequest) {
         }
 
         // Insert transaction
-        const result = await execute<Transaction>(
+        const result = await executeWithContext<Transaction>(user,
           `INSERT INTO transactions (
             date, fund_id, church_id, report_id,
             concept, provider, document_number,
@@ -211,7 +212,7 @@ async function handlePost(req: NextRequest) {
 
         // Update fund balance
         const balanceChange = amountIn - amountOut;
-        await execute(
+        await executeWithContext(user, 
           `UPDATE funds
            SET current_balance = current_balance + $1,
                updated_at = CURRENT_TIMESTAMP
@@ -270,7 +271,7 @@ async function handlePut(req: NextRequest) {
     const body: Partial<TransactionInput> = await req.json();
 
     // Get existing transaction
-    const existing = await execute<Transaction>(
+    const existing = await executeWithContext<Transaction>(user,
       `SELECT * FROM transactions WHERE id = $1`,
       [transactionId]
     );
@@ -330,7 +331,7 @@ async function handlePut(req: NextRequest) {
       const balanceDiff = newBalance - oldBalance;
 
       if (balanceDiff !== 0) {
-        await execute(
+        await executeWithContext(user, 
           `UPDATE funds
            SET current_balance = current_balance + $1,
                updated_at = CURRENT_TIMESTAMP
@@ -351,7 +352,7 @@ async function handlePut(req: NextRequest) {
     paramCount++;
     values.push(transactionId);
 
-    const result = await execute<Transaction>(
+    const result = await executeWithContext<Transaction>(user,
       `UPDATE transactions SET ${updates.join(", ")} WHERE id = $${paramCount} RETURNING *`,
       values
     );
@@ -395,7 +396,7 @@ async function handleDelete(req: NextRequest) {
     }
 
     // Get transaction details for balance adjustment
-    const existing = await execute<Transaction>(
+    const existing = await executeWithContext<Transaction>(user,
       `SELECT * FROM transactions WHERE id = $1`,
       [transactionId]
     );
@@ -409,11 +410,11 @@ async function handleDelete(req: NextRequest) {
     const transaction = existing.rows[0];
 
     // Delete transaction
-    await execute(`DELETE FROM transactions WHERE id = $1`, [transactionId]);
+    await executeWithContext(user, `DELETE FROM transactions WHERE id = $1`, [transactionId]);
 
     // Adjust fund balance
     const balanceAdjustment = Number(transaction.amount_out) - Number(transaction.amount_in);
-    await execute(
+    await executeWithContext(user, 
       `UPDATE funds
        SET current_balance = current_balance + $1,
            updated_at = CURRENT_TIMESTAMP

@@ -2,8 +2,8 @@ import { Buffer } from "node:buffer";
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 
-import { getAuthContext } from "@/lib/auth-context";
-import { execute } from "@/lib/db";
+import { getAuthContext, type AuthContext } from "@/lib/auth-context";
+import { executeWithContext } from "@/lib/db";
 import { setCORSHeaders } from "@/lib/cors";
 
 export const runtime = "nodejs";
@@ -66,7 +66,7 @@ export async function GET(req: NextRequest) {
       return badRequest("Parámetro action requerido. Valores válidos: export");
     }
 
-    return handleExportRequest(searchParams);
+    return handleExportRequest(auth, searchParams);
   } catch (error) {
     console.error("Error in data export handler:", error);
     return jsonResponse({ error: "Error interno del servidor" }, 500);
@@ -85,13 +85,13 @@ export async function POST(req: NextRequest) {
       return badRequest("Parámetro action requerido. Valores válidos: import");
     }
 
-    return handleImportRequest(req);
+    return handleImportRequest(auth, req);
   } catch (error) {
     console.error("Error in data import handler:", error);
     return jsonResponse({ error: "Error interno del servidor" }, 500);
   }
 }
-async function handleExportRequest(searchParams: URLSearchParams) {
+async function handleExportRequest(auth: AuthContext | null, searchParams: URLSearchParams) {
   const yearParam = searchParams.get("year");
   const monthParam = searchParams.get("month");
   const type = (searchParams.get("type") || "monthly").toLowerCase();
@@ -117,15 +117,15 @@ async function handleExportRequest(searchParams: URLSearchParams) {
     if (!Number.isInteger(month) || month < 1 || month > 12) {
       return badRequest("Mes inválido");
     }
-    const result = await fetchMonthlyExport(year, month);
+    const result = await fetchMonthlyExport(auth, year, month);
     exportData = result.data;
     filename = result.filename;
   } else if (type === "yearly") {
-    const result = await fetchYearlyExport(year);
+    const result = await fetchYearlyExport(auth, year);
     exportData = result.data;
     filename = result.filename;
   } else if (type === "churches") {
-    const result = await fetchChurchesExport(year);
+    const result = await fetchChurchesExport(auth, year);
     exportData = result.data;
     filename = result.filename;
   } else {
@@ -145,8 +145,8 @@ async function handleExportRequest(searchParams: URLSearchParams) {
 
   return buildBinaryResponse(Buffer.from(buffer), filename);
 }
-async function fetchMonthlyExport(year: number, month: number) {
-  const result = await execute(
+async function fetchMonthlyExport(auth: AuthContext | null, year: number, month: number) {
+  const result = await executeWithContext(auth, 
     `
     SELECT
       c.name as "Iglesia",
@@ -192,8 +192,8 @@ async function fetchMonthlyExport(year: number, month: number) {
   };
 }
 
-async function fetchYearlyExport(year: number) {
-  const result = await execute(
+async function fetchYearlyExport(auth: AuthContext | null, year: number) {
+  const result = await executeWithContext(auth, 
     `
     SELECT
       c.name as "Iglesia",
@@ -221,8 +221,8 @@ async function fetchYearlyExport(year: number) {
   };
 }
 
-async function fetchChurchesExport(year: number) {
-  const result = await execute(
+async function fetchChurchesExport(auth: AuthContext | null, year: number) {
+  const result = await executeWithContext(auth, 
     `
     SELECT
       name as "Nombre Iglesia",
@@ -289,7 +289,7 @@ function buildWorkbook(
 
   return { workbook, sheetName };
 }
-async function handleImportRequest(req: NextRequest) {
+async function handleImportRequest(auth: AuthContext | null, req: NextRequest) {
   if (req.method !== "POST") {
     return methodNotAllowed("Método no permitido para import - usar POST");
   }
@@ -338,12 +338,12 @@ async function handleImportRequest(req: NextRequest) {
         return badRequest("Mes inválido");
       }
 
-      const result = await importReports(rows, year, month, overwrite);
+      const result = await importReports(auth, rows, year, month, overwrite);
       return jsonResponse(result);
     }
 
     if (type === "churches") {
-      const result = await importChurches(rows as ChurchesImportRow[], overwrite);
+      const result = await importChurches(auth, rows as ChurchesImportRow[], overwrite);
       return jsonResponse(result);
     }
 
@@ -354,10 +354,11 @@ async function handleImportRequest(req: NextRequest) {
   }
 }
 async function importReports(
+  auth: AuthContext | null,
   data: ReportsImportRow[],
   year: number,
   month: number,
-  overwrite: boolean
+  overwrite: boolean,
 ): Promise<ImportResult> {
   const results: ImportResult = {
     imported: 0,
@@ -383,7 +384,7 @@ async function importReports(
         continue;
       }
 
-      const churchResult = await execute(
+      const churchResult = await executeWithContext(auth, 
         "SELECT id FROM churches WHERE LOWER(name) LIKE LOWER($1) AND active = true",
         [`%${churchName.trim()}%`]
       );
@@ -395,7 +396,7 @@ async function importReports(
 
       const churchId = churchResult.rows[0].id;
 
-      const existingReport = await execute(
+      const existingReport = await executeWithContext(auth, 
         "SELECT id FROM reports WHERE church_id = $1 AND month = $2 AND year = $3",
         [churchId, month, year]
       );
@@ -449,7 +450,7 @@ async function importReports(
       const observaciones = (row["Observaciones"] as string | undefined) || "";
 
       if (existingReport.rows.length > 0 && overwrite) {
-        await execute(
+        await executeWithContext(auth, 
           `
           UPDATE reports SET
             diezmos = $1, ofrendas = $2, anexos = $3, caballeros = $4, damas = $5,
@@ -488,7 +489,7 @@ async function importReports(
           ]
         );
       } else {
-        await execute(
+        await executeWithContext(auth, 
           `
           INSERT INTO reports (
             church_id, month, year, diezmos, ofrendas, anexos, caballeros, damas,
@@ -544,8 +545,9 @@ async function importReports(
   return results;
 }
 async function importChurches(
+  auth: AuthContext | null,
   data: ChurchesImportRow[],
-  overwrite: boolean
+  overwrite: boolean,
 ): Promise<ImportResult> {
   const results: ImportResult = {
     imported: 0,
@@ -573,7 +575,7 @@ async function importChurches(
         continue;
       }
 
-      const existingChurch = await execute(
+      const existingChurch = await executeWithContext(auth, 
         "SELECT id FROM churches WHERE LOWER(name) = LOWER($1)",
         [name.trim()]
       );
@@ -600,7 +602,7 @@ async function importChurches(
         "";
 
       if (existingChurch.rows.length > 0 && overwrite) {
-        await execute(
+        await executeWithContext(auth, 
           `
           UPDATE churches SET
             city = $1, pastor = $2, phone = $3, pastor_ruc = $4, pastor_cedula = $5,
@@ -610,7 +612,7 @@ async function importChurches(
           [city, pastor, phone, ruc, cedula, grado, posicion, name]
         );
       } else {
-        await execute(
+        await executeWithContext(auth, 
           `
           INSERT INTO churches (
             name, city, pastor, phone, pastor_ruc, pastor_cedula, pastor_grado, pastor_posicion

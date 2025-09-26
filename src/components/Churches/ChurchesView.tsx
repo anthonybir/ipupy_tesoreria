@@ -5,6 +5,10 @@ import { useMemo, useState } from 'react';
 
 import { useChurches } from '@/hooks/useChurches';
 import { ChurchForm } from '@/components/Churches/ChurchForm';
+import { Button } from '@/components/ui/button';
+import { DataTable, FilterBar, FormField, PageHeader, SectionCard, StatusPill } from '@/components/Shared';
+import type { DataTableColumn } from '@/components/Shared/DataTable';
+import type { ChurchRecord } from '@/types/api';
 
 export default function ChurchesView() {
   const [search, setSearch] = useState('');
@@ -23,126 +27,123 @@ export default function ChurchesView() {
     );
   }, [churches, search]);
 
+  const columns: Array<DataTableColumn<ChurchRecord>> = [
+    {
+      id: 'church',
+      header: 'Iglesia',
+      render: (church) => (
+        <div className="flex flex-col gap-1">
+          <span className="font-semibold text-[var(--absd-ink)]">{church.name}</span>
+          {church.ruc && <span className="text-xs text-[rgba(15,23,42,0.55)]">RUC: {church.ruc}</span>}
+        </div>
+      ),
+    },
+    {
+      id: 'city',
+      header: 'Ciudad',
+      render: (church) => <span className="text-[var(--absd-ink)]">{church.city || 'Sin registrar'}</span>,
+    },
+    {
+      id: 'pastor',
+      header: 'Pastor/a',
+      render: (church) => (
+        <div className="flex flex-col gap-1 text-[var(--absd-ink)]">
+          <span>{church.pastor}</span>
+          {church.position && (
+            <span className="text-xs text-[rgba(15,23,42,0.55)]">{church.position}</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      id: 'contact',
+      header: 'Contacto',
+      render: (church) => (
+        <div className="flex flex-col gap-1 text-[var(--absd-ink)]">
+          {church.phone ? <span>Tel: {church.phone}</span> : <span className="text-xs text-[rgba(15,23,42,0.55)]">Sin teléfono</span>}
+          {church.email && <span className="text-xs text-[rgba(15,23,42,0.55)]">{church.email}</span>}
+        </div>
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Estado',
+      render: (church) => (
+        <StatusPill tone={church.active ? 'success' : 'neutral'}>
+          {church.active ? 'Activa' : 'Inactiva'}
+        </StatusPill>
+      ),
+    },
+    {
+      id: 'actions',
+      header: 'Acciones',
+      render: (church) => (
+        <Link
+          href={`/reports?tab=history&churchId=${church.id}`}
+          className="inline-flex items-center rounded-lg border border-[var(--absd-border)] px-3 py-1.5 text-xs font-semibold text-[var(--absd-authority)] transition hover:border-[var(--absd-authority)] hover:text-[var(--absd-authority)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--absd-authority)]"
+        >
+          Ver reportes
+        </Link>
+      ),
+    },
+  ];
+
   return (
     <div className="space-y-8">
-      <header className="flex flex-col gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Directorio</span>
-        <h1 className="text-3xl font-semibold text-slate-900">Iglesias activas</h1>
-        <p className="max-w-3xl text-sm text-slate-600">
-          Registra nuevas congregaciones, actualiza su información de contacto y consulta rápidamente el estado de sus reportes.
-        </p>
-      </header>
+      <PageHeader
+        title="Iglesias activas"
+        subtitle="Registra nuevas congregaciones, actualiza información de contacto y consulta el estado de sus reportes."
+      />
 
       <ChurchForm />
 
-      <section className="dashboard-card p-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
-          <div className="flex flex-1 flex-col">
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="search-churches">
-              Buscar
-            </label>
-            <input
-              id="search-churches"
-              type="search"
-              placeholder="Filtrar por nombre, ciudad o pastor"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              className="mt-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-            />
-          </div>
-
-          <button
+      <FilterBar
+        actions={
+          <Button
             type="button"
-            className="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/30 transition hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+            variant="primary"
+            size="sm"
+            loading={isFetching}
             onClick={() => refetch()}
-            disabled={isFetching}
           >
-            {isFetching ? 'Actualizando…' : 'Refrescar'}
-          </button>
-        </div>
-      </section>
+            Refrescar
+          </Button>
+        }
+      >
+        <FormField htmlFor="search-churches" label="Buscar">
+          <input
+            id="search-churches"
+            type="search"
+            placeholder="Filtrar por nombre, ciudad o pastor"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            className="rounded-xl border border-[var(--absd-border)] bg-white px-3 py-2 text-sm text-[var(--absd-ink)] shadow-sm focus:border-[var(--absd-authority)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_oklab,var(--absd-authority) 40%,white)]"
+          />
+        </FormField>
+      </FilterBar>
 
-      <section className="dashboard-card overflow-hidden">
-        <header className="flex flex-col gap-2 border-b border-slate-200 px-6 py-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">Listado de iglesias</h2>
-            <p className="text-sm text-slate-600">
-              {isLoading ? 'Cargando iglesias…' : `${filteredChurches.length} registro${filteredChurches.length === 1 ? '' : 's'} visibles`}
-            </p>
+      <SectionCard
+        title="Listado de iglesias"
+        description={
+          isLoading
+            ? 'Cargando iglesias…'
+            : `${filteredChurches.length} registro${filteredChurches.length === 1 ? '' : 's'} visibles`
+        }
+      >
+        {isError ? (
+          <div className="rounded-2xl border border-[var(--absd-error)] bg-[rgba(239,68,68,0.08)] px-4 py-3 text-sm text-[var(--absd-error)]">
+            {(error as Error).message || 'No se pudieron cargar las iglesias'}
           </div>
-        </header>
-
-        <div className="overflow-x-auto px-6 pb-6">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium uppercase tracking-wide text-slate-500">Iglesia</th>
-                <th className="px-4 py-3 text-left font-medium uppercase tracking-wide text-slate-500">Ciudad</th>
-                <th className="px-4 py-3 text-left font-medium uppercase tracking-wide text-slate-500">Pastor/a</th>
-                <th className="px-4 py-3 text-left font-medium uppercase tracking-wide text-slate-500">Contacto</th>
-                <th className="px-4 py-3 text-left font-medium uppercase tracking-wide text-slate-500">Estado</th>
-                <th className="px-4 py-3 text-left font-medium uppercase tracking-wide text-slate-500">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-slate-500">Cargando información…</td>
-                </tr>
-              ) : isError ? (
-                <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-red-600">
-                    {(error as Error).message || 'No se pudieron cargar las iglesias'}
-                  </td>
-                </tr>
-              ) : filteredChurches.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
-                    No se encontraron iglesias que coincidan con la búsqueda.
-                  </td>
-                </tr>
-              ) : (
-                filteredChurches.map((church) => (
-                  <tr key={church.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-900">
-                      <div className="font-semibold">{church.name}</div>
-                      {church.ruc && (
-                        <div className="text-xs text-slate-500">RUC: {church.ruc}</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">{church.city || 'Sin registrar'}</td>
-                    <td className="px-4 py-3 text-slate-700">
-                      <div>{church.pastor}</div>
-                      {church.position && (
-                        <div className="text-xs text-slate-500">{church.position}</div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
-                      {church.phone ? <div>Tel: {church.phone}</div> : <div className="text-xs text-slate-500">Sin teléfono</div>}
-                      {church.email && <div className="text-xs text-slate-500">{church.email}</div>}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${church.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}
-                      >
-                        {church.active ? 'Activa' : 'Inactiva'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/reports?tab=history&churchId=${church.id}`}
-                        className="inline-flex items-center rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50"
-                      >
-                        Ver reportes
-                      </Link>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+        ) : (
+          <DataTable
+            data={filteredChurches}
+            columns={columns}
+            loading={isLoading || isFetching}
+            skeletonRows={6}
+            emptyContent="No se encontraron iglesias que coincidan con la búsqueda."
+          />
+        )}
+      </SectionCard>
     </div>
   );
 }

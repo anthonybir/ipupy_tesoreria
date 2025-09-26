@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchFundBalances, addExternalTransaction } from '@/lib/db-admin';
-import { execute } from '@/lib/db';
+import { executeWithContext } from '@/lib/db';
+import { requireAdmin } from '@/lib/auth-supabase';
 
 // Admin-only fund management using direct pool access
 // GET: Fetch all funds with full ledger calculations
 export async function GET(request: NextRequest) {
   try {
+    // SECURITY: Require admin authentication
+    const auth = await requireAdmin(request);
     const { searchParams } = new URL(request.url);
     const includeInactive = searchParams.get('includeInactive') === 'true';
     const type = searchParams.get('type');
 
-    const funds = await fetchFundBalances({
+    const funds = await fetchFundBalances(auth, {
       includeInactive,
       type: type || null
     });
@@ -38,6 +41,8 @@ export async function GET(request: NextRequest) {
 // POST: Create external transaction (treasurer manual entry)
 export async function POST(request: NextRequest) {
   try {
+    // SECURITY: Require admin authentication
+    const auth = await requireAdmin(request);
     const data = await request.json();
     const {
       fund_id,
@@ -57,7 +62,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const txn = await addExternalTransaction({
+    const txn = await addExternalTransaction(auth, {
       fund_id,
       concept,
       amount_in,
@@ -83,12 +88,14 @@ export async function POST(request: NextRequest) {
 // PUT: Update fund settings or perform adjustments
 export async function PUT(request: NextRequest) {
   try {
+    // SECURITY: Require admin authentication
+    const auth = await requireAdmin(request);
     const data = await request.json();
     const { fund_id, action } = data;
 
     if (action === 'reconcile') {
       // Recalculate balance from transaction history
-      const result = await execute(`
+      const result = await executeWithContext(auth, `
         UPDATE funds f
         SET current_balance = COALESCE((
           SELECT SUM(t.amount_in - t.amount_out)

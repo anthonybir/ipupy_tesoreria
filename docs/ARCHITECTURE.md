@@ -11,15 +11,16 @@ IPU PY Tesorería es una aplicación web moderna construida con Next.js 15 y Sup
 - **UI Library**: React 19
 - **Language**: TypeScript 5
 - **Styling**: Tailwind CSS 4
-- **Components**: HeadlessUI
-- **State Management**: Zustand
-- **Data Fetching**: React Query (TanStack Query)
+- **Components**: shadcn/ui + Radix UI
+- **State Management**: React State + Custom hooks
+- **Data Fetching**: TanStack Query v5
 
 ### Backend
 - **API**: Next.js API Routes (Serverless Functions)
 - **Database**: PostgreSQL (via Supabase)
-- **Authentication**: Supabase Auth con Google OAuth
-- **ORM**: SQL directo con cliente Supabase
+- **Authentication**: Supabase Auth con Google OAuth + Magic Link
+- **Database Layer**: Custom connection pooling with RLS context
+- **Security**: Row Level Security (RLS) + Role-based access control
 
 ### Infrastructure
 - **Hosting**: Vercel (Serverless)
@@ -66,34 +67,61 @@ graph TB
 ipupy-tesoreria/
 ├── src/
 │   ├── app/                      # Next.js App Router
-│   │   ├── (auth)/               # Rutas de autenticación
-│   │   │   ├── login/
-│   │   │   └── auth/callback/
-│   │   ├── (dashboard)/          # Rutas principales
-│   │   │   ├── page.tsx         # Dashboard
-│   │   │   ├── churches/
-│   │   │   ├── reports/
-│   │   │   ├── funds/
-│   │   │   └── transactions/
+│   │   ├── admin/               # Rutas administrativas
+│   │   │   └── configuration/   # Sistema de configuración
+│   │   ├── auth/
+│   │   │   └── callback/        # OAuth callback
+│   │   ├── dashboard/           # Dashboard principal
+│   │   ├── churches/           # Gestión de iglesias
+│   │   ├── reports/            # Informes mensuales
+│   │   ├── funds/              # Gestión de fondos
+│   │   ├── transactions/       # Transacciones
+│   │   ├── reconciliation/     # Reconciliación contable
+│   │   ├── ledger/            # Libro mayor
+│   │   └── export/            # Exportación de datos
 │   │   ├── api/                  # API Routes
 │   │   │   ├── dashboard/
+│   │   │   ├── dashboard-init/
 │   │   │   ├── churches/
 │   │   │   ├── reports/
-│   │   │   └── financial/
+│   │   │   ├── admin/           # Rutas administrativas
+│   │   │   │   ├── configuration/ # API configuración
+│   │   │   │   ├── reports/
+│   │   │   │   ├── funds/
+│   │   │   │   └── transactions/
+│   │   │   ├── financial/
+│   │   │   │   ├── funds/
+│   │   │   │   ├── transactions/
+│   │   │   │   └── fund-movements/
+│   │   │   ├── accounting/
+│   │   │   ├── donors/
+│   │   │   ├── people/
+│   │   │   ├── worship-records/
+│   │   │   └── data/
 │   │   ├── layout.tsx            # Root layout
 │   │   └── providers.tsx         # Context providers
 │   ├── components/               # Componentes React
-│   │   ├── Auth/
-│   │   ├── Churches/
-│   │   ├── Layout/
-│   │   └── Reports/
+│   │   ├── Admin/               # Componentes admin
+│   │   ├── Auth/                # Autenticación
+│   │   ├── Churches/            # Gestión iglesias
+│   │   ├── Layout/              # Layout componentes
+│   │   ├── Reports/             # Sistema informes
+│   │   ├── LibroMensual/        # Libro mensual
+│   │   ├── Funds/               # Gestión fondos
+│   │   ├── Export/              # Exportación
+│   │   ├── Shared/              # Componentes compartidos
+│   │   └── ui/                  # shadcn/ui componentes
 │   ├── lib/                      # Utilidades
 │   │   ├── supabase/            # Cliente Supabase
 │   │   │   ├── client.ts
 │   │   │   ├── server.ts
 │   │   │   └── middleware.ts
 │   │   ├── auth-context.ts      # Contexto de auth
-│   │   └── auth-supabase.ts     # Helpers de auth
+│   │   ├── db.ts                # Database layer mejorado
+│   │   ├── db-admin.ts          # Admin DB utilities
+│   │   ├── cors.ts              # CORS configuration
+│   │   ├── rate-limit.ts        # Rate limiting
+│   │   └── env-validation.ts    # Environment validation
 │   ├── hooks/                    # Custom hooks
 │   └── types/                    # TypeScript types
 ├── migrations/                   # SQL migrations
@@ -143,10 +171,14 @@ CREATE TABLE profiles (
   id UUID PRIMARY KEY,              -- Linked to auth.users
   email TEXT NOT NULL,
   full_name TEXT,
-  role TEXT,                        -- 8 role types
+  role TEXT CHECK (role IN ('admin', 'district_supervisor', 'pastor', 'treasurer', 'secretary', 'member')),  -- 6 simplified roles
   church_id INTEGER,
-  permissions JSONB,
-  last_seen_at TIMESTAMPTZ
+  is_active BOOLEAN DEFAULT true,
+  is_authenticated BOOLEAN DEFAULT false,
+  onboarding_step INTEGER DEFAULT 0,
+  last_seen_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
 )
 ```
 
@@ -163,38 +195,99 @@ CREATE TABLE churches (
 )
 ```
 
-#### Tabla: reports
+#### Tabla: monthly_reports
 ```sql
-CREATE TABLE reports (
+CREATE TABLE monthly_reports (
   id SERIAL PRIMARY KEY,
   church_id INTEGER REFERENCES churches(id),
-  month INTEGER,
+  month INTEGER CHECK (month BETWEEN 1 AND 12),
   year INTEGER,
-  diezmos DECIMAL,
-  ofrendas DECIMAL,
-  fondo_nacional DECIMAL,
+  diezmos DECIMAL DEFAULT 0,
+  ofrendas DECIMAL DEFAULT 0,
+  fondo_nacional DECIMAL DEFAULT 0,
+  honorarios_pastorales DECIMAL DEFAULT 0,
+  total_entradas DECIMAL DEFAULT 0,
+  total_salidas DECIMAL DEFAULT 0,
+  saldo_mes DECIMAL DEFAULT 0,
   numero_deposito TEXT,
-  fecha_deposito DATE
+  fecha_deposito DATE,
+  status TEXT DEFAULT 'draft',
+  submission_source TEXT,
+  manual_report_source TEXT,
+  manual_report_notes TEXT,
+  entered_by UUID REFERENCES profiles(id),
+  entered_at TIMESTAMPTZ DEFAULT now(),
+  approved_by UUID REFERENCES profiles(id),
+  approved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(church_id, month, year)
+)
+```
+
+#### Tabla: system_configuration (Nueva)
+```sql
+CREATE TABLE system_configuration (
+  id SERIAL PRIMARY KEY,
+  section TEXT NOT NULL,
+  key TEXT NOT NULL,
+  value JSONB NOT NULL,
+  updated_by UUID REFERENCES profiles(id),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(section, key)
 )
 ```
 
 ### Row Level Security (RLS)
 
-Todas las tablas tienen RLS habilitado:
+Todas las tablas tienen RLS habilitado con contexto de usuario mejorado:
 
 ```sql
--- Usuarios ven solo sus datos
-CREATE POLICY "Users can view own data" ON profiles
-  FOR SELECT USING (auth.uid() = id);
+-- Context functions (set by application before queries)
+CREATE OR REPLACE FUNCTION app_current_user_id()
+RETURNS UUID
+LANGUAGE SQL
+STABLE
+AS $$
+  SELECT COALESCE(
+    NULLIF(current_setting('app.current_user_id', true), ''),
+    '00000000-0000-0000-0000-000000000000'
+  )::UUID;
+$$;
 
--- Admins ven todo
-CREATE POLICY "Admins can view all" ON reports
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM profiles
-      WHERE id = auth.uid()
-      AND role IN ('super_admin', 'admin')
-    )
+CREATE OR REPLACE FUNCTION app_current_user_role()
+RETURNS TEXT
+LANGUAGE SQL
+STABLE
+AS $$
+  SELECT COALESCE(current_setting('app.current_user_role', true), '');
+$$;
+
+-- Admin check function (simplified roles)
+CREATE OR REPLACE FUNCTION app_user_is_admin()
+RETURNS BOOLEAN
+LANGUAGE SQL
+STABLE
+AS $$
+  SELECT app_current_user_role() = 'admin';
+$$;
+
+-- RLS policies using context
+CREATE POLICY "profiles_access" ON profiles
+  FOR ALL TO authenticated
+  USING (
+    app_user_is_admin() OR
+    id = app_current_user_id() OR
+    (app_current_user_role() IN ('pastor', 'treasurer', 'secretary')
+     AND church_id = app_current_user_church_id())
+  );
+
+CREATE POLICY "monthly_reports_access" ON monthly_reports
+  FOR ALL TO authenticated
+  USING (
+    app_user_is_admin() OR
+    church_id = app_current_user_church_id()
   );
 ```
 
@@ -204,12 +297,81 @@ CREATE POLICY "Admins can view all" ON reports
 
 ```typescript
 // src/app/api/churches/route.ts
+import { getAuthContext } from '@/lib/auth-context';
+import { executeWithContext, executeTransaction } from '@/lib/db';
+import { setCORSHeaders } from '@/lib/cors';
+
 export async function GET(request: NextRequest) {
-  const context = await requireAuth(request);
+  try {
+    const auth = await getAuthContext(request);
 
-  // Logic here
+    if (!auth) {
+      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      setCORSHeaders(response);
+      return response;
+    }
 
-  return NextResponse.json(data);
+    // Use executeWithContext for RLS enforcement
+    const result = await executeWithContext(
+      auth,
+      'SELECT * FROM churches ORDER BY name',
+      []
+    );
+
+    const response = NextResponse.json({
+      success: true,
+      data: result.rows
+    });
+
+    setCORSHeaders(response);
+    return response;
+  } catch (error) {
+    console.error('API Error:', error);
+    const response = NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+    setCORSHeaders(response);
+    return response;
+  }
+}
+
+// Transaction example for complex operations
+export async function POST(request: NextRequest) {
+  try {
+    const auth = await getAuthContext(request);
+    const body = await request.json();
+
+    await executeTransaction(auth, async (client) => {
+      // Multiple related operations in single transaction
+      const report = await client.query(
+        'INSERT INTO monthly_reports (...) VALUES (...) RETURNING id',
+        [...]
+      );
+
+      await client.query(
+        'UPDATE fund_balances SET balance = balance + $1 WHERE ...',
+        [...]
+      );
+
+      await client.query(
+        'INSERT INTO user_activity (...) VALUES (...)',
+        [auth.userId, 'report.create', JSON.stringify({ reportId: report.rows[0].id })]
+      );
+    });
+
+    const response = NextResponse.json({ success: true });
+    setCORSHeaders(response);
+    return response;
+  } catch (error) {
+    console.error('Transaction Error:', error);
+    const response = NextResponse.json(
+      { error: 'Transaction failed' },
+      { status: 500 }
+    );
+    setCORSHeaders(response);
+    return response;
+  }
 }
 ```
 
@@ -245,12 +407,13 @@ export async function GET(request: NextRequest) {
 
 ### Capas de Seguridad
 
-1. **Autenticación**: Google OAuth via Supabase
-2. **Autorización**: Sistema de 8 roles
-3. **Database**: Row Level Security
-4. **API**: Middleware validation
-5. **Frontend**: Protected routes
-6. **Network**: HTTPS only
+1. **Autenticación**: Google OAuth + Magic Link via Supabase
+2. **Autorización**: Sistema de 6 roles simplificado (admin, district_supervisor, pastor, treasurer, secretary, member)
+3. **Database**: Row Level Security con contexto de usuario mejorado
+4. **API**: executeWithContext para RLS + CORS estricto
+5. **Frontend**: Protected routes + role-based UI
+6. **Network**: HTTPS only + Rate limiting
+7. **Configuration**: Sistema de configuración con auditoria
 
 ### Políticas de Seguridad
 
@@ -267,9 +430,10 @@ export async function GET(request: NextRequest) {
 1. **Server Components**: Renderizado en servidor por defecto
 2. **Static Generation**: Páginas estáticas donde sea posible
 3. **Edge Runtime**: Middleware ejecuta en edge
-4. **Database Pooling**: Connection pooling via Supabase
-5. **Image Optimization**: Next.js Image component
-6. **Code Splitting**: Automático via Next.js
+4. **Database Pooling**: Custom connection pooling with health monitoring
+5. **Transaction Management**: ACID compliance for complex operations
+6. **Image Optimization**: Next.js Image component
+7. **Code Splitting**: Automático via Next.js
 
 ### Caching Strategy
 
@@ -364,14 +528,49 @@ await logActivity('report_created', {
 - Edge network global
 - Analytics integrado
 
-## Futuras Mejoras
+## Mejoras Recientes (v2.0)
 
-1. **Real-time Updates**: Usar Supabase Realtime
+### Sistema de Configuración Administrable
+- **Admin Configuration Panel**: Sistema completo de configuración por secciones
+- **Database Storage**: Configuración almacenada en `system_configuration` con JSONB
+- **Audit Trail**: Registro de cambios de configuración con `user_activity`
+- **Type Safety**: TypeScript types completos para todas las configuraciones
+
+### Arquitectura de Base de Datos Mejorada
+- **executeWithContext**: Ejecución segura con contexto RLS
+- **executeTransaction**: Soporte completo para transacciones ACID
+- **Connection Pooling**: Pool de conexiones con monitoreo de salud
+- **Error Resilience**: Retry logic con backoff exponencial
+
+### Simplificación de Roles (Migration 023)
+- **De 8 a 6 roles**: Simplificación de `super_admin`, `church_admin`, `viewer`
+- **Role Hierarchy**: Sistema jerárquico claro con niveles de permisos
+- **Permission Matrix**: Tabla `role_permissions` para documentar permisos
+
+### Seguridad Mejorada
+- **RLS Context Fix**: Corrección crítica del fallback de roles
+- **CORS Security**: Restricción estricta de dominios permitidos
+- **Rate Limiting**: Protección contra abuso de API
+- **Environment Validation**: Validación de variables de entorno críticas
+
+### Experiencia de Usuario
+- **shadcn/ui Migration**: Componentes modernos con Radix UI
+- **TanStack Query v5**: Migration completa con placeholderData
+- **Type Safety**: Mejoras en TypeScript en toda la aplicación
+- **Error Boundaries**: Manejo robusto de errores en UI
+
+## Futuras Mejoras (v3.0)
+
+1. **Real-time Updates**: Usar Supabase Realtime para actualizaciones en tiempo real
 2. **Mobile App**: React Native con mismo backend
-3. **Offline Support**: PWA capabilities
+3. **Offline Support**: PWA capabilities con sync
 4. **Multi-tenancy**: Soportar múltiples organizaciones
-5. **Advanced Analytics**: Dashboard con gráficos
-6. **Backup Automation**: Backups programados
+5. **Advanced Analytics**: Dashboard con gráficos interactivos
+6. **Backup Automation**: Backups programados con recuperación point-in-time
+7. **Audit Dashboard**: Visualización completa de auditoría
+8. **API Versioning**: Versionado de API para compatibilidad
+9. **Read Replicas**: Separación read/write para mejor performance
+10. **Monitoring**: Sistema completo de monitoreo y alertas
 
 ## Contacto Técnico
 

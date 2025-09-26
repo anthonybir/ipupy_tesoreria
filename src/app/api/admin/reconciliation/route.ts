@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { generateReconciliation } from '@/lib/db-admin';
+import { requireAdmin } from '@/lib/auth-supabase';
 
 export async function GET(request: NextRequest) {
   try {
+    // SECURITY: Require admin authentication
+    const auth = await requireAdmin(request);
     const { searchParams } = new URL(request.url);
     const fundIdParam = searchParams.get('fund_id');
     const fundId = fundIdParam ? Number(fundIdParam) : undefined;
 
-    const data = await generateReconciliation(fundId);
+    const data = await generateReconciliation(auth, fundId);
     const summary = {
       totalFunds: data.length,
       balanced: data.filter(item => item.status === 'balanced').length,

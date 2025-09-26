@@ -21,13 +21,17 @@ export const buildCorsHeaders = (origin?: string | null): HeadersInit => {
   };
 
   const allowedOrigins = getAllowedOrigins();
+
+  // SECURITY FIX: Never use wildcard (*) with credentials
+  // Only set CORS header if origin is explicitly allowed
   if (origin && allowedOrigins.includes(origin)) {
     headers['Access-Control-Allow-Origin'] = origin;
-  } else if (allowedOrigins.length > 0) {
+  } else if (!origin && allowedOrigins.length > 0) {
+    // For requests without origin (e.g., server-side), use first allowed origin
     headers['Access-Control-Allow-Origin'] = allowedOrigins[0];
-  } else {
-    headers['Access-Control-Allow-Origin'] = '*';
   }
+  // REMOVED: Wildcard fallback that allowed all origins
+  // If origin is not allowed, no CORS header is set (request will be blocked)
 
   return headers;
 };

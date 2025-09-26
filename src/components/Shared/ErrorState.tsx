@@ -3,11 +3,25 @@
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import type { ReactNode } from 'react';
 
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils/cn';
+
+type ErrorStateVariant = 'error' | 'warning';
+
 type ErrorStateProps = {
   title?: string;
   description?: ReactNode;
   onRetry?: () => void;
   retryLabel?: string;
+  variant?: ErrorStateVariant;
+  className?: string;
+};
+
+const variantStyles: Record<ErrorStateVariant, string> = {
+  error:
+    'border border-[color-mix(in_oklab,var(--absd-error) 40%,transparent)] bg-[color-mix(in_oklab,var(--absd-error) 16%,white)] text-[var(--absd-error)]',
+  warning:
+    'border border-[color-mix(in_oklab,var(--absd-warning) 40%,transparent)] bg-[color-mix(in_oklab,var(--absd-warning) 16%,white)] text-[var(--absd-warning)]',
 };
 
 export function ErrorState({
@@ -15,24 +29,33 @@ export function ErrorState({
   description,
   onRetry,
   retryLabel = 'Reintentar',
+  variant = 'error',
+  className,
 }: ErrorStateProps) {
   return (
-    <div className="flex w-full flex-col items-center justify-center gap-4 rounded-xl border border-rose-200 bg-rose-50/60 px-6 py-10 text-center">
-      <ExclamationTriangleIcon className="h-8 w-8 text-rose-500" aria-hidden="true" />
+    <div
+      className={cn(
+        'absd-state flex w-full flex-col items-center justify-center gap-4 text-center transition-colors duration-200',
+        variantStyles[variant],
+        className,
+      )}
+    >
+      <ExclamationTriangleIcon className="h-8 w-8" aria-hidden="true" />
       <div className="space-y-1">
-        <p className="text-sm font-semibold text-rose-600">{title}</p>
+        <p className="text-sm font-semibold text-[var(--absd-ink)]">{title}</p>
         {description ? (
-          <p className="max-w-md text-xs text-rose-500">{description}</p>
+          <p className="max-w-md text-xs text-[rgba(15,23,42,0.68)]">{description}</p>
         ) : null}
       </div>
       {onRetry ? (
-        <button
+        <Button
           type="button"
+          variant={variant === 'warning' ? 'secondary' : 'danger'}
+          size="sm"
           onClick={onRetry}
-          className="rounded-full bg-rose-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-rose-600"
         >
           {retryLabel}
-        </button>
+        </Button>
       ) : null}
     </div>
   );

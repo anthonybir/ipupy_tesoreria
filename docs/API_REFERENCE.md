@@ -14,24 +14,81 @@ Todas las rutas protegidas requieren autenticación via Supabase Auth. La autent
 
 ```typescript
 // Verificación en API routes
-import { requireAuth } from '@/lib/auth-context';
+import { getAuthContext } from '@/lib/auth-context';
+import { executeWithContext, executeTransaction } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
-  const context = await requireAuth(request);
-  // context contiene: userId, email, role, churchId, etc.
+  try {
+    const auth = await getAuthContext(request);
+
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Use executeWithContext for RLS enforcement
+    const result = await executeWithContext(
+      auth,
+      'SELECT * FROM monthly_reports WHERE church_id = $1',
+      [auth.churchId]
+    );
+
+    return NextResponse.json({ success: true, data: result.rows });
+  } catch (error) {
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
 }
 ```
 
-### Roles Disponibles
+### Ejecución Segura de Base de Datos
 
-- `super_admin` - Control total del sistema
-- `admin` - Administradores de plataforma
+El sistema implementa tres patrones de ejecución de base de datos:
+
+1. **executeWithContext**: Para consultas con Row Level Security (RLS)
+2. **executeTransaction**: Para operaciones transaccionales complejas
+3. **execute**: Solo para consultas a nivel de sistema (sin RLS)
+
+```typescript
+// Operación transaccional segura
+export async function POST(req: NextRequest) {
+  const auth = await getAuthContext(req);
+
+  await executeTransaction(auth, async (client) => {
+    // Crear reporte
+    const report = await client.query(
+      'INSERT INTO monthly_reports (...) VALUES (...) RETURNING id',
+      [...]
+    );
+
+    // Actualizar balances de fondos
+    await client.query(
+      'UPDATE fund_balances SET balance = balance + $1 WHERE ...',
+      [...]
+    );
+
+    // Registrar actividad
+    await client.query(
+      'INSERT INTO user_activity (...) VALUES (...)',
+      [...]
+    );
+  });
+}
+```
+
+### Roles Disponibles (Simplificado desde Migration 023)
+
+El sistema se ha simplificado de 8 roles a 6 roles jerárquicos:
+
+- `admin` - Administradores de plataforma (consolidado desde super_admin)
 - `district_supervisor` - Supervisores regionales
-- `church_admin` - Líderes de iglesia
+- `pastor` - Líderes de iglesia (renombrado desde church_admin)
 - `treasurer` - Tesoreros
 - `secretary` - Secretarios
-- `member` - Miembros
-- `viewer` - Solo lectura
+- `member` - Miembros (convertido desde viewer)
+
+**Roles Deprecados:**
+- `super_admin` → **Consolidado en `admin`**
+- `church_admin` → **Renombrado a `pastor`**
+- `viewer` → **Convertido a `member`**
 
 ---
 
@@ -50,7 +107,7 @@ Obtiene métricas y resumen del dashboard principal.
   "success": true,
   "user": {
     "email": "administracion@ipupy.org.py",
-    "role": "super_admin",
+    "role": "admin",
     "name": "Administrador IPUPY",
     "churchId": null
   },
@@ -114,7 +171,7 @@ Lista todas las iglesias registradas.
 #### POST `/api/churches`
 Crea una nueva iglesia.
 
-**Autorización**: Requiere rol `admin` o `super_admin`
+**Autorización**: Requiere rol `admin`
 
 **Request Body:**
 ```json
@@ -131,7 +188,7 @@ Crea una nueva iglesia.
 #### PUT `/api/churches`
 Actualiza información de una iglesia.
 
-**Autorización**: Requiere rol `admin` o `super_admin`
+**Autorización**: Requiere rol `admin`
 
 **Request Body:**
 ```json
@@ -190,7 +247,7 @@ Obtiene reportes financieros mensuales.
 #### POST `/api/reports`
 Crea un nuevo reporte mensual (desde iglesias o cargado manualmente por el tesorero nacional).
 
-**Autorización**: Requiere rol `treasurer`, `church_admin`, `admin`, o `super_admin`
+**Autorización**: Requiere rol `treasurer`, `pastor`, o `admin`
 
 **Request Body (ejemplo iglesia en línea):**
 ```json
@@ -446,12 +503,80 @@ Lista de miembros y personas relacionadas.
 
 ---
 
-### 9. Exportación de Datos
+### 9. Configuración del Sistema
+
+#### GET `/api/admin/configuration`
+Obtiene la configuración del sistema por sección.
+
+**Autorización**: Requiere rol `admin`
+
+**Query Parameters:**
+- `section` (optional): Sección específica (`general`, `financial`, `security`, `notifications`, `funds`, `roles`, `integration`)
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "financial": {
+      "fondoNacionalPercentage": 10,
+      "reportDeadlineDay": 5,
+      "requireReceipts": true,
+      "receiptMinAmount": 100000,
+      "autoCalculateTotals": true,
+      "requireDoubleEntry": true
+    }
+  }
+}
+```
+
+#### POST `/api/admin/configuration`
+Actualiza la configuración del sistema.
+
+**Autorización**: Requiere rol `admin`
+
+**Request Body:**
+```json
+{
+  "section": "financial",
+  "data": {
+    "fondoNacionalPercentage": 12,
+    "reportDeadlineDay": 7,
+    "requireReceipts": true,
+    "receiptMinAmount": 150000
+  }
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Configuration updated successfully"
+}
+```
+
+#### PUT `/api/admin/configuration`
+Restablece la configuración a valores predeterminados.
+
+**Autorización**: Requiere rol `admin`
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Configuration reset to defaults"
+}
+```
+
+---
+
+### 10. Exportación de Datos
 
 #### GET `/api/data`
 Exporta datos en formato JSON o CSV.
 
-**Autorización**: Requiere rol `admin` o `super_admin`
+**Autorización**: Requiere rol `admin`
 
 **Query Parameters:**
 - `format`: `json` | `csv` | `excel`

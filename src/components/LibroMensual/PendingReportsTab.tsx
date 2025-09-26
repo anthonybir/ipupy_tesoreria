@@ -1,35 +1,38 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { PlusCircleIcon } from '@heroicons/react/24/outline';
 
-import { EmptyState } from '@/components/Shared/EmptyState';
-import { ErrorState } from '@/components/Shared/ErrorState';
-import { LoadingState } from '@/components/Shared/LoadingState';
+import {
+  DataTable,
+  Drawer,
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  MetricCard,
+  SectionCard,
+  StatusPill,
+  Toolbar,
+  FormSection,
+  FormField,
+} from '@/components/Shared';
 import ManualReportForm from '@/components/Admin/ManualReportForm';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import type { DataTableColumn } from '@/components/Shared/DataTable';
 import {
   AdminReportRecord,
   useAdminReports,
   useApproveReport,
-  useUpdateReport
+  useUpdateReport,
 } from '@/hooks/useAdminData';
-
 const currencyFormatter = new Intl.NumberFormat('es-PY', {
   style: 'currency',
   currency: 'PYG',
-  maximumFractionDigits: 0
+  maximumFractionDigits: 0,
 });
-
-type PendingReportsTabProps = {
-  filters: { year: string; month: string };
-};
-
-type ModalState = {
-  report: AdminReportRecord | null;
-  observations: string;
-};
 
 const monthNames = [
   '',
@@ -44,13 +47,34 @@ const monthNames = [
   'Septiembre',
   'Octubre',
   'Noviembre',
-  'Diciembre'
+  'Diciembre',
 ];
 
+type PendingReportsTabProps = {
+  filters: { year: string; month: string };
+};
+
+type ChurchOption = {
+  id: number;
+  name: string;
+  city: string;
+  pastor?: string;
+};
+const formatCurrency = (value: number | null | undefined) => currencyFormatter.format(value ?? 0);
+
+const friendlyLabel = (key: string) =>
+  key
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^[a-z]/, (char) => char.toUpperCase());
 export function PendingReportsTab({ filters }: PendingReportsTabProps) {
-  const [modalState, setModalState] = useState<ModalState>({ report: null, observations: '' });
   const [showManualForm, setShowManualForm] = useState(false);
-  const [churches, setChurches] = useState<Array<{ id: number; name: string; city: string; pastor?: string }>>([]);
+  const [selectedReport, setSelectedReport] = useState<AdminReportRecord | null>(null);
+  const [observations, setObservations] = useState('');
+  const [churches, setChurches] = useState<ChurchOption[]>([]);
+  const [quickApproveId, setQuickApproveId] = useState<number | null>(null);
 
   const queryFilters = useMemo(() => {
     const params: Record<string, string> = { status: 'pending' };
@@ -66,65 +90,194 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps) {
   const reportsQuery = useAdminReports(queryFilters);
   const approveReport = useApproveReport();
   const updateReport = useUpdateReport();
-
-  // Fetch churches for manual report form
   useEffect(() => {
     const fetchChurches = async () => {
       try {
         const response = await fetch('/api/churches');
-        if (response.ok) {
-          const data = await response.json();
-          setChurches(data.data || []);
+        if (!response.ok) {
+          return;
         }
+        const data = await response.json();
+        setChurches((data?.data as ChurchOption[] | undefined) ?? []);
       } catch (error) {
         console.error('Error fetching churches:', error);
       }
     };
+
     fetchChurches();
   }, []);
-
   const reports = reportsQuery.data?.reports ?? [];
   const summary = reportsQuery.data?.summary ?? {};
+  const pendingCount = reports.length;
 
-  const openModal = (report: AdminReportRecord) => {
-    setModalState({ report, observations: report.observations ?? '' });
-  };
+  const handleOpenReview = useCallback((report: AdminReportRecord) => {
+    setSelectedReport(report);
+    setObservations(report.observations ?? '');
+  }, []);
 
-  const closeModal = () => {
-    setModalState({ report: null, observations: '' });
-  };
-
-  const handleApprove = async () => {
-    if (!modalState.report) {
+  const handleCloseReview = useCallback(() => {
+    setSelectedReport(null);
+    setObservations('');
+  }, []);
+  const handleQuickApprove = useCallback(
+    async (report: AdminReportRecord) => {
+      try {
+        setQuickApproveId(report.id);
+        await approveReport.mutateAsync({ reportId: report.id });
+        await reportsQuery.refetch();
+      } catch (error) {
+        console.error('Error approving report', error);
+      } finally {
+        setQuickApproveId(null);
+      }
+    },
+    [approveReport, reportsQuery],
+  );
+  const handleApproveDetailed = useCallback(async () => {
+    if (!selectedReport) {
       return;
     }
     try {
-      await approveReport.mutateAsync({
-        reportId: modalState.report.id
-      });
-      closeModal();
+      await approveReport.mutateAsync({ reportId: selectedReport.id });
+      await reportsQuery.refetch();
+      handleCloseReview();
     } catch (error) {
       console.error('Error approving report', error);
     }
-  };
-
-  const handleReject = async () => {
-    if (!modalState.report) {
+  }, [approveReport, handleCloseReview, reportsQuery, selectedReport]);
+  const handleReject = useCallback(async () => {
+    if (!selectedReport) {
       return;
     }
     try {
       await updateReport.mutateAsync({
-        reportId: modalState.report.id,
+        reportId: selectedReport.id,
         estado: 'rechazado_admin',
-        observations: modalState.observations,
-        transactionsCreated: false
+        observations,
+        transactionsCreated: false,
       });
-      closeModal();
+      await reportsQuery.refetch();
+      handleCloseReview();
     } catch (error) {
       console.error('Error rejecting report', error);
     }
-  };
-
+  }, [handleCloseReview, observations, reportsQuery, selectedReport, updateReport]);
+  const columns = useMemo<DataTableColumn<AdminReportRecord>[]>(
+    () => [
+      {
+        id: 'church',
+        header: 'Iglesia',
+        render: (report) => (
+          <span className="text-sm font-semibold text-[var(--absd-ink)]">{report.churchName}</span>
+        ),
+      },
+      {
+        id: 'period',
+        header: 'Periodo',
+        render: (report) => (
+          <span className="text-sm text-[rgba(15,23,42,0.7)]">
+            {`${monthNames[Number(report.month)] ?? report.month}/${report.year}`}
+          </span>
+        ),
+      },
+      {
+        id: 'entries',
+        header: 'Entradas',
+        align: 'right',
+        render: (report) => (
+          <span className="text-sm font-semibold text-[var(--absd-ink)]">
+            {formatCurrency(report.totals?.totalEntradas)}
+          </span>
+        ),
+      },
+      {
+        id: 'designated',
+        header: 'Designados',
+        align: 'right',
+        render: (report) => (
+          <span className="text-sm text-[rgba(15,23,42,0.7)]">
+            {formatCurrency(report.totals?.totalDesignado)}
+          </span>
+        ),
+      },
+      {
+        id: 'operational',
+        header: 'Operativos',
+        align: 'right',
+        render: (report) => (
+          <span className="text-sm text-[rgba(15,23,42,0.7)]">
+            {formatCurrency(report.totals?.totalOperativo)}
+          </span>
+        ),
+      },
+      {
+        id: 'status',
+        header: 'Estado',
+        render: (report) => (
+          <StatusPill tone={report.status?.includes('rechazado') ? 'critical' : 'warning'}>
+            {friendlyLabel(report.status ?? 'pendiente')}
+          </StatusPill>
+        ),
+      },
+      {
+        id: 'actions',
+        header: 'Acciones',
+        render: (report) => (
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              density="compact"
+              onClick={(event) => {
+                event.stopPropagation();
+                handleOpenReview(report);
+              }}
+            >
+              Revisar
+            </Button>
+            <Button
+              type="button"
+              variant="success"
+              size="sm"
+              density="compact"
+              loading={approveReport.isPending && quickApproveId === report.id}
+              onClick={async (event) => {
+                event.stopPropagation();
+                await handleQuickApprove(report);
+              }}
+            >
+              Aprobar rápido
+            </Button>
+          </div>
+        ),
+      },
+    ],
+    [approveReport.isPending, handleOpenReview, handleQuickApprove, quickApproveId],
+  );
+  const summaryMetrics = useMemo(
+    () => [
+      {
+        label: 'Informes pendientes',
+        value: pendingCount.toString(),
+        description: 'Listos para revisión',
+        tone: pendingCount > 0 ? 'warning' : 'neutral',
+      },
+      {
+        label: 'Ingresos reportados',
+        value: formatCurrency(summary.totalEntradas),
+        description: 'Monto total informado por congregaciones',
+        tone: 'neutral',
+      },
+      {
+        label: 'Fondos designados',
+        value: formatCurrency(summary.totalDesignado),
+        description: 'Requieren aprobación nacional',
+        tone: 'info',
+      },
+    ],
+    [pendingCount, summary.totalDesignado, summary.totalEntradas],
+  );
   if (reportsQuery.isLoading) {
     return <LoadingState title="Cargando informes pendientes..." fullHeight />;
   }
@@ -132,240 +285,372 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps) {
   if (reportsQuery.isError) {
     return <ErrorState title="No se pudieron cargar los informes pendientes" />;
   }
-
-  if (reports.length === 0 && !showManualForm) {
-    return (
-      <div className="space-y-4">
-        <div className="flex justify-end">
-          <button
-            onClick={() => setShowManualForm(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            <PlusCircleIcon className="w-5 h-5" />
-            Registrar Informe Manual
-          </button>
-        </div>
-        <EmptyState
-          title="No hay informes pendientes"
-          description="Todas las congregaciones están al día o no se registraron nuevos informes en el periodo seleccionado."
-        />
-      </div>
-    );
-  }
-
-  // Show manual report form if toggled
   if (showManualForm) {
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">
-          Registrar Informe Manual de Pastor
-        </h2>
+      <SectionCard
+        title="Registrar informe manual de pastor"
+        description="Integra un informe recibido fuera del flujo digital y mantén la auditoría al día."
+        padding="lg"
+        actions={
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            density="compact"
+            onClick={() => setShowManualForm(false)}
+          >
+            Volver a pendientes
+          </Button>
+        }
+      >
         <ManualReportForm
           churches={churches}
           onSuccess={() => {
             setShowManualForm(false);
-            reportsQuery.refetch();
+            void reportsQuery.refetch();
           }}
           onCancel={() => setShowManualForm(false)}
         />
+      </SectionCard>
+    );
+  }
+  const manualActionButton = (
+    <Button
+      type="button"
+      size="sm"
+      density="compact"
+      icon={<PlusCircleIcon className="h-4 w-4" aria-hidden />}
+      onClick={() => setShowManualForm(true)}
+    >
+      Registrar informe manual
+    </Button>
+  );
+
+  if (pendingCount === 0) {
+    return (
+      <div className="space-y-6">
+        <Toolbar actions={manualActionButton} variant="filters">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-[var(--absd-ink)]">
+              No hay informes pendientes para el periodo seleccionado.
+            </p>
+            <p className="text-xs text-[rgba(15,23,42,0.6)]">
+              Puedes registrar manualmente un informe recibido por otros canales o esperar nuevos envíos.
+            </p>
+          </div>
+        </Toolbar>
+
+        <SectionCard title="Resumen general">
+          <div className="absd-grid">
+            {summaryMetrics.map((metric) => (
+              <MetricCard
+                key={metric.label}
+                label={metric.label}
+                value={metric.value}
+                description={metric.description}
+                tone={metric.tone as never}
+              />
+            ))}
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          title="Informes pendientes"
+          description="Todas las congregaciones están al día."
+          actions={manualActionButton}
+        >
+          <EmptyState
+            title="No hay informes pendientes"
+            description="Cuando llegue un nuevo informe, aparecerá aquí para su aprobación."
+            action={manualActionButton}
+            tone="info"
+            fullHeight
+          />
+        </SectionCard>
       </div>
     );
   }
+  const incomeEntries = selectedReport
+    ? (Object.entries(selectedReport.incomes ?? {}) as Array<[string, number]>)
+    : [];
+  const expenseEntries = selectedReport
+    ? (Object.entries(selectedReport.expenses ?? {}) as Array<[string, number]>)
+    : [];
+  const detailMetrics = selectedReport
+    ? [
+        {
+          label: 'Total entradas',
+          value: formatCurrency(selectedReport.totals?.totalEntradas),
+          description: 'Suma de ingresos congregacionales y designados',
+          tone: 'info' as const,
+        },
+        {
+          label: 'Fondo nacional (10%)',
+          value: formatCurrency(selectedReport.totals?.fondoNacional),
+          description: 'Transferencia a tesorería nacional',
+          tone: 'neutral' as const,
+        },
+        {
+          label: 'Fondos designados',
+          value: formatCurrency(selectedReport.totals?.totalDesignado),
+          description: 'Distribución 100% nacional',
+          tone: 'info' as const,
+        },
+        {
+          label: 'Gastos operativos',
+          value: formatCurrency(selectedReport.totals?.totalOperativo),
+          description: 'Servicios y mantenimiento',
+          tone: 'warning' as const,
+        },
+        {
+          label: 'Honorario pastoral',
+          value: formatCurrency(selectedReport.expenses?.honorariosPastoral),
+          description: 'Monto sugerido según entradas',
+          tone: 'success' as const,
+        },
+        {
+          label: 'Saldo estimado',
+          value: formatCurrency(selectedReport.totals?.saldoCalculado),
+          description: 'Resultados tras designados y gastos',
+          tone:
+            (selectedReport.totals?.saldoCalculado ?? 0) >= 0 ? ('success' as const) : ('danger' as const),
+        },
+      ]
+    : [];
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Resumen</p>
-          <p className="text-base font-semibold text-slate-900">
-            {reports.length} informes pendientes — {currencyFormatter.format(summary.totalEntradas ?? 0)} en ingresos reportados
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowManualForm(true)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            <PlusCircleIcon className="w-4 h-4" />
-            Informe Manual
-          </button>
-          <p className="text-xs text-slate-500">
-            {summary.totalDesignado
-              ? `Fondos designados por aprobar: ${currencyFormatter.format(summary.totalDesignado)}`
-              : ''}
-          </p>
-        </div>
+    <>
+      <div className="space-y-6">
+        <Toolbar actions={manualActionButton} variant="filters">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-[var(--absd-ink)]">
+              {pendingCount} informe{pendingCount === 1 ? '' : 's'} pendientes para aprobación.
+            </p>
+            <p className="text-xs text-[rgba(15,23,42,0.6)]">
+              Fondos designados por aprobar: {formatCurrency(summary.totalDesignado)}
+            </p>
+          </div>
+        </Toolbar>
+
+        <SectionCard title="Resumen general" padding="md">
+          <div className="absd-grid">
+            {summaryMetrics.map((metric) => (
+              <MetricCard
+                key={metric.label}
+                label={metric.label}
+                value={metric.value}
+                description={metric.description}
+                tone={metric.tone as never}
+              />
+            ))}
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          title="Informes pendientes"
+          description={`${pendingCount} informe${pendingCount === 1 ? '' : 's'} listos para revisión.`}
+          padding="lg"
+        >
+          <DataTable
+            data={reports}
+            columns={columns}
+            loading={reportsQuery.isFetching || approveReport.isPending || updateReport.isPending}
+            skeletonRows={6}
+            onRowClick={handleOpenReview}
+          />
+        </SectionCard>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Iglesia</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Periodo</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Entradas</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Designados</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Operativos</th>
-              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {reports.map((report) => {
-              const periodLabel = `${monthNames[Number(report.month)] ?? 'Mes'} ${report.year}`;
-              return (
-                <tr key={report.id} className="hover:bg-indigo-50/30">
-                  <td className="px-4 py-3 text-sm font-medium text-slate-800">{report.churchName}</td>
-                  <td className="px-4 py-3 text-sm text-slate-600">{periodLabel}</td>
-                  <td className="px-4 py-3 text-right text-sm font-semibold text-slate-900">
-                    {currencyFormatter.format(report.totals.totalEntradas ?? 0)}
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm text-slate-600">
-                    {currencyFormatter.format(report.totals.totalDesignado ?? 0)}
-                  </td>
-                  <td className="px-4 py-3 text-right text-sm text-slate-600">
-                    {currencyFormatter.format(report.totals.totalOperativo ?? 0)}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openModal(report)}
-                        className="rounded-lg border border-indigo-200 px-3 py-1 text-xs font-semibold text-indigo-600 transition hover:bg-indigo-50"
-                      >
-                        Revisar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          try {
-                            await approveReport.mutateAsync({ reportId: report.id });
-                          } catch (error) {
-                            console.error('Error approving report', error);
-                          }
-                        }}
-                        disabled={approveReport.isPending}
-                        className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        Aprobar rápido
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {modalState.report ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-10">
-          <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-2xl">
-            <header className="flex items-start justify-between border-b border-slate-200 px-6 py-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Revisión de informe</p>
-                <h2 className="text-xl font-semibold text-slate-900">
-                  {modalState.report.churchName} — {monthNames[Number(modalState.report.month)] ?? modalState.report.month}/{
-                    modalState.report.year
-                  }
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Ingresado el{' '}
-                  {modalState.report.submittedAt
-                    ? format(new Date(modalState.report.submittedAt), "dd 'de' MMMM yyyy", { locale: es })
-                    : 'sin fecha registrada'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded-full border border-slate-200 px-3 py-1 text-xs font-semibold text-slate-500 transition hover:bg-slate-100"
-              >
-                Cerrar
-              </button>
-            </header>
-
-            <div className="space-y-6 px-6 py-6">
-              <section className="grid gap-4 sm:grid-cols-3">
-                {[
-                  { label: 'Total entradas', value: modalState.report.totals.totalEntradas ?? 0 },
-                  { label: 'Fondo nacional', value: modalState.report.totals.fondoNacional ?? 0 },
-                  { label: 'Fondos designados', value: modalState.report.totals.totalDesignado ?? 0 },
-                  { label: 'Gastos operativos', value: modalState.report.totals.totalOperativo ?? 0 },
-                  { label: 'Honorario pastoral', value: modalState.report.expenses.honorariosPastoral ?? 0 },
-                  { label: 'Saldo estimado', value: modalState.report.totals.saldoCalculado ?? 0 }
-                ].map((card) => (
-                  <article key={card.label} className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 shadow-sm">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{card.label}</p>
-                    <p className="mt-2 text-lg font-semibold text-slate-900">{currencyFormatter.format(card.value)}</p>
-                  </article>
-                ))}
-              </section>
-
-              <section className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-xl border border-slate-200">
-                  <header className="border-b border-slate-200 bg-slate-50 px-4 py-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ingresos congregacionales</h3>
-                  </header>
-                  <dl className="divide-y divide-slate-100">
-                    {Object.entries(modalState.report.incomes).map(([key, value]) => (
-                      <div key={key} className="flex items-center justify-between px-4 py-2 text-sm text-slate-600">
-                        <dt className="capitalize">{key.replace(/([A-Z])/g, ' $1')}</dt>
-                        <dd className="font-semibold text-slate-900">{currencyFormatter.format(value)}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </div>
-
-                <div className="rounded-xl border border-slate-200">
-                  <header className="border-b border-slate-200 bg-slate-50 px-4 py-2">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Gastos y designados</h3>
-                  </header>
-                  <dl className="divide-y divide-slate-100">
-                    {Object.entries(modalState.report.expenses).map(([key, value]) => (
-                      <div key={key} className="flex items-center justify-between px-4 py-2 text-sm text-slate-600">
-                        <dt className="capitalize">{key.replace(/([A-Z])/g, ' $1')}</dt>
-                        <dd className="font-semibold text-slate-900">{currencyFormatter.format(value)}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </div>
-              </section>
-
-              <section className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Notas para la congregación (opcional)
-                </label>
-                <textarea
-                  value={modalState.observations}
-                  onChange={(event) => setModalState((prev) => ({ ...prev, observations: event.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-indigo-400 focus:outline-none"
-                  rows={3}
-                  placeholder="Comentarios u observaciones para la congregación"
-                />
-              </section>
+      <Drawer
+        open={Boolean(selectedReport)}
+        onClose={handleCloseReview}
+        title={
+          selectedReport
+            ? `${selectedReport.churchName} — ${
+                monthNames[Number(selectedReport.month)] ?? selectedReport.month
+              }/${selectedReport.year}`
+            : 'Detalle de informe'
+        }
+        description={
+          selectedReport?.submittedAt
+            ? `Enviado el ${format(new Date(selectedReport.submittedAt), "dd 'de' MMMM yyyy", {
+                locale: es,
+              })}`
+            : undefined
+        }
+        size="lg"
+        footer={
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              density="compact"
+              onClick={handleReject}
+              loading={updateReport.isPending}
+              disabled={approveReport.isPending}
+            >
+              Solicitar corrección
+            </Button>
+            <Button
+              type="button"
+              variant="success"
+              size="sm"
+              density="compact"
+              onClick={handleApproveDetailed}
+              loading={approveReport.isPending}
+              disabled={updateReport.isPending}
+            >
+              Aprobar y generar movimientos
+            </Button>
+          </div>
+        }
+      >
+        {selectedReport ? (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <StatusPill tone={selectedReport.status?.includes('rechazado') ? 'critical' : 'warning'}>
+                {friendlyLabel(selectedReport.status ?? 'pendiente')}
+              </StatusPill>
+              <span className="text-xs text-[rgba(15,23,42,0.55)]">
+                Depósito: {(selectedReport.raw?.numero_deposito as string) ?? 'No registrado'}
+              </span>
             </div>
 
-            <footer className="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
-              <button
-                type="button"
-                onClick={handleReject}
-                disabled={updateReport.isPending}
-                className="rounded-lg border border-rose-200 px-4 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+            <div className="absd-grid">
+              {detailMetrics.map((metric) => (
+                <MetricCard
+                  key={metric.label}
+                  label={metric.label}
+                  value={metric.value}
+                  description={metric.description}
+                  tone={metric.tone}
+                />
+              ))}
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-[var(--absd-border)] bg-[var(--absd-surface)] shadow-sm">
+                <header className="border-b border-[var(--absd-border)] px-4 py-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.6)]">
+                    Ingresos congregacionales
+                  </h3>
+                </header>
+                <dl className="divide-y divide-[var(--absd-border)]">
+                  {incomeEntries.map(([key, value]) => (
+                    <div
+                      key={key}
+                      className="flex items-center justify-between px-4 py-2 text-sm text-[rgba(15,23,42,0.7)]"
+                    >
+                      <dt>{friendlyLabel(key)}</dt>
+                      <dd className="font-semibold text-[var(--absd-ink)]">{formatCurrency(value)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+
+              <div className="rounded-2xl border border-[var(--absd-border)] bg-[var(--absd-surface)] shadow-sm">
+                <header className="border-b border-[var(--absd-border)] px-4 py-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.6)]">
+                    Designados y gastos
+                  </h3>
+                </header>
+                <dl className="divide-y divide-[var(--absd-border)]">
+                  {expenseEntries.map(([key, value]) => (
+                    <div
+                      key={key}
+                      className="flex items-center justify-between px-4 py-2 text-sm text-[rgba(15,23,42,0.7)]"
+                    >
+                      <dt>{friendlyLabel(key)}</dt>
+                      <dd className="font-semibold text-[var(--absd-ink)]">{formatCurrency(value)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[var(--absd-border)] bg-[var(--absd-surface)] shadow-sm">
+              <header className="border-b border-[var(--absd-border)] px-4 py-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.6)]">
+                  Detalle de envío
+                </h3>
+              </header>
+              <dl className="grid gap-4 px-4 py-4 text-sm text-[rgba(15,23,42,0.7)] md:grid-cols-2">
+                <div className="space-y-1">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">
+                    Tipo de envío
+                  </dt>
+                  <dd className="text-[var(--absd-ink)]">
+                    {friendlyLabel('normal')}
+                  </dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">
+                    Enviado por
+                  </dt>
+                  <dd className="text-[var(--absd-ink)]">{selectedReport.processedBy ?? 'N/A'}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">
+                    Fecha envío
+                  </dt>
+                  <dd className="text-[var(--absd-ink)]">
+                    {selectedReport.submittedAt
+                      ? format(new Date(selectedReport.submittedAt), "dd 'de' MMMM yyyy", { locale: es })
+                      : 'N/A'}
+                  </dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">
+                    Fecha depósito
+                  </dt>
+                  <dd className="text-[var(--absd-ink)]">{(selectedReport.raw?.fecha_deposito as string) ?? 'N/A'}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">
+                    Nº de depósito
+                  </dt>
+                  <dd className="text-[var(--absd-ink)]">{(selectedReport.raw?.numero_deposito as string) ?? 'N/A'}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">
+                    Monto depositado
+                  </dt>
+                  <dd className="text-[var(--absd-ink)]">
+                    {formatCurrency(selectedReport.raw?.monto_depositado as number | undefined)}
+                  </dd>
+                </div>
+                <div className="space-y-1 md:col-span-2">
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">
+                    Observaciones del envío
+                  </dt>
+                  <dd className="text-[rgba(15,23,42,0.7)]">
+                    {selectedReport.observations?.trim() || 'Sin observaciones registradas.'}
+                  </dd>
+                </div>
+              </dl>
+            </div>
+
+            <FormSection
+              title="Notas para la congregación"
+              description="Comparte hallazgos o ajustes solicitados antes de aprobar el informe."
+            >
+              <FormField
+                htmlFor="report-observations"
+                label="Observaciones"
+                hint="Estas notas se compartirán con la congregación para que realicen las correcciones necesarias."
               >
-                Solicitar corrección
-              </button>
-              <button
-                type="button"
-                onClick={handleApprove}
-                disabled={approveReport.isPending}
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                Aprobar y generar movimientos
-              </button>
-            </footer>
+                <Textarea
+                  id="report-observations"
+                  rows={4}
+                  value={observations}
+                  onChange={(event) => setObservations(event.target.value)}
+                  placeholder="Comentarios u observaciones para la congregación"
+                />
+              </FormField>
+            </FormSection>
           </div>
-        </div>
-      ) : null}
-    </div>
+        ) : null}
+      </Drawer>
+    </>
   );
 }

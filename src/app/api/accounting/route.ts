@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthContext } from "@/lib/auth-context";
-import { execute } from "@/lib/db";
+import { getAuthContext, type AuthContext } from "@/lib/auth-context";
+import { executeWithContext } from "@/lib/db";
 import { setCORSHeaders } from "@/lib/cors";
 
 interface MonthlyLedger {
@@ -84,6 +84,7 @@ type AccountingAction = "expense" | "entry" | "open_ledger" | "close_ledger";
 // GET /api/accounting - Get accounting records
 async function handleGet(req: NextRequest) {
   try {
+    const auth = await getAuthContext(req);
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type") || "ledger";
     const church_id = searchParams.get("church_id");
@@ -93,13 +94,13 @@ async function handleGet(req: NextRequest) {
 
     switch (type) {
       case "ledger":
-        return await getMonthlyLedger(church_id, month, year, status);
+        return await getMonthlyLedger(auth, church_id, month, year, status);
       case "expenses":
-        return await getExpenses(church_id, month, year);
+        return await getExpenses(auth, church_id, month, year);
       case "entries":
-        return await getAccountingEntries(church_id, month, year);
+        return await getAccountingEntries(auth, church_id, month, year);
       case "summary":
-        return await getAccountingSummary(church_id, month, year);
+        return await getAccountingSummary(auth, church_id, month, year);
       default:
         const response = NextResponse.json({ error: "Invalid type parameter" }, { status: 400 });
         setCORSHeaders(response);
@@ -118,10 +119,11 @@ async function handleGet(req: NextRequest) {
 
 // Get monthly ledger records
 async function getMonthlyLedger(
+  auth: AuthContext | null,
   church_id: string | null,
   month: string | null,
   year: string | null,
-  status: string | null
+  status: string | null,
 ) {
   let query = `
     SELECT
@@ -161,7 +163,7 @@ async function getMonthlyLedger(
 
   query += ` ORDER BY ml.year DESC, ml.month DESC, c.name ASC`;
 
-  const result = await execute(query, params);
+  const result = await executeWithContext(auth, query, params);
 
   const response = NextResponse.json({
     success: true,
@@ -174,9 +176,10 @@ async function getMonthlyLedger(
 
 // Get expense records
 async function getExpenses(
+  auth: AuthContext | null,
   church_id: string | null,
   month: string | null,
-  year: string | null
+  year: string | null,
 ) {
   const filters: string[] = [];
   const values: (string | number)[] = [];
@@ -195,7 +198,7 @@ async function getExpenses(
 
   const whereClause = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
 
-  const result = await execute(
+  const result = await executeWithContext(auth, 
     `
     SELECT
       e.*,
@@ -208,7 +211,7 @@ async function getExpenses(
     values
   );
 
-  const categoryTotals = await execute(
+  const categoryTotals = await executeWithContext(auth, 
     `
     SELECT
       category,
@@ -234,9 +237,10 @@ async function getExpenses(
 
 // Get accounting entries (double-entry bookkeeping)
 async function getAccountingEntries(
+  auth: AuthContext | null,
   church_id: string | null,
   month: string | null,
-  year: string | null
+  year: string | null,
 ) {
   const filters: string[] = [];
   const values: (string | number)[] = [];
@@ -255,7 +259,7 @@ async function getAccountingEntries(
 
   const whereClause = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
 
-  const result = await execute(
+  const result = await executeWithContext(auth, 
     `
     SELECT
       ae.*,
@@ -268,7 +272,7 @@ async function getAccountingEntries(
     values
   );
 
-  const trialBalance = await execute(
+  const trialBalance = await executeWithContext(auth, 
     `
     SELECT
       account_code,
@@ -296,9 +300,10 @@ async function getAccountingEntries(
 
 // Get accounting summary for a period
 async function getAccountingSummary(
+  auth: AuthContext | null,
   church_id: string | null,
   month: string | null,
-  year: string | null
+  year: string | null,
 ) {
   const reportFilters: string[] = [];
   const reportValues: (string | number)[] = [];
@@ -317,7 +322,7 @@ async function getAccountingSummary(
 
   const reportWhere = reportFilters.length > 0 ? `WHERE ${reportFilters.join(" AND ")}` : "";
 
-  const income = await execute(
+  const income = await executeWithContext(auth, 
     `
     SELECT
       SUM(diezmos) as total_diezmos,
@@ -348,7 +353,7 @@ async function getAccountingSummary(
 
   const expenseWhere = expenseFilters.length > 0 ? `WHERE ${expenseFilters.join(" AND ")}` : "";
 
-  const expenses = await execute(
+  const expenses = await executeWithContext(auth, 
     `
     SELECT
       SUM(amount) as total_expenses,
@@ -376,7 +381,7 @@ async function getAccountingSummary(
 
   const movementWhere = movementFilters.length > 0 ? `WHERE ${movementFilters.join(" AND ")}` : "";
 
-  const movements = await execute(
+  const movements = await executeWithContext(auth, 
     `
     SELECT
       SUM(amount) as total_movements,
@@ -405,7 +410,7 @@ async function getAccountingSummary(
 
   const ledgerWhere = ledgerFilters.length > 0 ? `WHERE ${ledgerFilters.join(" AND ")}` : "";
 
-  const ledger = await execute(
+  const ledger = await executeWithContext(auth, 
     `
     SELECT
       status,
@@ -458,13 +463,13 @@ async function handlePost(req: NextRequest) {
 
     switch (action) {
       case "expense":
-        return await createExpense(body as ExpenseCreatePayload, user.email || "");
+        return await createExpense(user, body as ExpenseCreatePayload, user.email || "");
       case "entry":
-        return await createAccountingEntry(body as AccountingEntriesRequest, user.email || "");
+        return await createAccountingEntry(user, body as AccountingEntriesRequest, user.email || "");
       case "open_ledger":
-        return await openMonthlyLedger(body as LedgerOpenPayload, user.email || "");
+        return await openMonthlyLedger(user, body as LedgerOpenPayload, user.email || "");
       case "close_ledger":
-        return await closeMonthlyLedger(body as LedgerClosePayload, user.email || "");
+        return await closeMonthlyLedger(user, body as LedgerClosePayload, user.email || "");
       default:
         const response = NextResponse.json({ error: "Invalid type" }, { status: 400 });
         setCORSHeaders(response);
@@ -482,7 +487,7 @@ async function handlePost(req: NextRequest) {
 }
 
 // Create expense record
-async function createExpense(data: ExpenseCreatePayload, userEmail: string) {
+async function createExpense(auth: AuthContext | null, data: ExpenseCreatePayload, userEmail: string) {
   const required: Array<keyof ExpenseCreatePayload> = [
     "church_id",
     "date",
@@ -499,7 +504,7 @@ async function createExpense(data: ExpenseCreatePayload, userEmail: string) {
     }
   }
 
-  const result = await execute<ExpenseRecord>(
+  const result = await executeWithContext<ExpenseRecord>(auth,
     `INSERT INTO expense_records (
       church_id, date, concept, category, amount,
       provider, document_number, approved_by, notes, created_by
@@ -520,7 +525,7 @@ async function createExpense(data: ExpenseCreatePayload, userEmail: string) {
   );
 
   // Create corresponding accounting entry
-  await execute(
+  await executeWithContext(auth, 
     `INSERT INTO accounting_entries (
       church_id, date, account_code, account_name,
       debit, credit, reference, description, created_by
@@ -549,7 +554,7 @@ async function createExpense(data: ExpenseCreatePayload, userEmail: string) {
 }
 
 // Create accounting entry (double-entry)
-async function createAccountingEntry(data: AccountingEntriesRequest, userEmail: string) {
+async function createAccountingEntry(auth: AuthContext | null, data: AccountingEntriesRequest, userEmail: string) {
   let entries: AccountingEntryPayload[];
 
   if ("entries" in data) {
@@ -597,7 +602,7 @@ async function createAccountingEntry(data: AccountingEntriesRequest, userEmail: 
   const results: AccountingEntry[] = [];
 
   for (const entry of entries) {
-    const result = await execute<AccountingEntry>(
+    const result = await executeWithContext<AccountingEntry>(auth,
       `INSERT INTO accounting_entries (
         church_id, date, account_code, account_name,
         debit, credit, reference, description, created_by
@@ -629,7 +634,7 @@ async function createAccountingEntry(data: AccountingEntriesRequest, userEmail: 
 }
 
 // Open monthly ledger
-async function openMonthlyLedger(data: LedgerOpenPayload, userEmail: string) {
+async function openMonthlyLedger(auth: AuthContext | null, data: LedgerOpenPayload, userEmail: string) {
   const { church_id, month, year } = data;
 
   if (!church_id || !month || !year) {
@@ -639,7 +644,7 @@ async function openMonthlyLedger(data: LedgerOpenPayload, userEmail: string) {
   }
 
   // Check if ledger already exists
-  const existing = await execute(
+  const existing = await executeWithContext(auth, 
     `SELECT id, status FROM monthly_ledger WHERE church_id = $1 AND month = $2 AND year = $3`,
     [church_id, month, year]
   );
@@ -656,7 +661,7 @@ async function openMonthlyLedger(data: LedgerOpenPayload, userEmail: string) {
   const prevMonth = month === 1 ? 12 : month - 1;
   const prevYear = month === 1 ? year - 1 : year;
 
-  const previous = await execute(
+  const previous = await executeWithContext(auth, 
     `SELECT closing_balance FROM monthly_ledger
      WHERE church_id = $1 AND month = $2 AND year = $3`,
     [church_id, prevMonth, prevYear]
@@ -665,7 +670,7 @@ async function openMonthlyLedger(data: LedgerOpenPayload, userEmail: string) {
   const openingBalance = previous.rows[0]?.closing_balance || 0;
 
   // Create new ledger
-  const result = await execute<MonthlyLedger>(
+  const result = await executeWithContext<MonthlyLedger>(auth,
     `INSERT INTO monthly_ledger (
       church_id, month, year, opening_balance,
       closing_balance, total_income, total_expenses,
@@ -686,7 +691,7 @@ async function openMonthlyLedger(data: LedgerOpenPayload, userEmail: string) {
 }
 
 // Close monthly ledger
-async function closeMonthlyLedger(data: LedgerClosePayload, userEmail: string) {
+async function closeMonthlyLedger(auth: AuthContext | null, data: LedgerClosePayload, userEmail: string) {
   const { church_id, month, year, notes } = data;
 
   if (!church_id || !month || !year) {
@@ -696,7 +701,7 @@ async function closeMonthlyLedger(data: LedgerClosePayload, userEmail: string) {
   }
 
   // Get ledger
-  const ledger = await execute(
+  const ledger = await executeWithContext(auth, 
     `SELECT * FROM monthly_ledger WHERE church_id = $1 AND month = $2 AND year = $3`,
     [church_id, month, year]
   );
@@ -714,13 +719,13 @@ async function closeMonthlyLedger(data: LedgerClosePayload, userEmail: string) {
   }
 
   // Calculate totals
-  const income = await execute(
+  const income = await executeWithContext(auth, 
     `SELECT SUM(total_entradas) as total FROM reports
      WHERE church_id = $1 AND month = $2 AND year = $3`,
     [church_id, month, year]
   );
 
-  const expenses = await execute(
+  const expenses = await executeWithContext(auth, 
     `SELECT SUM(amount) as total FROM expense_records
      WHERE church_id = $1
      AND EXTRACT(MONTH FROM date) = $2
@@ -733,7 +738,7 @@ async function closeMonthlyLedger(data: LedgerClosePayload, userEmail: string) {
   const closingBalance = parseFloat(String(ledger.rows[0].opening_balance)) + totalIncome - totalExpenses;
 
   // Update ledger
-  const result = await execute<MonthlyLedger>(
+  const result = await executeWithContext<MonthlyLedger>(auth,
     `UPDATE monthly_ledger SET
       closing_balance = $1,
       total_income = $2,

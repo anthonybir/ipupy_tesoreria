@@ -1,9 +1,10 @@
 import type { ChurchRecord, ReportRecord } from '@/types/api';
+import { SectionCard, StatCard, StatusPill } from '@/components/Shared';
 
 const currency = new Intl.NumberFormat('es-PY', {
   style: 'currency',
   currency: 'PYG',
-  maximumFractionDigits: 0
+  maximumFractionDigits: 0,
 });
 
 const monthLabels = [
@@ -18,7 +19,7 @@ const monthLabels = [
   'Septiembre',
   'Octubre',
   'Noviembre',
-  'Diciembre'
+  'Diciembre',
 ];
 
 type ReportsDashboardProps = {
@@ -32,7 +33,7 @@ export function ReportsDashboard({ reports, churches }: ReportsDashboardProps) {
   const currentDate = new Date();
   const currentPeriod = {
     month: currentDate.getMonth() + 1,
-    year: currentDate.getFullYear()
+    year: currentDate.getFullYear(),
   };
 
   const reportsThisMonth = reports.filter(
@@ -45,96 +46,98 @@ export function ReportsDashboard({ reports, churches }: ReportsDashboardProps) {
   const pending = Math.max(churches.length - reportsThisMonth.length, 0);
 
   const recentReports = [...reports]
-    .sort((a, b) => (new Date(b.metadata.createdAt ?? '').getTime() || 0) - (new Date(a.metadata.createdAt ?? '').getTime() || 0))
+    .sort(
+      (a, b) =>
+        (new Date(b.metadata.createdAt ?? '').getTime() || 0) -
+        (new Date(a.metadata.createdAt ?? '').getTime() || 0)
+    )
     .slice(0, 6);
 
+  const statCards = [
+    {
+      label: 'Iglesias activas',
+      value: churches.length.toLocaleString('es-PY'),
+      description: `${processed} procesadas`,
+      tone: processed === churches.length ? 'success' : 'default',
+    },
+    {
+      label: 'Entradas del mes',
+      value: currency.format(totalEntries),
+      description: `${reportsThisMonth.length} informes registrados`,
+    },
+    {
+      label: 'Fondo nacional (10 %)',
+      value: currency.format(totalNationalFund),
+      description: 'Calculado automáticamente',
+    },
+    {
+      label: 'Informes pendientes',
+      value: pending.toLocaleString('es-PY'),
+      description: pending === 0 ? 'Al día' : 'Requiere seguimiento',
+      tone: pending === 0 ? 'success' : 'warning',
+    },
+  ];
+
   return (
-    <div className="grid gap-6">
-      <section className="dashboard-grid">
-        {[
-          {
-            label: 'Iglesias activas',
-            value: churches.length,
-            badge: `${processed} procesadas`
-          },
-          {
-            label: 'Entradas del mes',
-            value: currency.format(totalEntries),
-            badge: `${reportsThisMonth.length} informes`
-          },
-          {
-            label: 'Fondo nacional (10%)',
-            value: currency.format(totalNationalFund),
-            badge: 'Calculado automáticamente'
-          },
-          {
-            label: 'Informes pendientes',
-            value: pending,
-            badge: pending === 0 ? 'Al día' : 'Requiere seguimiento',
-            tone: pending === 0 ? 'success' : 'warning'
-          }
-        ].map((card) => (
-          <article
+    <div className="space-y-6">
+      <div className="absd-grid">
+        {statCards.map((card) => (
+          <StatCard
             key={card.label}
-            className="dashboard-card dashboard-span-minimal p-5"
-          >
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{card.label}</p>
-            <p className="mt-3 text-2xl font-semibold text-slate-900">{card.value}</p>
-            <span
-              className={`mt-3 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
-                card.tone === 'success'
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : card.tone === 'warning'
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-slate-100 text-slate-600'
-              }`}
-            >
-              {card.badge}
-            </span>
-          </article>
+            label={card.label}
+            value={card.value}
+            description={card.description}
+            tone={(card.tone ?? 'default') as 'default' | 'success' | 'warning' | 'critical'}
+          />
         ))}
-      </section>
+      </div>
 
-      <section className="dashboard-card overflow-hidden">
-        <header className="flex flex-col gap-2 border-b border-slate-200 px-6 py-5 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-900">Últimos informes</h3>
-            <p className="text-sm text-slate-600">Seguimiento rápido de los reportes más recientes</p>
-          </div>
-        </header>
-
-        <div className="overflow-x-auto px-6 pb-6">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50">
+      <SectionCard
+        title="Últimos informes"
+        description="Seguimiento rápido de los reportes más recientes"
+      >
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-[var(--absd-border)] text-sm">
+            <thead className="bg-[color-mix(in_oklab,var(--absd-authority) 6%,white)]">
               <tr>
-                <th className="px-4 py-3 text-left font-medium uppercase tracking-wide text-slate-500">Iglesia</th>
-                <th className="px-4 py-3 text-left font-medium uppercase tracking-wide text-slate-500">Periodo</th>
-                <th className="px-4 py-3 text-right font-medium uppercase tracking-wide text-slate-500">Entradas</th>
-                <th className="px-4 py-3 text-left font-medium uppercase tracking-wide text-slate-500">Estado</th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.65)]">
+                  Iglesia
+                </th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.65)]">
+                  Periodo
+                </th>
+                <th scope="col" className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.65)]">
+                  Entradas
+                </th>
+                <th scope="col" className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.65)]">
+                  Estado
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 bg-white">
+            <tbody className="divide-y divide-[var(--absd-border)] bg-white">
               {recentReports.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-slate-500">
+                  <td colSpan={4} className="px-4 py-6 text-center text-[rgba(15,23,42,0.6)]">
                     Todavía no hay reportes migrados.
                   </td>
                 </tr>
               ) : (
                 recentReports.map((report) => (
-                  <tr key={report.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-900">
+                  <tr key={report.id} className="hover:bg-[color-mix(in_oklab,var(--absd-authority) 6%,white)]">
+                    <td className="px-4 py-3 text-[var(--absd-ink)]">
                       <div className="font-semibold">{report.churchName}</div>
-                      <div className="text-xs text-slate-500">{report.metadata.city ?? 'Ciudad no registrada'}</div>
+                      <div className="text-xs text-[rgba(15,23,42,0.55)]">
+                        {report.metadata.city ?? 'Ciudad no registrada'}
+                      </div>
                     </td>
-                    <td className="px-4 py-3 text-slate-700">{formatPeriod(report)}</td>
-                    <td className="px-4 py-3 text-right text-slate-900 font-semibold">
+                    <td className="px-4 py-3 text-[var(--absd-ink)]">{formatPeriod(report)}</td>
+                    <td className="px-4 py-3 text-right text-[var(--absd-ink)] font-semibold">
                       {currency.format(report.totals.entries)}
                     </td>
                     <td className="px-4 py-3">
-                      <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold capitalize text-slate-600">
+                      <StatusPill tone={report.status.toLowerCase() === 'procesado' ? 'success' : 'warning'}>
                         {report.status}
-                      </span>
+                      </StatusPill>
                     </td>
                   </tr>
                 ))
@@ -142,7 +145,7 @@ export function ReportsDashboard({ reports, churches }: ReportsDashboardProps) {
             </tbody>
           </table>
         </div>
-      </section>
+      </SectionCard>
     </div>
   );
 }

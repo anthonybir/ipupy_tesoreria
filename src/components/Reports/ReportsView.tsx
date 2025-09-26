@@ -8,8 +8,16 @@ import { useReports } from '@/hooks/useReports';
 import { ReportForm } from '@/components/Reports/ReportForm';
 import { ReportsDashboard } from '@/components/Reports/ReportsDashboard';
 import { ReportDetailsDrawer } from '@/components/Reports/ReportDetailsDrawer';
-import { ReportRow } from '@/components/Reports/ReportRow';
 import type { ReportFilters, ReportRecord } from '@/types/api';
+import {
+  DataTable,
+  FilterBar,
+  FormField,
+  PageHeader,
+  SectionCard,
+  StatusPill,
+} from '@/components/Shared';
+import { Button } from '@/components/ui/button';
 
 const monthLabels = [
   'Enero',
@@ -23,16 +31,15 @@ const monthLabels = [
   'Septiembre',
   'Octubre',
   'Noviembre',
-  'Diciembre'
+  'Diciembre',
 ];
-
 
 const currentYear = new Date().getFullYear();
 
 const tabs = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'new', label: 'Registrar informe' },
-  { id: 'history', label: 'Historial' }
+  { id: 'history', label: 'Historial' },
 ] as const;
 
 type TabId = (typeof tabs)[number]['id'];
@@ -46,7 +53,7 @@ type FilterState = {
 const defaultFilterState: FilterState = {
   churchId: 'all',
   year: 'all',
-  month: 'all'
+  month: 'all',
 };
 
 const FILTER_STORAGE_KEY = 'reports::filters';
@@ -56,9 +63,8 @@ const buildFilters = (state: FilterState): ReportFilters => ({
   churchId: state.churchId !== 'all' ? Number(state.churchId) : undefined,
   year: state.year !== 'all' ? Number(state.year) : undefined,
   month: state.month !== 'all' ? Number(state.month) : undefined,
-  limit: 50
+  limit: 50,
 });
-
 
 export default function ReportsView() {
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
@@ -86,7 +92,7 @@ export default function ReportsView() {
       setFilters({
         churchId: churchParam && churchParam !== '' ? churchParam : 'all',
         year: yearParam && yearParam !== '' ? yearParam : 'all',
-        month: monthParam && monthParam !== '' ? monthParam : 'all'
+        month: monthParam && monthParam !== '' ? monthParam : 'all',
       });
 
       if (tabParam === 'history') {
@@ -105,7 +111,7 @@ export default function ReportsView() {
           setFilters({
             churchId: parsed.churchId ?? 'all',
             year: parsed.year ?? 'all',
-            month: parsed.month ?? 'all'
+            month: parsed.month ?? 'all',
           });
         }
       } catch (error) {
@@ -164,10 +170,7 @@ export default function ReportsView() {
 
   const queryFilters = useMemo(() => buildFilters(filters), [filters]);
   const historyQuery = useReports(queryFilters);
-  const reports = useMemo(
-    () => (historyQuery.data ?? []) as ReportRecord[],
-    [historyQuery.data]
-  );
+  const reports = useMemo(() => (historyQuery.data ?? []) as ReportRecord[], [historyQuery.data]);
 
   const summaryQuery = useReports({ limit: 200, year: currentYear });
   const summaryReports = useMemo(
@@ -194,182 +197,75 @@ export default function ReportsView() {
     historyQuery.refetch();
   };
 
-  const HistorySection = () => (
-    <div className="space-y-6">
-      <section className="dashboard-card p-6">
-        <div className="flex flex-wrap items-center gap-4">
-          <div className="flex min-w-[190px] flex-col">
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="filter-church">
-              Iglesia
-            </label>
-            <select
-              id="filter-church"
-              value={filters.churchId}
-              onChange={handleSelectChange('churchId')}
-              className="mt-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-              disabled={churchesLoading}
-            >
-              <option value="all">Todas</option>
-              {churches.map((church) => (
-                <option key={church.id} value={church.id}>
-                  {church.name}
-                </option>
-              ))}
-            </select>
+  const historyColumns = useMemo(() => {
+    return [
+      {
+        id: 'church',
+        header: 'Iglesia',
+        render: (report: ReportRecord) => (
+          <div className="flex flex-col gap-1">
+            <span className="font-semibold text-[var(--absd-ink)]">{report.churchName}</span>
+            <span className="text-xs text-[rgba(15,23,42,0.55)]">{report.metadata.city ?? 'Ciudad no registrada'}</span>
           </div>
-
-          <div className="flex min-w-[150px] flex-col">
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="filter-year">
-              Año
-            </label>
-            <select
-              id="filter-year"
-              value={filters.year}
-              onChange={handleSelectChange('year')}
-              className="mt-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-            >
-              <option value="all">Todos</option>
-              {availableYears.length === 0
-                ? Array.from({ length: 5 }, (_, index) => (
-                    <option key={index} value={String(currentYear - index)}>
-                      {currentYear - index}
-                    </option>
-                  ))
-                : availableYears.map((year) => (
-                    <option key={year} value={String(year)}>
-                      {year}
-                    </option>
-                  ))}
-            </select>
-          </div>
-
-          <div className="flex min-w-[170px] flex-col">
-            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500" htmlFor="filter-month">
-              Mes
-            </label>
-            <select
-              id="filter-month"
-              value={filters.month}
-              onChange={handleSelectChange('month')}
-              className="mt-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-            >
-              <option value="all">Todos</option>
-              {monthLabels.map((label, index) => (
-                <option key={label} value={String(index + 1)}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="ml-auto flex items-end gap-2">
-            <button
-              type="button"
-              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100"
-              onClick={handleResetFilters}
-            >
-              Limpiar filtros
-            </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-500/25 transition hover:bg-indigo-500"
-              onClick={() => historyQuery.refetch()}
-              disabled={historyQuery.isFetching}
-            >
-              {historyQuery.isFetching ? 'Actualizando…' : 'Refrescar'}
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section className="dashboard-card overflow-hidden">
-        <header className="flex flex-col gap-2 border-b border-slate-200 px-6 py-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">Resultados</h2>
-            <p className="text-sm text-slate-600">
-              {historyQuery.isLoading
-                ? 'Cargando informes…'
-                : `${reports.length} informe${reports.length === 1 ? '' : 's'} encontrados`}
-            </p>
-          </div>
-        </header>
-
-        <div className="overflow-x-auto px-6 pb-6">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50">
-              <tr>
-                <th className="px-4 py-3 text-left font-medium uppercase tracking-wide text-slate-500">Iglesia</th>
-                <th className="px-4 py-3 text-left font-medium uppercase tracking-wide text-slate-500">Periodo</th>
-                <th className="px-4 py-3 text-right font-medium uppercase tracking-wide text-slate-500">Entradas</th>
-                <th className="px-4 py-3 text-right font-medium uppercase tracking-wide text-slate-500">Salidas</th>
-                <th className="px-4 py-3 text-right font-medium uppercase tracking-wide text-slate-500">Saldo</th>
-                <th className="px-4 py-3 text-left font-medium uppercase tracking-wide text-slate-500">Estado</th>
-                <th className="px-4 py-3 text-left font-medium uppercase tracking-wide text-slate-500">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {historyQuery.isLoading ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-slate-500">
-                    Cargando información…
-                  </td>
-                </tr>
-              ) : historyQuery.isError ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-red-600">
-                    {historyQuery.error?.message ?? 'No se pudieron cargar los informes.'}
-                  </td>
-                </tr>
-              ) : reports.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-slate-500">
-                    No se encontraron reportes con los filtros seleccionados.
-                  </td>
-                </tr>
-              ) : (
-                reports.map((report) => (
-                  <ReportRow key={report.id} report={report} onView={setSelectedReport} />
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </div>
-  );
+        ),
+      },
+      {
+        id: 'period',
+        header: 'Periodo',
+        render: (report: ReportRecord) => (
+          <span className="text-[var(--absd-ink)]">{`${monthLabels[report.month - 1] ?? report.month}/${report.year}`}</span>
+        ),
+      },
+      {
+        id: 'entries',
+        header: 'Entradas',
+        align: 'right' as const,
+        render: (report: ReportRecord) => (
+          <span className="font-semibold text-[var(--absd-ink)]">
+            {new Intl.NumberFormat('es-PY', {
+              style: 'currency',
+              currency: 'PYG',
+              maximumFractionDigits: 0,
+            }).format(report.totals.entries)}
+          </span>
+        ),
+      },
+      {
+        id: 'status',
+        header: 'Estado',
+        render: (report: ReportRecord) => (
+          <StatusPill tone={report.status.toLowerCase() === 'procesado' ? 'success' : 'warning'}>
+            {report.status}
+          </StatusPill>
+        ),
+      },
+    ];
+  }, []);
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-col gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Informes congregacionales</span>
-        <h1 className="text-3xl font-semibold text-slate-900">Centro de reportes</h1>
-        <p className="max-w-3xl text-sm text-slate-600">
-          Gestiona los informes mensuales, revisa métricas nacionales y mantiene actualizado el directorio congregacional desde un solo lugar.
-        </p>
-      </header>
-
-      <nav className="flex flex-wrap gap-2">
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={`
-                rounded-full px-4 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2
-                ${
-                  isActive
-                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30 focus-visible:outline-indigo-500'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200 focus-visible:outline-slate-400'
-                }
-              `}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </nav>
+      <PageHeader
+        title="Centro de reportes"
+        subtitle="Gestiona los informes mensuales, revisa métricas nacionales y mantiene actualizado el directorio congregacional."
+      >
+        <div className="flex flex-wrap items-center gap-2">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <Button
+                key={tab.id}
+                type="button"
+                variant={isActive ? 'primary' : 'ghost'}
+                size="sm"
+                density="compact"
+                onClick={() => setActiveTab(tab.id)}
+              >
+                {tab.label}
+              </Button>
+            );
+          })}
+        </div>
+      </PageHeader>
 
       {activeTab === 'dashboard' && (
         <ReportsDashboard reports={summaryReports} churches={churches} />
@@ -377,7 +273,101 @@ export default function ReportsView() {
 
       {activeTab === 'new' && <ReportForm />}
 
-      {activeTab === 'history' && <HistorySection />}
+      {activeTab === 'history' && (
+        <div className="space-y-6">
+          <FilterBar
+            actions={
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleResetFilters}
+                >
+                  Limpiar filtros
+                </Button>
+                <Button
+                  type="button"
+                  variant="primary"
+                  size="sm"
+                  onClick={() => historyQuery.refetch()}
+                  loading={historyQuery.isFetching}
+                >
+                  Refrescar
+                </Button>
+              </div>
+            }
+          >
+            <FormField htmlFor="filter-church" label="Iglesia">
+              <select
+                id="filter-church"
+                value={filters.churchId}
+                onChange={handleSelectChange('churchId')}
+                className="rounded-xl border border-[var(--absd-border)] bg-white px-3 py-2 text-sm text-[var(--absd-ink)] shadow-sm focus:border-[var(--absd-authority)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_oklab,var(--absd-authority) 40%,white)]"
+                disabled={churchesLoading}
+              >
+                <option value="all">Todas</option>
+                {churches.map((church) => (
+                  <option key={church.id} value={church.id}>
+                    {church.name}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormField htmlFor="filter-year" label="Año">
+              <select
+                id="filter-year"
+                value={filters.year}
+                onChange={handleSelectChange('year')}
+                className="rounded-xl border border-[var(--absd-border)] bg-white px-3 py-2 text-sm text-[var(--absd-ink)] shadow-sm focus:border-[var(--absd-authority)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_oklab,var(--absd-authority) 40%,white)]"
+              >
+                <option value="all">Todos</option>
+                {(availableYears.length === 0
+                  ? Array.from({ length: 5 }, (_, index) => currentYear - index)
+                  : availableYears
+                ).map((year) => (
+                  <option key={year} value={String(year)}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormField htmlFor="filter-month" label="Mes">
+              <select
+                id="filter-month"
+                value={filters.month}
+                onChange={handleSelectChange('month')}
+                className="rounded-xl border border-[var(--absd-border)] bg-white px-3 py-2 text-sm text-[var(--absd-ink)] shadow-sm focus:border-[var(--absd-authority)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_oklab,var(--absd-authority) 40%,white)]"
+              >
+                <option value="all">Todos</option>
+                {monthLabels.map((label, index) => (
+                  <option key={label} value={String(index + 1)}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </FilterBar>
+
+          <SectionCard
+            title="Resultados"
+            description={
+              historyQuery.isLoading
+                ? 'Cargando informes congregacionales…'
+                : `${reports.length} informe${reports.length === 1 ? '' : 's'} visibles`
+            }
+          >
+            <DataTable
+              data={reports}
+              columns={historyColumns}
+              loading={historyQuery.isLoading || historyQuery.isFetching}
+              skeletonRows={6}
+              onRowClick={setSelectedReport}
+              emptyContent="No se encontraron reportes con los filtros seleccionados."
+            />
+          </SectionCard>
+        </div>
+      )}
 
       <ReportDetailsDrawer report={selectedReport} onClose={() => setSelectedReport(null)} />
     </div>

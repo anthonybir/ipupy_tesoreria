@@ -6,6 +6,14 @@ import { ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 
 import { useExport } from '@/hooks/useExport';
+import {
+  FormField,
+  PageHeader,
+  SectionCard,
+  Toolbar,
+  ErrorState,
+} from '@/components/Shared';
+import { Button } from '@/components/ui/button';
 import type { DataExportParams, ExportType } from '@/types/financial';
 
 const monthLabels = [
@@ -37,6 +45,9 @@ const defaultState: ExportFormState = {
   year: String(currentYear),
   month: String(new Date().getMonth() + 1),
 };
+
+const selectClasses =
+  'rounded-xl border border-[var(--absd-border)] bg-white px-3 py-2 text-sm text-[var(--absd-ink)] shadow-sm focus:border-[var(--absd-authority)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_oklab,var(--absd-authority) 40%,white)]';
 
 export default function ExportView() {
   const [formState, setFormState] = useState<ExportFormState>(defaultState);
@@ -96,39 +107,45 @@ export default function ExportView() {
   }, [formState.type]);
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-2">
-        <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">
-          Exportaciones oficiales
-        </p>
-        <h1 className="text-3xl font-semibold text-slate-900">Descarga de reportes</h1>
-        <p className="text-sm text-slate-600">
-          Genera archivos Excel con la información consolidada para respaldos y reportes oficiales.
-        </p>
-      </header>
+    <div className="space-y-8">
+      <PageHeader
+        title="Descarga de reportes"
+        subtitle="Genera archivos Excel con la información consolidada para respaldos y reportes oficiales."
+      />
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <form className="space-y-6" onSubmit={handleSubmit}>
-          <div className="grid gap-4 md:grid-cols-2">
-            <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
-              Tipo de exportación
+      <SectionCard title="Generar exportación" description={helperText} padding="lg">
+        <form id="export-form" className="space-y-6" onSubmit={handleSubmit}>
+          <Toolbar
+            actions={
+              <Button
+                type="submit"
+                form="export-form"
+                loading={exportMutation.isPending}
+                icon={<ArrowDownTrayIcon className="h-4 w-4" aria-hidden="true" />}
+                iconPosition="left"
+              >
+                {exportMutation.isPending ? 'Generando archivo…' : 'Descargar archivo'}
+              </Button>
+            }
+          >
+            <FormField htmlFor="export-type" label="Tipo de exportación">
               <select
+                id="export-type"
                 value={formState.type}
                 onChange={handleFieldChange('type')}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                className={selectClasses}
               >
                 <option value="monthly">Informe mensual (Iglesia x Mes)</option>
                 <option value="yearly">Resumen anual</option>
                 <option value="churches">Directorio de iglesias</option>
               </select>
-            </label>
-
-            <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
-              Año
+            </FormField>
+            <FormField htmlFor="export-year" label="Año">
               <select
+                id="export-year"
                 value={formState.year}
                 onChange={handleFieldChange('year')}
-                className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                className={selectClasses}
               >
                 {selectableYears.map((year) => (
                   <option key={year} value={year}>
@@ -136,15 +153,14 @@ export default function ExportView() {
                   </option>
                 ))}
               </select>
-            </label>
-
+            </FormField>
             {isMonthly ? (
-              <label className="flex flex-col gap-1 text-xs font-semibold text-slate-600">
-                Mes
+              <FormField htmlFor="export-month" label="Mes">
                 <select
+                  id="export-month"
                   value={formState.month}
                   onChange={handleFieldChange('month')}
-                  className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  className={selectClasses}
                 >
                   {monthLabels.map((label, index) => (
                     <option key={label} value={index + 1}>
@@ -152,33 +168,23 @@ export default function ExportView() {
                     </option>
                   ))}
                 </select>
-              </label>
+              </FormField>
             ) : null}
-          </div>
+          </Toolbar>
 
-          <p className="rounded-xl bg-slate-50 px-4 py-3 text-xs text-slate-600">{helperText}</p>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="submit"
-              disabled={exportMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              <ArrowDownTrayIcon className="h-4 w-4" aria-hidden="true" />
-              {exportMutation.isPending ? 'Generando archivo...' : 'Descargar archivo'}
-            </button>
-            <span className="text-xs text-slate-500">
-              Los archivos se generan en formato XLSX con compresión habilitada.
-            </span>
-          </div>
+          <p className="rounded-2xl bg-[color-mix(in_oklab,var(--absd-authority) 6%,white)] px-4 py-3 text-xs text-[rgba(15,23,42,0.7)]">
+            Los archivos se generan en formato XLSX con compresión habilitada.
+          </p>
         </form>
-      </section>
 
-      {exportMutation.isError ? (
-        <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-600">
-          {(exportMutation.error as Error)?.message ?? 'No se pudo completar la exportación.'}
-        </p>
-      ) : null}
+        {exportMutation.isError ? (
+          <ErrorState
+            className="mt-6"
+            title="No se pudo completar la exportación"
+            description={(exportMutation.error as Error)?.message ?? 'Inténtalo nuevamente en unos minutos.'}
+          />
+        ) : null}
+      </SectionCard>
     </div>
   );
 }

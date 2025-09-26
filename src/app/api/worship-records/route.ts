@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContext } from '@/lib/auth-context';
-import { execute, createConnection } from '@/lib/db';
+import { executeWithContext, createConnection } from '@/lib/db';
 import { setCORSHeaders } from '@/lib/cors';
 
 export const runtime = 'nodejs';
@@ -462,7 +462,7 @@ const listWorshipRecords = async (query: any, auth: any): Promise<any[]> => {
     throw new BadRequestError('year debe ser un año válido');
   }
 
-  const recordsResult = await execute(`
+  const recordsResult = await executeWithContext(auth, `
     SELECT *
     FROM worship_records
     WHERE church_id = $1
@@ -478,7 +478,7 @@ const listWorshipRecords = async (query: any, auth: any): Promise<any[]> => {
 
   const recordIds = records.map((r: any) => r.id);
 
-  const contributionsResult = await execute(`
+  const contributionsResult = await executeWithContext(auth, `
     SELECT *
     FROM worship_contributions
     WHERE worship_record_id = ANY($1::bigint[])

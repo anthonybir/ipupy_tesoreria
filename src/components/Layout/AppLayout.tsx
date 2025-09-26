@@ -1,6 +1,7 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import MainNav from "./MainNav";
 import UserMenu from "./UserMenu";
 import { Toaster } from "react-hot-toast";
@@ -9,52 +10,99 @@ interface AppLayoutProps {
   children: ReactNode;
 }
 
-export default function AppLayout({ children }: AppLayoutProps) {
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header with Navigation */}
-      <header className="bg-white shadow-sm">
-        <MainNav />
+const MINIMAL_ROUTES = new Set(["/login"]);
 
-        {/* User Menu Bar */}
-        <div className="bg-gray-50 border-b">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex justify-between items-center h-12">
-              <div className="flex items-center space-x-4">
-                <span className="text-sm text-gray-500">
+type ThemeOption = "light" | "dark";
+type DensityOption = "comfortable" | "compact";
+
+export default function AppLayout({ children }: AppLayoutProps) {
+  const pathname = usePathname();
+  const isMinimal = useMemo(() => MINIMAL_ROUTES.has(pathname ?? ""), [pathname]);
+  const [theme, setTheme] = useState<ThemeOption>("light");
+  const [density, setDensity] = useState<DensityOption>("comfortable");
+
+  useEffect(() => {
+    const storedTheme = window.localStorage.getItem("absd::theme") as ThemeOption | null;
+    const storedDensity = window.localStorage.getItem("absd::density") as DensityOption | null;
+
+    if (storedTheme) {
+      setTheme(storedTheme);
+    }
+    if (storedDensity) {
+      setDensity(storedDensity);
+    }
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("absd::theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    document.documentElement.dataset.density = density;
+    window.localStorage.setItem("absd::density", density);
+  }, [density]);
+
+  const toggleTheme = () => setTheme((value) => (value === "light" ? "dark" : "light"));
+  const toggleDensity = () =>
+    setDensity((value) => (value === "comfortable" ? "compact" : "comfortable"));
+
+  return (
+    <div className="min-h-screen bg-[var(--color-background)] text-[var(--color-foreground)]">
+      <a href="#main-content" className="skip-link">
+        Saltar al contenido principal
+      </a>
+
+      {!isMinimal && (
+        <header className="border-b border-[var(--absd-border)] bg-[var(--absd-surface)] shadow-sm">
+          <MainNav />
+
+          <div className="border-t border-[var(--absd-border)] bg-[color-mix(in_oklab,var(--absd-surface) 94%,var(--absd-authority) 6%)]">
+            <div className="absd-container">
+              <div className="flex h-12 items-center justify-between gap-4">
+                <span className="text-sm text-[rgba(15,23,42,0.65)]">
                   Sistema de Tesorería Nacional
                 </span>
-              </div>
-              <div className="flex items-center space-x-4">
-                <UserMenu />
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={toggleTheme}
+                    className="rounded-full border border-[var(--absd-border)] px-3 py-1 text-xs font-semibold text-[var(--absd-ink)] transition hover:border-[var(--absd-authority)] hover:text-[var(--absd-authority)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--absd-authority)]"
+                    aria-label="Cambiar tema"
+                  >
+                    Tema: {theme === "light" ? "Claro" : "Oscuro"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleDensity}
+                    className="rounded-full border border-[var(--absd-border)] px-3 py-1 text-xs font-semibold text-[var(--absd-ink)] transition hover:border-[var(--absd-authority)] hover:text-[var(--absd-authority)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--absd-authority)]"
+                    aria-label="Cambiar densidad"
+                  >
+                    Densidad: {density === "comfortable" ? "Cómoda" : "Compacta"}
+                  </button>
+                  <UserMenu />
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
 
-      {/* Main Content */}
-      <main className="flex-1">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {children}
-        </div>
+      <main id="main-content" className={isMinimal ? "py-12" : "py-8"}>
+        <div className="absd-container">{children}</div>
       </main>
 
-      {/* Footer */}
-      <footer className="bg-white border-t mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-col md:flex-row justify-between items-center text-sm text-gray-500">
-            <div>
-              © {new Date().getFullYear()} IPU Paraguay - Todos los derechos reservados
-            </div>
-            <div className="mt-2 md:mt-0">
-              Sistema de Tesorería v2.0
+      {!isMinimal && (
+        <footer className="border-t border-[var(--absd-border)] bg-[var(--absd-surface)]">
+          <div className="absd-container py-4">
+            <div className="flex flex-col items-start justify-between gap-2 text-sm text-[rgba(15,23,42,0.65)] md:flex-row md:items-center">
+              <span>© {new Date().getFullYear()} IPU Paraguay — Todos los derechos reservados</span>
+              <span>Sistema de Tesorería v2.0</span>
             </div>
           </div>
-        </div>
-      </footer>
+        </footer>
+      )}
 
-      {/* Toast Notifications */}
       <Toaster
         position="top-right"
         toastOptions={{

@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { execute } from '@/lib/db';
-import { requireAuth } from '@/lib/auth-context';
-
-const isAdminRole = (role?: string) => role === 'admin' || role === 'super_admin';
+import { executeWithContext } from '@/lib/db';
+import { requireAdmin } from '@/lib/auth-supabase';
 
 const toNumber = (value: unknown): number => {
   const parsed = Number(value ?? 0);
@@ -135,13 +133,8 @@ const mapReportRow = (row: Record<string, unknown>) => {
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = await requireAuth(request);
-    if (!isAdminRole(auth.role)) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 403 }
-      );
-    }
+    // SECURITY: Require admin authentication
+    const auth = await requireAdmin(request);
 
     const { searchParams } = new URL(request.url);
     const { whereClause, params } = buildWhereClause(searchParams);
@@ -149,7 +142,8 @@ export async function GET(request: NextRequest) {
 
     params.push(limit);
 
-    const result = await execute(
+    const result = await executeWithContext(
+      auth,
       `
         SELECT
           r.*, c.name AS church_name
@@ -185,13 +179,8 @@ export async function GET(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const auth = await requireAuth(request);
-    if (!isAdminRole(auth.role)) {
-      return NextResponse.json(
-        { success: false, error: 'Unauthorized' },
-        { status: 403 }
-      );
-    }
+    // SECURITY: Require admin authentication
+    const auth = await requireAdmin(request);
 
     const body = await request.json();
     const { reportId, estado, observations, transactionsCreated } = body;
@@ -246,7 +235,8 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    const result = await execute(
+    const result = await executeWithContext(
+      auth,
       `
         UPDATE reports
         SET ${updates.join(', ')}

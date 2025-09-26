@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { execute } from '@/lib/db';
+import { executeWithContext } from '@/lib/db';
 import { buildCorsHeaders, handleCorsPreflight } from '@/lib/cors';
-import { requireAuth } from '@/lib/auth-context';
+import { requireAuth, getAuthContext } from '@/lib/auth-context';
 
 const jsonResponse = (data: unknown, origin: string | null, status = 200) =>
   NextResponse.json(data, { status, headers: buildCorsHeaders(origin) });
@@ -36,13 +36,15 @@ export async function GET(request: NextRequest) {
   // Make GET endpoint public - authentication optional
   // This allows the churches page to load without login
   // Write operations (POST, PUT, DELETE) still require auth
+  // But we still get auth context for RLS if user is logged in
+  const auth = await getAuthContext(request);
 
-  const result = await execute<{
+  const result = await executeWithContext<{
     id: number;
     name: string;
     city: string;
     pastor: string;
-  }>('SELECT * FROM churches WHERE active = true ORDER BY name');
+  }>(auth, 'SELECT * FROM churches WHERE active = true ORDER BY name');
 
   return jsonResponse(result.rows ?? [], origin);
 }
@@ -54,7 +56,7 @@ export async function POST(request: NextRequest) {
     return preflight;
   }
 
-  await requireAuth(request);
+  const auth = await requireAuth(request);
 
   const { name, city, pastor, phone, ruc, cedula, grado, posicion } = await request.json();
 
@@ -63,7 +65,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const result = await execute(
+    const result = await executeWithContext(
+      auth,
       `
         INSERT INTO churches (name, city, pastor, phone, pastor_ruc, pastor_cedula, pastor_grado, pastor_posicion)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -89,7 +92,7 @@ export async function PUT(request: NextRequest) {
     return preflight;
   }
 
-  await requireAuth(request);
+  const auth = await requireAuth(request);
 
   const searchParams = request.nextUrl.searchParams;
   let churchId: number;
@@ -101,7 +104,8 @@ export async function PUT(request: NextRequest) {
 
   const { name, city, pastor, phone, ruc, cedula, grado, posicion, active } = await request.json();
 
-  const result = await execute(
+  const result = await executeWithContext(
+    auth,
     `
       UPDATE churches
       SET name = $1, city = $2, pastor = $3, phone = $4, pastor_ruc = $5,
@@ -126,7 +130,7 @@ export async function DELETE(request: NextRequest) {
     return preflight;
   }
 
-  await requireAuth(request);
+  const auth = await requireAuth(request);
 
   const searchParams = request.nextUrl.searchParams;
   let churchId: number;
@@ -136,7 +140,8 @@ export async function DELETE(request: NextRequest) {
     return jsonResponse({ error: (error as Error).message }, origin, 400);
   }
 
-  const result = await execute(
+  const result = await executeWithContext(
+    auth,
     `
       UPDATE churches
       SET active = false, updated_at = CURRENT_TIMESTAMP

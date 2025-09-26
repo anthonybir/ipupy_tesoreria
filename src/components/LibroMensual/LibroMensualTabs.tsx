@@ -2,8 +2,7 @@
 
 import { useMemo, useState } from 'react';
 
-import { LoadingState } from '@/components/Shared/LoadingState';
-import { ErrorState } from '@/components/Shared/ErrorState';
+import { ErrorState, FormField, LoadingState, MetricCard, PageHeader, Toolbar } from '@/components/Shared';
 import { useAdminFunds, useAdminFundsSummary } from '@/hooks/useAdminData';
 
 import { ExternalTransactionsTab } from './ExternalTransactionsTab';
@@ -57,6 +56,24 @@ export function LibroMensualTabs() {
     [fundsQuery.data]
   );
 
+  const metrics = [
+    {
+      label: 'Saldo total fondos',
+      value: currencyFormatter.format(fundsSummary.totalBalance),
+      description: `${fundsSummary.fundCount} fondos activos`,
+      tone: 'neutral' as const,
+    },
+    {
+      label: 'Fondos disponibles',
+      value: availableFunds.length.toString(),
+      description: 'Fondos visibles según permisos',
+      tone: 'info' as const,
+    },
+  ];
+
+  const filterSelectClasses =
+    'rounded-xl border border-[var(--absd-border)] bg-white px-3 py-2 text-sm text-[var(--absd-ink)] shadow-sm focus:border-[var(--absd-authority)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_oklab,var(--absd-authority) 40%,white)]';
+
   const handleMonthChange = (value: string) => {
     setFilters((prev) => ({ ...prev, month: value }));
   };
@@ -74,69 +91,71 @@ export function LibroMensualTabs() {
   }
 
   return (
-    <div className="space-y-6">
-      <header className="rounded-2xl border border-indigo-100 bg-indigo-50/60 px-6 py-5 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Libro mensual del tesorero</p>
-            <h1 className="text-2xl font-semibold text-slate-900">Centro de control IPU Paraguay</h1>
-          </div>
-          <div className="rounded-xl border border-indigo-200 bg-white px-4 py-3 text-right shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Saldo total fondos</p>
-            <p className="text-lg font-semibold text-slate-900">
-              {currencyFormatter.format(fundsSummary.totalBalance)}
-            </p>
-            <p className="text-[11px] text-slate-500">{fundsSummary.fundCount} fondos activos</p>
-          </div>
-        </div>
+    <div className="space-y-8">
+      <PageHeader
+        title="Centro de control IPU Paraguay"
+        subtitle="Libro mensual del tesorero"
+        badge={{ label: 'Libro mensual' }}
+      />
 
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 rounded-xl border border-indigo-100 bg-white px-3 py-2 text-sm text-slate-600 shadow-sm">
-            <span className="font-semibold text-indigo-500">Año</span>
-            <select
-              value={filters.year}
-              onChange={(event) => handleYearChange(event.target.value)}
-              className="rounded-lg border border-indigo-200 px-2 py-1 text-sm focus:border-indigo-400 focus:outline-none"
-            >
-              {selectableYears.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-2 rounded-xl border border-indigo-100 bg-white px-3 py-2 text-sm text-slate-600 shadow-sm">
-            <span className="font-semibold text-indigo-500">Mes</span>
-            <select
-              value={filters.month}
-              onChange={(event) => handleMonthChange(event.target.value)}
-              className="rounded-lg border border-indigo-200 px-2 py-1 text-sm focus:border-indigo-400 focus:outline-none"
-            >
-              <option value="all">Todos</option>
-              {monthLabels.slice(1).map((label, index) => (
-                <option key={label} value={String(index + 1)}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </header>
+      <div className="absd-grid">
+        {metrics.map((metric) => (
+          <MetricCard
+            key={metric.label}
+            label={metric.label}
+            value={metric.value}
+            description={metric.description}
+            tone={metric.tone}
+          />
+        ))}
+      </div>
+
+      <Toolbar variant="filters">
+        <FormField htmlFor="ledger-year" label="Año">
+          <select
+            id="ledger-year"
+            value={filters.year}
+            onChange={(event) => handleYearChange(event.target.value)}
+            className={filterSelectClasses}
+          >
+            {selectableYears.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField htmlFor="ledger-month" label="Mes">
+          <select
+            id="ledger-month"
+            value={filters.month}
+            onChange={(event) => handleMonthChange(event.target.value)}
+            className={filterSelectClasses}
+          >
+            <option value="all">Todos</option>
+            {monthLabels.slice(1).map((label, index) => (
+              <option key={label} value={String(index + 1)}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </FormField>
+      </Toolbar>
 
       <nav className="flex flex-wrap gap-2">
         {[
           { id: 'pending', label: 'Informes pendientes' },
           { id: 'external', label: 'Transacciones externas' },
-          { id: 'ledger', label: 'Libro diario' }
+          { id: 'ledger', label: 'Libro diario' },
         ].map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setActiveTab(tab.id as ActiveTab)}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
+            className={`inline-flex items-center rounded-full px-4 py-2 text-sm font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--absd-authority)] ${
               activeTab === tab.id
-                ? 'bg-indigo-600 text-white shadow'
-                : 'bg-white text-slate-600 shadow-sm hover:bg-slate-50'
+                ? 'bg-[var(--absd-authority)] text-white shadow'
+                : 'border border-[var(--absd-border)] text-[rgba(15,23,42,0.7)] hover:bg-[color-mix(in_oklab,var(--absd-authority) 8%,white)]'
             }`}
           >
             {tab.label}
@@ -145,15 +164,9 @@ export function LibroMensualTabs() {
       </nav>
 
       <section>
-        {activeTab === 'pending' ? (
-          <PendingReportsTab filters={filters} />
-        ) : null}
-        {activeTab === 'external' ? (
-          <ExternalTransactionsTab funds={availableFunds} />
-        ) : null}
-        {activeTab === 'ledger' ? (
-          <LedgerTab filters={filters} funds={availableFunds} />
-        ) : null}
+        {activeTab === 'pending' ? <PendingReportsTab filters={filters} /> : null}
+        {activeTab === 'external' ? <ExternalTransactionsTab funds={availableFunds} /> : null}
+        {activeTab === 'ledger' ? <LedgerTab filters={filters} funds={availableFunds} /> : null}
       </section>
     </div>
   );

@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { execute } from '@/lib/db';
+import { executeWithContext } from '@/lib/db';
+import { requireAdmin } from '@/lib/auth-supabase';
+import { withRateLimit } from '@/lib/rate-limit';
 
 // Admin endpoint for full transaction management
 export async function GET(request: NextRequest) {
   try {
+    // SECURITY: Rate limiting check
+    const rateLimitResponse = withRateLimit(request, 'admin');
+    if (rateLimitResponse) return rateLimitResponse;
+
+    // SECURITY: Require admin authentication
+    const auth = await requireAdmin(request);
     const { searchParams } = new URL(request.url);
     const fund_id = searchParams.get('fund_id');
     const church_id = searchParams.get('church_id');
@@ -56,7 +64,7 @@ export async function GET(request: NextRequest) {
 
     // Get transactions with fund and church details
     params.push(limit, offset);
-    const result = await execute(`
+    const result = await executeWithContext(auth, `
       SELECT
         t.*,
         f.name as fund_name,
@@ -72,7 +80,7 @@ export async function GET(request: NextRequest) {
     `, params);
 
     // Get total count for pagination
-    const countResult = await execute(`
+    const countResult = await executeWithContext(auth, `
       SELECT COUNT(*) as total
       FROM transactions t
       ${whereClause}
@@ -99,6 +107,8 @@ export async function GET(request: NextRequest) {
 // POST: Create external transaction
 export async function POST(request: NextRequest) {
   try {
+    // SECURITY: Require admin authentication
+    const auth = await requireAdmin(request);
     const data = await request.json();
     const {
       fund_id,
@@ -111,11 +121,11 @@ export async function POST(request: NextRequest) {
     } = data;
 
     // Begin transaction for atomicity
-    await execute('BEGIN');
+    await executeWithContext(auth, 'BEGIN');
 
     try {
       // Insert transaction
-      const result = await execute(`
+      const result = await executeWithContext(auth, `
         INSERT INTO transactions (
           fund_id, concept, provider, document_number,
           amount_in, amount_out, date, created_by, created_at
@@ -133,21 +143,21 @@ export async function POST(request: NextRequest) {
       ]);
 
       // Update fund balance
-      await execute(`
+      await executeWithContext(auth, `
         UPDATE funds
         SET current_balance = current_balance + $1 - $2,
             updated_at = NOW()
         WHERE id = $3
       `, [amount_in, amount_out, fund_id]);
 
-      await execute('COMMIT');
+      await executeWithContext(auth, 'COMMIT');
 
       return NextResponse.json({
         success: true,
         data: result.rows[0]
       });
     } catch (error) {
-      await execute('ROLLBACK');
+      await executeWithContext(auth, 'ROLLBACK');
       throw error;
     }
   } catch (error) {
@@ -162,6 +172,8 @@ export async function POST(request: NextRequest) {
 // DELETE: Remove transaction (with balance adjustment)
 export async function DELETE(request: NextRequest) {
   try {
+    // SECURITY: Require admin authentication
+    const auth = await requireAdmin(request);
     const { searchParams } = new URL(request.url);
     const transaction_id = searchParams.get('id');
 
@@ -172,16 +184,16 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    await execute('BEGIN');
+    await executeWithContext(auth, 'BEGIN');
 
     try {
       // Get transaction details
-      const txn = await execute(`
+      const txn = await executeWithContext(auth, `
         SELECT * FROM transactions WHERE id = $1
       `, [transaction_id]);
 
       if (txn.rowCount === 0) {
-        await execute('ROLLBACK');
+        await executeWithContext(auth, 'ROLLBACK');
         return NextResponse.json(
           { success: false, error: 'Transaction not found' },
           { status: 404 }
@@ -191,26 +203,26 @@ export async function DELETE(request: NextRequest) {
       const transaction = txn.rows[0];
 
       // Delete transaction
-      await execute(`
+      await executeWithContext(auth, `
         DELETE FROM transactions WHERE id = $1
       `, [transaction_id]);
 
       // Adjust fund balance
-      await execute(`
+      await executeWithContext(auth, `
         UPDATE funds
         SET current_balance = current_balance - $1 + $2,
             updated_at = NOW()
         WHERE id = $3
       `, [transaction.amount_in, transaction.amount_out, transaction.fund_id]);
 
-      await execute('COMMIT');
+      await executeWithContext(auth, 'COMMIT');
 
       return NextResponse.json({
         success: true,
         message: 'Transaction deleted successfully'
       });
     } catch (error) {
-      await execute('ROLLBACK');
+      await executeWithContext(auth, 'ROLLBACK');
       throw error;
     }
   } catch (error) {

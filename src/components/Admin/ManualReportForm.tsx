@@ -1,9 +1,13 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import type { ChangeEvent } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
+import { FormField, FormSection, SectionCard } from '@/components/Shared';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 interface Church {
   id: number;
   name: string;
@@ -23,15 +27,32 @@ const MANUAL_SOURCES = [
   { value: 'email', label: 'Email' },
   { value: 'phone', label: 'Llamada telefónica' },
   { value: 'in_person', label: 'En persona' },
-  { value: 'other', label: 'Otro' }
-];
+  { value: 'other', label: 'Otro' },
+] as const;
 
+const amountPattern = /^\d*(?:[\.,]\d{0,2})?$/;
+
+const parseAmount = (value: string) => {
+  if (!value) {
+    return 0;
+  }
+  const normalized = value.replace(/,/g, '.');
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatCurrency = (value: number) =>
+  new Intl.NumberFormat('es-PY', {
+    style: 'currency',
+    currency: 'PYG',
+    maximumFractionDigits: 0,
+  }).format(value);
 const blankDonor = (id: number) => ({
   id,
   firstName: '',
   lastName: '',
   document: '',
-  amount: ''
+  amount: '',
 });
 
 type DonorRow = ReturnType<typeof blankDonor>;
@@ -42,31 +63,53 @@ type DonorPayload = {
   document: string;
   amount: number;
 };
+const congregationalFields = [
+  { key: 'diezmos', label: 'Diezmos' },
+  { key: 'ofrendas', label: 'Ofrendas' },
+  { key: 'anexos', label: 'Anexos' },
+  { key: 'otros', label: 'Otros ingresos' },
+] as const;
 
-const amountPattern = /^\d*(?:[\.,]\d{0,2})?$/;
+const designatedFields = [
+  { key: 'misiones', label: 'Misiones' },
+  { key: 'lazos_amor', label: 'Lazos de Amor' },
+  { key: 'mision_posible', label: 'Misión Posible' },
+  { key: 'apy', label: 'APY' },
+  { key: 'iba', label: 'IBA' },
+  { key: 'caballeros', label: 'Caballeros' },
+  { key: 'damas', label: 'Damas' },
+  { key: 'jovenes', label: 'Jóvenes' },
+  { key: 'ninos', label: 'Niños' },
+] as const;
 
-const parseAmount = (value: string) => {
-  if (!value) return 0;
-  const normalized = value.replace(/,/g, '.');
-  const parsed = Number.parseFloat(normalized);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
+const expenseFields = [
+  { key: 'servicios', label: 'Servicios' },
+  { key: 'energia_electrica', label: 'Energía eléctrica' },
+  { key: 'agua', label: 'Agua' },
+  { key: 'recoleccion_basura', label: 'Recolección de basura' },
+  { key: 'mantenimiento', label: 'Mantenimiento' },
+  { key: 'materiales', label: 'Materiales' },
+  { key: 'otros_gastos', label: 'Otros gastos' },
+] as const;
 
+const statsFields = [
+  { key: 'asistencia_visitas', label: 'Asistencia / Visitas' },
+  { key: 'bautismos_agua', label: 'Bautismos en agua' },
+  { key: 'bautismos_espiritu', label: 'Bautismos del Espíritu' },
+] as const;
 export default function ManualReportForm({ churches, onSuccess, onCancel }: ManualReportFormProps) {
   const queryClient = useQueryClient();
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState(() => ({
     church_id: '',
     month: currentMonth,
     year: currentYear,
-    // Financial fields
     diezmos: 0,
     ofrendas: 0,
     anexos: 0,
     otros: 0,
-    // Designated offerings
     misiones: 0,
     lazos_amor: 0,
     mision_posible: 0,
@@ -76,7 +119,6 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
     damas: 0,
     jovenes: 0,
     ninos: 0,
-    // Expenses
     servicios: 0,
     energia_electrica: 0,
     agua: 0,
@@ -84,19 +126,15 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
     mantenimiento: 0,
     materiales: 0,
     otros_gastos: 0,
-    // Bank deposit info
     numero_deposito: '',
     fecha_deposito: '',
-    // Manual report tracking
     manual_report_source: 'paper',
     manual_report_notes: '',
     observaciones: '',
-    // Baptisms and attendance
     asistencia_visitas: 0,
     bautismos_agua: 0,
-    bautismos_espiritu: 0
-  });
-
+    bautismos_espiritu: 0,
+  }));
   const [totals, setTotals] = useState({
     totalEntradas: 0,
     fondoNacional: 0,
@@ -104,48 +142,116 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
     gastosOperativos: 0,
     honorariosPastoral: 0,
     totalSalidas: 0,
-    saldoMes: 0
+    saldoMes: 0,
   });
   const [donors, setDonors] = useState<DonorRow[]>([]);
   const [donorSequence, setDonorSequence] = useState(1);
-
-  // Calculate totals whenever form data changes
   useEffect(() => {
-    const congregacional = formData.diezmos + formData.ofrendas;
+    const congregacional = formData.diezmos + formData.ofrendas + formData.anexos + formData.otros;
     const designados =
-      formData.misiones + formData.lazos_amor + formData.mision_posible +
-      formData.apy + formData.iba + formData.caballeros + formData.damas +
-      formData.jovenes + formData.ninos;
+      formData.misiones +
+      formData.lazos_amor +
+      formData.mision_posible +
+      formData.apy +
+      formData.iba +
+      formData.caballeros +
+      formData.damas +
+      formData.jovenes +
+      formData.ninos;
     const gastos =
-      formData.servicios + formData.energia_electrica + formData.agua +
-      formData.recoleccion_basura + formData.mantenimiento +
-      formData.materiales + formData.otros_gastos;
+      formData.servicios +
+      formData.energia_electrica +
+      formData.agua +
+      formData.recoleccion_basura +
+      formData.mantenimiento +
+      formData.materiales +
+      formData.otros_gastos;
 
-    const totalIn = congregacional + formData.anexos + formData.otros + designados;
-    const fondoNac = Math.round(congregacional * 0.1);
-    const honorarios = Math.max(0, totalIn - (designados + gastos + fondoNac));
-    const totalOut = designados + gastos + fondoNac + honorarios;
+    const totalEntradas = congregacional + designados;
+    const fondoNacional = Math.round((formData.diezmos + formData.ofrendas) * 0.1);
+    const honorariosPastoral = Math.max(0, totalEntradas - (designados + gastos + fondoNacional));
+    const totalSalidas = designados + gastos + fondoNacional + honorariosPastoral;
 
     setTotals({
-      totalEntradas: totalIn,
-      fondoNacional: fondoNac,
+      totalEntradas,
+      fondoNacional,
       totalDesignados: designados,
       gastosOperativos: gastos,
-      honorariosPastoral: honorarios,
-      totalSalidas: totalOut,
-      saldoMes: totalIn - totalOut
+      honorariosPastoral,
+      totalSalidas,
+      saldoMes: totalEntradas - totalSalidas,
     });
   }, [formData]);
-
   const donorsTotal = useMemo(
     () => donors.reduce((sum, donor) => sum + parseAmount(donor.amount), 0),
-    [donors]
-  );
-  const donorsDifference = useMemo(
-    () => Math.abs(donorsTotal - formData.diezmos),
-    [donorsTotal, formData.diezmos]
+    [donors],
   );
 
+  const donorsDifference = useMemo(
+    () => Math.abs(donorsTotal - formData.diezmos),
+    [donorsTotal, formData.diezmos],
+  );
+  const addDonor = () => {
+    setDonors((prev) => [...prev, blankDonor(donorSequence)]);
+    setDonorSequence((prev) => prev + 1);
+  };
+
+  const removeDonor = (id: number) => {
+    setDonors((prev) => prev.filter((donor) => donor.id !== id));
+  };
+
+  const handleDonorChange = (id: number, field: keyof DonorRow) => (event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setDonors((prev) =>
+      prev.map((donor) => {
+        if (donor.id !== id) {
+          return donor;
+        }
+        if (field === 'amount') {
+          if (value === '' || amountPattern.test(value)) {
+            return { ...donor, amount: value };
+          }
+          return donor;
+        }
+        return { ...donor, [field]: value };
+      }),
+    );
+  };
+  const handleNumberChange = (field: keyof typeof formData) => (event: ChangeEvent<HTMLInputElement>) => {
+    const value = Number.parseFloat(event.target.value);
+    setFormData((prev) => ({
+      ...prev,
+      [field]: Number.isFinite(value) ? value : 0,
+    }));
+  };
+
+  const handleSelectChange = (field: keyof typeof formData) => (event: ChangeEvent<HTMLSelectElement>) => {
+    const value = event.target.value;
+    setFormData((prev) => ({
+      ...prev,
+      [field]: field === 'month' || field === 'year' ? Number.parseInt(value, 10) || prev[field] : value,
+    }));
+  };
+
+  const handleTextChange = (field: keyof typeof formData) => (event: ChangeEvent<HTMLInputElement>) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: event.target.value,
+    }));
+  };
+
+  const handleTextareaChange = (field: keyof typeof formData) => (event: ChangeEvent<HTMLTextAreaElement>) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: event.target.value,
+    }));
+  };
+  useEffect(() => {
+    if (formData.diezmos > 0 && donors.length === 0) {
+      setDonors([blankDonor(donorSequence)]);
+      setDonorSequence((prev) => prev + 1);
+    }
+  }, [donorSequence, donors.length, formData.diezmos]);
   const createReport = useMutation({
     mutationFn: async (payload: typeof formData & { aportantes: DonorPayload[] }) => {
       const response = await fetch('/api/reports', {
@@ -154,8 +260,8 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
         body: JSON.stringify({
           ...payload,
           submission_source: 'pastor_manual',
-          estado: 'pendiente_admin' // Ready for immediate approval
-        })
+          estado: 'pendiente_admin',
+        }),
       });
 
       if (!response.ok) {
@@ -168,57 +274,23 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-reports'] });
       onSuccess?.();
-    }
+    },
   });
-
-  const addDonor = () => {
-    setDonors(prev => [...prev, blankDonor(donorSequence)]);
-    setDonorSequence(prev => prev + 1);
-  };
-
-  const removeDonor = (id: number) => {
-    setDonors(prev => prev.filter(donor => donor.id !== id));
-  };
-
-  const handleDonorChange = (id: number, field: keyof DonorRow) => (event: ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
-    setDonors(prev =>
-      prev.map(donor => {
-        if (donor.id !== id) return donor;
-        if (field === 'amount') {
-          if (value === '' || amountPattern.test(value)) {
-            return { ...donor, amount: value };
-          }
-          return donor;
-        }
-        return { ...donor, [field]: value };
-      })
-    );
-  };
-
-  useEffect(() => {
-    if (formData.diezmos > 0 && donors.length === 0) {
-      setDonors([blankDonor(donorSequence)]);
-      setDonorSequence(prev => prev + 1);
-    }
-  }, [formData.diezmos, donors.length, donorSequence]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     if (!formData.church_id) {
-      alert('Por favor seleccione una iglesia');
+      alert('Por favor selecciona una iglesia');
       return;
     }
 
-    const donorsWithAmount = formData.diezmos > 0
-      ? donors.filter(donor => parseAmount(donor.amount) > 0)
-      : [];
+    const donorsWithAmount = formData.diezmos > 0 ? donors.filter((donor) => parseAmount(donor.amount) > 0) : [];
+
     if (formData.diezmos > 0) {
       if (donorsWithAmount.length === 0) {
         alert('Registra al menos un aportante con monto mayor a cero.');
         return;
       }
-      const missingIdentity = donorsWithAmount.some(donor => {
+      const missingIdentity = donorsWithAmount.some((donor) => {
         const first = donor.firstName.trim();
         const last = donor.lastName.trim();
         const doc = donor.document.trim();
@@ -234,571 +306,385 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
       }
     }
 
-    const donorPayload: DonorPayload[] = donorsWithAmount.map(donor => ({
+    const donorPayload: DonorPayload[] = donorsWithAmount.map((donor) => ({
       first_name: donor.firstName.trim(),
       last_name: donor.lastName.trim(),
       document: donor.document.trim(),
-      amount: parseAmount(donor.amount)
+      amount: parseAmount(donor.amount),
     }));
 
     await createReport.mutateAsync({
       ...formData,
-      aportantes: donorPayload
+      aportantes: donorPayload,
     });
   };
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('es-PY', {
-      style: 'currency',
-      currency: 'PYG',
-      maximumFractionDigits: 0
-    }).format(value);
-  };
-
+  const selectClassName =
+    'rounded-xl border border-[var(--absd-border)] bg-[var(--absd-surface)] px-3 py-2 text-sm text-[var(--absd-ink)] shadow-sm focus:border-[var(--absd-authority)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_oklab,var(--absd-authority) 40%,white)]';
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 max-h-[80vh] overflow-y-auto px-1">
-      {/* Church Selection and Period */}
-      <div className="bg-blue-50 p-4 rounded-lg">
-        <h3 className="text-sm font-semibold text-blue-900 mb-3">Información del Informe</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Iglesia *
-            </label>
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <FormSection
+        title="Información del informe"
+        description="Completa los datos básicos antes de cargar montos."
+      >
+        <div className="grid gap-4 md:grid-cols-3">
+          <FormField htmlFor="manual-church" label="Iglesia" required>
             <select
+              id="manual-church"
               value={formData.church_id}
-              onChange={(e) => setFormData(prev => ({ ...prev, church_id: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              onChange={handleSelectChange('church_id')}
+              className={selectClassName}
               required
             >
               <option value="">Seleccionar iglesia...</option>
-              {churches.map(church => (
+              {churches.map((church) => (
                 <option key={church.id} value={church.id}>
-                  {church.name} - {church.city}
+                  {church.name} — {church.city}
                   {church.pastor ? ` (${church.pastor})` : ''}
                 </option>
               ))}
             </select>
-          </div>
+          </FormField>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Mes *
-            </label>
+          <FormField htmlFor="manual-month" label="Mes" required>
             <select
+              id="manual-month"
               value={formData.month}
-              onChange={(e) => setFormData(prev => ({ ...prev, month: parseInt(e.target.value) }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              required
+              onChange={handleSelectChange('month')}
+              className={selectClassName}
             >
-              {Array.from({ length: 12 }, (_, i) => i + 1).map(month => (
+              {Array.from({ length: 12 }, (_, index) => index + 1).map((month) => (
                 <option key={month} value={month}>
                   {new Date(2024, month - 1).toLocaleDateString('es', { month: 'long' })}
                 </option>
               ))}
             </select>
-          </div>
+          </FormField>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Año *
-            </label>
+          <FormField htmlFor="manual-year" label="Año" required>
             <select
+              id="manual-year"
               value={formData.year}
-              onChange={(e) => setFormData(prev => ({ ...prev, year: parseInt(e.target.value) }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              required
+              onChange={handleSelectChange('year')}
+              className={selectClassName}
             >
-              {[currentYear, currentYear - 1].map(year => (
-                <option key={year} value={year}>{year}</option>
+              {[currentYear, currentYear - 1, currentYear - 2].map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
               ))}
             </select>
-          </div>
+          </FormField>
         </div>
 
-        {/* Manual Report Source */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Fuente del Informe *
-            </label>
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormField htmlFor="manual-source" label="Fuente del informe" required>
             <select
+              id="manual-source"
               value={formData.manual_report_source}
-              onChange={(e) => setFormData(prev => ({ ...prev, manual_report_source: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              required
+              onChange={handleSelectChange('manual_report_source')}
+              className={selectClassName}
             >
-              {MANUAL_SOURCES.map(source => (
+              {MANUAL_SOURCES.map((source) => (
                 <option key={source.value} value={source.value}>
                   {source.label}
                 </option>
               ))}
             </select>
-          </div>
+          </FormField>
 
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Notas sobre la recepción
-            </label>
-            <input
-              type="text"
+          <FormField
+            htmlFor="manual-notes"
+            label="Notas sobre la recepción"
+            hint="Ej: Pastor Juan entregó en persona"
+          >
+            <Input
+              id="manual-notes"
               value={formData.manual_report_notes}
-              onChange={(e) => setFormData(prev => ({ ...prev, manual_report_notes: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              placeholder="Ej: Pastor Juan entregó en persona"
+              onChange={handleTextChange('manual_report_notes')}
+              placeholder="Detalles sobre cómo se recibió el informe"
             />
-          </div>
+          </FormField>
         </div>
-      </div>
-
-      {/* Income Section */}
-      <div className="bg-green-50 p-4 rounded-lg">
-        <h3 className="text-sm font-semibold text-green-900 mb-3">Ingresos Congregacionales</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Diezmos</label>
-            <input
-              type="number"
-              value={formData.diezmos}
-              onChange={(e) => setFormData(prev => ({ ...prev, diezmos: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Ofrendas</label>
-            <input
-              type="number"
-              value={formData.ofrendas}
-              onChange={(e) => setFormData(prev => ({ ...prev, ofrendas: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Anexos</label>
-            <input
-              type="number"
-              value={formData.anexos}
-              onChange={(e) => setFormData(prev => ({ ...prev, anexos: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Otros</label>
-            <input
-              type="number"
-              value={formData.otros}
-              onChange={(e) => setFormData(prev => ({ ...prev, otros: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
+      </FormSection>
+      <FormSection
+        title="Ingresos congregacionales"
+        description="Registra los montos reportados por la congregación."
+      >
+        <div className="grid gap-4 md:grid-cols-4">
+          {congregationalFields.map(({ key, label }) => (
+            <FormField key={key} htmlFor={`income-${key}`} label={label}>
+              <Input
+                id={`income-${key}`}
+                type="number"
+                min={0}
+                value={formData[key] as number}
+                onChange={handleNumberChange(key)}
+              />
+            </FormField>
+          ))}
         </div>
-      </div>
-
-      {/* Donor Details */}
-      <div className="bg-white border border-gray-200 p-4 rounded-lg">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900">Detalle de aportantes de diezmo</h3>
-            <p className="text-xs text-gray-600">
-              Registra a cada aportante cuando haya diezmos. Los montos deben coincidir con el total de diezmos declarado.
-            </p>
-          </div>
-          <button
+      </FormSection>
+      <FormSection
+        title="Ofrendas designadas"
+        description="Distribuciones nacionales que requieren registro individual."
+      >
+        <div className="grid gap-4 md:grid-cols-3">
+          {designatedFields.map(({ key, label }) => (
+            <FormField key={key} htmlFor={`designated-${key}`} label={label}>
+              <Input
+                id={`designated-${key}`}
+                type="number"
+                min={0}
+                value={formData[key] as number}
+                onChange={handleNumberChange(key)}
+              />
+            </FormField>
+          ))}
+        </div>
+      </FormSection>
+      <FormSection
+        title="Gastos operativos"
+        description="Detalla los gastos mensuales cubiertos por la congregación."
+      >
+        <div className="grid gap-4 md:grid-cols-4">
+          {expenseFields.map(({ key, label }) => (
+            <FormField key={key} htmlFor={`expense-${key}`} label={label}>
+              <Input
+                id={`expense-${key}`}
+                type="number"
+                min={0}
+                value={formData[key] as number}
+                onChange={handleNumberChange(key)}
+              />
+            </FormField>
+          ))}
+        </div>
+      </FormSection>
+      <SectionCard
+        title="Detalle de aportantes de diezmo"
+        description="Cuando existan diezmos declarados, registra a cada aportante para sostener la trazabilidad."
+        actions={
+          <Button
             type="button"
+            variant="outline"
+            size="sm"
+            density="compact"
             onClick={addDonor}
-            className="px-3 py-1.5 text-sm font-semibold text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
           >
             Agregar aportante
-          </button>
-        </div>
+          </Button>
+        }
+      >
         {donors.length === 0 ? (
-          <p className="text-sm text-gray-600">
-            No hay aportantes cargados. Agrega al menos uno si hay diezmos en el informe.
+          <p className="text-sm text-[rgba(15,23,42,0.65)]">
+            No hay aportantes cargados. Agrega al menos uno si existen diezmos en el informe.
           </p>
         ) : (
-          <div className="space-y-3">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 text-sm">
-                <thead className="bg-gray-50">
+          <div className="space-y-4">
+            <div className="overflow-x-auto rounded-2xl border border-[var(--absd-border)]">
+              <table className="min-w-full divide-y divide-[var(--absd-border)] text-sm">
+                <thead className="bg-[color-mix(in_oklab,var(--absd-authority) 6%,white)]">
                   <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Nombre</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Apellido</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Documento</th>
-                    <th className="px-3 py-2 text-right font-semibold text-gray-600">Monto</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600">Acciones</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.6)]">
+                      Nombre
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.6)]">
+                      Apellido
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.6)]">
+                      Documento
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.6)]">
+                      Monto
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.6)]">
+                      Acciones
+                    </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 bg-white">
+                <tbody className="divide-y divide-[var(--absd-border)] bg-[var(--absd-surface)]">
                   {donors.map((donor) => (
                     <tr key={donor.id}>
-                      <td className="px-3 py-2">
-                        <input
-                          type="text"
+                      <td className="px-4 py-3">
+                        <Input
                           value={donor.firstName}
                           onChange={handleDonorChange(donor.id, 'firstName')}
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                           placeholder="Nombre"
                         />
                       </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="text"
+                      <td className="px-4 py-3">
+                        <Input
                           value={donor.lastName}
                           onChange={handleDonorChange(donor.id, 'lastName')}
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                           placeholder="Apellido"
                         />
                       </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="text"
+                      <td className="px-4 py-3">
+                        <Input
                           value={donor.document}
                           onChange={handleDonorChange(donor.id, 'document')}
-                          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                           placeholder="RUC / C.I."
                         />
                       </td>
-                      <td className="px-3 py-2">
-                        <input
-                          type="text"
-                          inputMode="decimal"
+                      <td className="px-4 py-3">
+                        <Input
                           value={donor.amount}
                           onChange={handleDonorChange(donor.id, 'amount')}
-                          className="w-32 rounded-lg border border-gray-300 px-3 py-2 text-right text-sm"
+                          inputMode="decimal"
                           placeholder="0"
+                          className="text-right"
                         />
                       </td>
-                      <td className="px-3 py-2">
-                        <button
+                      <td className="px-4 py-3">
+                        <Button
                           type="button"
+                          variant="ghost"
+                          size="sm"
+                          density="compact"
                           onClick={() => removeDonor(donor.id)}
-                          className="text-xs font-semibold text-rose-600 hover:text-rose-700"
                         >
                           Eliminar
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+
             <div className="flex flex-wrap items-center gap-4 text-sm">
-              <div className="font-semibold text-gray-700">
+              <span className="font-semibold text-[var(--absd-ink)]">
                 Total aportantes: {formatCurrency(donorsTotal)}
-              </div>
-              <div className={donorsDifference === 0 ? 'text-emerald-600' : 'text-rose-600'}>
+              </span>
+              <span
+                className={
+                  donorsDifference === 0
+                    ? 'font-semibold text-[var(--absd-success)]'
+                    : 'font-semibold text-[var(--absd-error)]'
+                }
+              >
                 Diferencia vs diezmos declarados: {formatCurrency(donorsTotal - formData.diezmos)}
-              </div>
+              </span>
             </div>
           </div>
         )}
-      </div>
-
-      {/* Designated Offerings */}
-      <div className="bg-purple-50 p-4 rounded-lg">
-        <h3 className="text-sm font-semibold text-purple-900 mb-3">Ofrendas Designadas</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Misiones</label>
-            <input
-              type="number"
-              value={formData.misiones}
-              onChange={(e) => setFormData(prev => ({ ...prev, misiones: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Lazos de Amor</label>
-            <input
-              type="number"
-              value={formData.lazos_amor}
-              onChange={(e) => setFormData(prev => ({ ...prev, lazos_amor: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Misión Posible</label>
-            <input
-              type="number"
-              value={formData.mision_posible}
-              onChange={(e) => setFormData(prev => ({ ...prev, mision_posible: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">APY</label>
-            <input
-              type="number"
-              value={formData.apy}
-              onChange={(e) => setFormData(prev => ({ ...prev, apy: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">IBA</label>
-            <input
-              type="number"
-              value={formData.iba}
-              onChange={(e) => setFormData(prev => ({ ...prev, iba: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Caballeros</label>
-            <input
-              type="number"
-              value={formData.caballeros}
-              onChange={(e) => setFormData(prev => ({ ...prev, caballeros: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Damas</label>
-            <input
-              type="number"
-              value={formData.damas}
-              onChange={(e) => setFormData(prev => ({ ...prev, damas: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Jóvenes</label>
-            <input
-              type="number"
-              value={formData.jovenes}
-              onChange={(e) => setFormData(prev => ({ ...prev, jovenes: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Niños</label>
-            <input
-              type="number"
-              value={formData.ninos}
-              onChange={(e) => setFormData(prev => ({ ...prev, ninos: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Expenses */}
-      <div className="bg-red-50 p-4 rounded-lg">
-        <h3 className="text-sm font-semibold text-red-900 mb-3">Gastos Operativos</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Servicios</label>
-            <input
-              type="number"
-              value={formData.servicios}
-              onChange={(e) => setFormData(prev => ({ ...prev, servicios: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Energía Eléctrica</label>
-            <input
-              type="number"
-              value={formData.energia_electrica}
-              onChange={(e) => setFormData(prev => ({ ...prev, energia_electrica: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Agua</label>
-            <input
-              type="number"
-              value={formData.agua}
-              onChange={(e) => setFormData(prev => ({ ...prev, agua: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Recolección Basura</label>
-            <input
-              type="number"
-              value={formData.recoleccion_basura}
-              onChange={(e) => setFormData(prev => ({ ...prev, recoleccion_basura: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Mantenimiento</label>
-            <input
-              type="number"
-              value={formData.mantenimiento}
-              onChange={(e) => setFormData(prev => ({ ...prev, mantenimiento: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Materiales</label>
-            <input
-              type="number"
-              value={formData.materiales}
-              onChange={(e) => setFormData(prev => ({ ...prev, materiales: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Otros Gastos</label>
-            <input
-              type="number"
-              value={formData.otros_gastos}
-              onChange={(e) => setFormData(prev => ({ ...prev, otros_gastos: parseFloat(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Bank Deposit Info */}
-      <div className="bg-yellow-50 p-4 rounded-lg">
-        <h3 className="text-sm font-semibold text-yellow-900 mb-3">Información del Depósito</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Número de Depósito
-            </label>
-            <input
-              type="text"
+      </SectionCard>
+      <FormSection
+        title="Información del depósito"
+        description="Completa los datos bancarios cuando exista comprobante."
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormField htmlFor="manual-deposit-number" label="Número de depósito">
+            <Input
+              id="manual-deposit-number"
               value={formData.numero_deposito}
-              onChange={(e) => setFormData(prev => ({ ...prev, numero_deposito: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              placeholder="Número de comprobante"
+              onChange={handleTextChange('numero_deposito')}
+              placeholder="Número del comprobante"
             />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">
-              Fecha de Depósito
-            </label>
-            <input
+          </FormField>
+          <FormField htmlFor="manual-deposit-date" label="Fecha de depósito">
+            <Input
+              id="manual-deposit-date"
               type="date"
               value={formData.fecha_deposito}
-              onChange={(e) => setFormData(prev => ({ ...prev, fecha_deposito: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              onChange={handleTextChange('fecha_deposito')}
             />
-          </div>
+          </FormField>
         </div>
-      </div>
-
-      {/* Statistics */}
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <h3 className="text-sm font-semibold text-gray-900 mb-3">Estadísticas</h3>
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Asistencia/Visitas</label>
-            <input
-              type="number"
-              value={formData.asistencia_visitas}
-              onChange={(e) => setFormData(prev => ({ ...prev, asistencia_visitas: parseInt(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Bautismos en Agua</label>
-            <input
-              type="number"
-              value={formData.bautismos_agua}
-              onChange={(e) => setFormData(prev => ({ ...prev, bautismos_agua: parseInt(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Bautismos del Espíritu</label>
-            <input
-              type="number"
-              value={formData.bautismos_espiritu}
-              onChange={(e) => setFormData(prev => ({ ...prev, bautismos_espiritu: parseInt(e.target.value) || 0 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              min="0"
-            />
-          </div>
+      </FormSection>
+      <FormSection
+        title="Estadísticas congregacionales"
+        description="Datos pastorales adicionales para seguimiento nacional."
+      >
+        <div className="grid gap-4 md:grid-cols-3">
+          {statsFields.map(({ key, label }) => (
+            <FormField key={key} htmlFor={`stat-${key}`} label={label}>
+              <Input
+                id={`stat-${key}`}
+                type="number"
+                min={0}
+                value={formData[key] as number}
+                onChange={handleNumberChange(key)}
+              />
+            </FormField>
+          ))}
         </div>
-
-        <div className="mt-4">
-          <label className="block text-xs font-medium text-gray-700 mb-1">
-            Observaciones
-          </label>
-          <textarea
+        <FormField htmlFor="manual-observaciones" label="Observaciones">
+          <Textarea
+            id="manual-observaciones"
+            rows={3}
             value={formData.observaciones}
-            onChange={(e) => setFormData(prev => ({ ...prev, observaciones: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-            rows={2}
-            placeholder="Notas adicionales sobre el informe..."
+            onChange={handleTextareaChange('observaciones')}
+            placeholder="Notas adicionales sobre el informe"
           />
-        </div>
-      </div>
-
-      {/* Calculated Summary */}
-      <div className="bg-indigo-100 p-4 rounded-lg">
-        <h3 className="text-sm font-semibold text-indigo-900 mb-3">Resumen Calculado</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-          <div>
-            <span className="text-xs text-gray-600">Total Entradas:</span>
-            <div className="font-semibold text-green-700">{formatCurrency(totals.totalEntradas)}</div>
-          </div>
-          <div>
-            <span className="text-xs text-gray-600">Fondo Nacional (10%):</span>
-            <div className="font-semibold text-blue-700">{formatCurrency(totals.fondoNacional)}</div>
-          </div>
-          <div>
-            <span className="text-xs text-gray-600">Honorarios Pastoral:</span>
-            <div className="font-semibold text-purple-700">{formatCurrency(totals.honorariosPastoral)}</div>
-          </div>
-          <div>
-            <span className="text-xs text-gray-600">Saldo del Mes:</span>
-            <div className={`font-semibold ${totals.saldoMes === 0 ? 'text-green-700' : 'text-red-700'}`}>
-              {formatCurrency(totals.saldoMes)}
+        </FormField>
+      </FormSection>
+      <SectionCard
+        title="Resumen calculado"
+        description="Estos valores se actualizan automáticamente con los montos ingresados."
+      >
+        <div className="absd-grid">
+          {[
+            {
+              label: 'Total entradas',
+              value: formatCurrency(totals.totalEntradas),
+              toneClass: 'text-[var(--absd-ink)]',
+            },
+            {
+              label: 'Fondo nacional (10%)',
+              value: formatCurrency(totals.fondoNacional),
+              toneClass: 'text-[var(--absd-ink)]',
+            },
+            {
+              label: 'Honorarios pastoral',
+              value: formatCurrency(totals.honorariosPastoral),
+              toneClass: 'text-[var(--absd-ink)]',
+            },
+            {
+              label: 'Saldo del mes',
+              value: formatCurrency(totals.saldoMes),
+              toneClass:
+                totals.saldoMes >= 0 ? 'text-[var(--absd-success)]' : 'text-[var(--absd-error)]',
+            },
+          ].map((metric) => (
+            <div
+              key={metric.label}
+              className="rounded-2xl border border-[var(--absd-border)] bg-[var(--absd-surface)] px-4 py-3 shadow-sm"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">
+                {metric.label}
+              </p>
+              <p className={`text-lg font-semibold ${metric.toneClass}`}>{metric.value}</p>
             </div>
-          </div>
+          ))}
         </div>
-      </div>
-
-      {/* Action Buttons */}
-      <div className="flex justify-end gap-3 pt-4 border-t">
-        <button
+      </SectionCard>
+      <div className="flex justify-end gap-3 pt-4">
+        <Button
           type="button"
+          variant="ghost"
+          size="md"
+          density="compact"
           onClick={onCancel}
-          className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
         >
           Cancelar
-        </button>
-        <button
+        </Button>
+        <Button
           type="submit"
-          disabled={createReport.isPending}
-          className="px-4 py-2 text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+          variant="primary"
+          size="md"
+          density="compact"
+          loading={createReport.isPending}
         >
-          {createReport.isPending ? 'Creando...' : 'Crear Informe Manual'}
-        </button>
+          {createReport.isPending ? 'Creando…' : 'Crear informe manual'}
+        </Button>
       </div>
 
       {createReport.isError && (
-        <div className="mt-4 p-3 bg-red-100 border border-red-300 text-red-700 rounded-lg text-sm">
-          Error: {(createReport.error as Error).message}
-        </div>
+        <Alert variant="danger">
+          <AlertTitle>Error al crear el informe</AlertTitle>
+          <AlertDescription>{(createReport.error as Error).message}</AlertDescription>
+        </Alert>
       )}
     </form>
   );

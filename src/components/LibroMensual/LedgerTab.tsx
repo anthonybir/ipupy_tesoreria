@@ -4,15 +4,22 @@ import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-import { EmptyState } from '@/components/Shared/EmptyState';
-import { ErrorState } from '@/components/Shared/ErrorState';
-import { LoadingState } from '@/components/Shared/LoadingState';
+import {
+  DataTable,
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  MetricCard,
+  SectionCard,
+  Toolbar,
+  FormField,
+} from '@/components/Shared';
+import type { DataTableColumn } from '@/components/Shared/DataTable';
 import { useAdminTransactions } from '@/hooks/useAdminData';
-
 const currencyFormatter = new Intl.NumberFormat('es-PY', {
   style: 'currency',
   currency: 'PYG',
-  maximumFractionDigits: 0
+  maximumFractionDigits: 0,
 });
 
 type LedgerTabProps = {
@@ -44,14 +51,15 @@ const monthNames = [
   'Septiembre',
   'Octubre',
   'Noviembre',
-  'Diciembre'
+  'Diciembre',
 ];
 
 const buildDateRange = (filters: { year: string; month: string }) => {
   if (filters.month === 'all') {
-    const start = `${filters.year}-01-01`;
-    const end = `${filters.year}-12-31`;
-    return { start, end };
+    return {
+      start: `${filters.year}-01-01`,
+      end: `${filters.year}-12-31`,
+    };
   }
 
   const month = Number(filters.month);
@@ -60,7 +68,6 @@ const buildDateRange = (filters: { year: string; month: string }) => {
   const end = `${filters.year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   return { start, end };
 };
-
 export function LedgerTab({ filters, funds }: LedgerTabProps) {
   const [selectedFund, setSelectedFund] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
@@ -71,7 +78,7 @@ export function LedgerTab({ filters, funds }: LedgerTabProps) {
     const params: Record<string, string | number> = {
       start_date: dateRange.start,
       end_date: dateRange.end,
-      limit: 500
+      limit: 500,
     };
 
     if (selectedFund !== 'all') {
@@ -86,12 +93,12 @@ export function LedgerTab({ filters, funds }: LedgerTabProps) {
   }, [dateRange.end, dateRange.start, selectedFund, typeFilter]);
 
   const ledgerQuery = useAdminTransactions(queryFilters);
-
   const rawTransactions = ledgerQuery.data?.data as Array<Record<string, unknown>> | undefined;
   const transactions = useMemo<LedgerTransaction[]>(() => {
     if (!rawTransactions) {
       return [];
     }
+
     return rawTransactions.map((row) => ({
       id: Number(row.id),
       date: row.date ? String(row.date) : null,
@@ -111,9 +118,98 @@ export function LedgerTab({ filters, funds }: LedgerTabProps) {
         acc.expense += txn.amount_out;
         return acc;
       },
-      { income: 0, expense: 0 }
+      { income: 0, expense: 0 },
     );
   }, [transactions]);
+
+  const selectClassName =
+    'rounded-xl border border-[var(--absd-border)] bg-[var(--absd-surface)] px-3 py-2 text-sm text-[var(--absd-ink)] shadow-sm focus:border-[var(--absd-authority)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_oklab,var(--absd-authority) 40%,white)]';
+  const columns = useMemo<DataTableColumn<LedgerTransaction>[]>(
+    () => [
+      {
+        id: 'date',
+        header: 'Fecha',
+        render: (txn) => (
+          <span className="text-sm text-[rgba(15,23,42,0.7)]">
+            {txn.date ? format(new Date(txn.date), 'dd MMM yyyy', { locale: es }) : '—'}
+          </span>
+        ),
+      },
+      {
+        id: 'concept',
+        header: 'Concepto',
+        render: (txn) => (
+          <span className="text-sm font-semibold text-[var(--absd-ink)]">{txn.concept}</span>
+        ),
+      },
+      {
+        id: 'fund',
+        header: 'Fondo',
+        render: (txn) => (
+          <span className="text-sm text-[rgba(15,23,42,0.7)]">{txn.fund_name ?? 'N/D'}</span>
+        ),
+      },
+      {
+        id: 'church',
+        header: 'Iglesia',
+        render: (txn) => (
+          <span className="text-sm text-[rgba(15,23,42,0.7)]">{txn.church_name ?? '—'}</span>
+        ),
+      },
+      {
+        id: 'income',
+        header: 'Entrada',
+        align: 'right',
+        render: (txn) => (
+          <span className="text-sm font-semibold text-[var(--absd-success)]">
+            {txn.amount_in > 0 ? currencyFormatter.format(txn.amount_in) : '—'}
+          </span>
+        ),
+      },
+      {
+        id: 'expense',
+        header: 'Salida',
+        align: 'right',
+        render: (txn) => (
+          <span className="text-sm font-semibold text-[var(--absd-error)]">
+            {txn.amount_out > 0 ? currencyFormatter.format(txn.amount_out) : '—'}
+          </span>
+        ),
+      },
+      {
+        id: 'createdBy',
+        header: 'Registrado por',
+        render: (txn) => (
+          <span className="text-xs text-[rgba(15,23,42,0.55)]">{txn.created_by ?? '—'}</span>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const summaryMetrics = useMemo(
+    () => [
+      {
+        label: 'Entradas registradas',
+        value: currencyFormatter.format(aggregates.income),
+        description: 'Total de movimientos ingresados',
+        tone: 'success' as const,
+      },
+      {
+        label: 'Salidas registradas',
+        value: currencyFormatter.format(aggregates.expense),
+        description: 'Total de egresos ejecutados',
+        tone: 'danger' as const,
+      },
+      {
+        label: 'Saldo neto',
+        value: currencyFormatter.format(aggregates.income - aggregates.expense),
+        description: 'Resultado del periodo',
+        tone: aggregates.income - aggregates.expense >= 0 ? ('success' as const) : ('warning' as const),
+      },
+    ],
+    [aggregates.expense, aggregates.income],
+  );
 
   if (ledgerQuery.isLoading) {
     return <LoadingState title="Cargando libro diario..." fullHeight />;
@@ -122,101 +218,89 @@ export function LedgerTab({ filters, funds }: LedgerTabProps) {
   if (ledgerQuery.isError) {
     return <ErrorState title="No se pudo cargar el libro diario" />;
   }
-
   if (!transactions.length) {
     return (
-      <EmptyState
-        title="No hay movimientos registrados"
+      <SectionCard
+        title="Libro diario"
         description="Ajusta los filtros para visualizar movimientos de otro fondo o periodo."
-      />
+      >
+        <EmptyState
+          title="No hay movimientos registrados"
+          description="No se encontraron transacciones con los filtros seleccionados."
+          tone="info"
+          fullHeight
+        />
+      </SectionCard>
     );
   }
 
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            <span className="font-semibold text-slate-500">Fondo</span>
-            <select
-              value={selectedFund}
-              onChange={(event) => setSelectedFund(event.target.value)}
-              className="rounded-lg border border-slate-200 px-2 py-1 text-sm focus:border-indigo-400 focus:outline-none"
-            >
-              <option value="all">Todos</option>
-              {funds.map((fund) => (
-                <option key={fund.id} value={fund.id}>
-                  {fund.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-            <span className="font-semibold text-slate-500">Origen</span>
-            <select
-              value={typeFilter}
-              onChange={(event) => setTypeFilter(event.target.value)}
-              className="rounded-lg border border-slate-200 px-2 py-1 text-sm focus:border-indigo-400 focus:outline-none"
-            >
-              <option value="all">Todos</option>
-              <option value="automatic">Automáticos</option>
-              <option value="manual">Manual tesorería</option>
-              <option value="reconciliation">Reconciliación</option>
-            </select>
-          </div>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-right shadow-sm">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-            Resumen {filters.month === 'all' ? filters.year : `${monthNames[Number(filters.month)]} ${filters.year}`}
-          </p>
-          <p className="text-sm font-semibold text-emerald-600">
-            Entradas: {currencyFormatter.format(aggregates.income)}
-          </p>
-          <p className="text-sm font-semibold text-rose-600">
-            Salidas: {currencyFormatter.format(aggregates.expense)}
-          </p>
-          <p className="text-sm font-semibold text-slate-900">
-            Neto: {currencyFormatter.format(aggregates.income - aggregates.expense)}
-          </p>
-        </div>
-      </div>
+  const periodLabel =
+    filters.month === 'all'
+      ? filters.year
+      : `${monthNames[Number(filters.month)] ?? filters.month} ${filters.year}`;
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Fecha</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Concepto</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Fondo</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Iglesia</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Entrada</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Salida</th>
-              <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Registrado por</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {transactions.map((txn) => (
-              <tr key={txn.id} className="hover:bg-indigo-50/30">
-                <td className="px-4 py-3 text-sm text-slate-600">
-                  {txn.date ? format(new Date(txn.date), 'dd MMM yyyy', { locale: es }) : '—'}
-                </td>
-                <td className="px-4 py-3 text-sm font-medium text-slate-800">
-                  {txn.concept}
-                </td>
-                <td className="px-4 py-3 text-sm text-slate-600">{txn.fund_name ?? 'N/D'}</td>
-                <td className="px-4 py-3 text-sm text-slate-600">{txn.church_name ?? '—'}</td>
-                <td className="px-4 py-3 text-right text-sm font-semibold text-emerald-600">
-                  {txn.amount_in > 0 ? currencyFormatter.format(Number(txn.amount_in)) : '—'}
-                </td>
-                <td className="px-4 py-3 text-right text-sm font-semibold text-rose-600">
-                  {txn.amount_out > 0 ? currencyFormatter.format(Number(txn.amount_out)) : '—'}
-                </td>
-                <td className="px-4 py-3 text-xs text-slate-500">{txn.created_by ?? '—'}</td>
-              </tr>
+  return (
+    <div className="space-y-6">
+      <Toolbar variant="filters">
+        <FormField htmlFor="ledger-fund" label="Fondo">
+          <select
+            id="ledger-fund"
+            value={selectedFund}
+            onChange={(event) => setSelectedFund(event.target.value)}
+            className={selectClassName}
+          >
+            <option value="all">Todos</option>
+            {funds.map((fund) => (
+              <option key={fund.id} value={fund.id}>
+                {fund.name}
+              </option>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </select>
+        </FormField>
+        <FormField htmlFor="ledger-type" label="Origen">
+          <select
+            id="ledger-type"
+            value={typeFilter}
+            onChange={(event) => setTypeFilter(event.target.value)}
+            className={selectClassName}
+          >
+            <option value="all">Todos</option>
+            <option value="automatic">Automáticos</option>
+            <option value="manual">Manual tesorería</option>
+            <option value="reconciliation">Reconciliación</option>
+          </select>
+        </FormField>
+      </Toolbar>
+
+      <SectionCard
+        title="Resumen del periodo"
+        description={`Movimientos registrados para ${periodLabel}`}
+      >
+        <div className="absd-grid">
+          {summaryMetrics.map((metric) => (
+            <MetricCard
+              key={metric.label}
+              label={metric.label}
+              value={metric.value}
+              description={metric.description}
+              tone={metric.tone}
+            />
+          ))}
+        </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Movimientos"
+        description={`${transactions.length} registro${transactions.length === 1 ? '' : 's'} encontrados`}
+        padding="lg"
+      >
+        <DataTable
+          data={transactions}
+          columns={columns}
+          virtualized
+          maxHeight={520}
+        />
+      </SectionCard>
     </div>
   );
 }

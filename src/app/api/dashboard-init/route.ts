@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { getAuthContext } from '@/lib/auth-context';
-import { execute } from '@/lib/db';
+import { executeWithContext } from '@/lib/db';
 import { setCORSHeaders } from '@/lib/cors';
 
 export const runtime = 'nodejs';
@@ -28,7 +28,7 @@ export async function GET(req: NextRequest) {
     }
 
     const queries = [
-      execute(`
+      executeWithContext(auth, `
         SELECT
           COUNT(DISTINCT c.id) as total_churches,
           COUNT(DISTINCT r.id) as total_reports,
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
         FROM churches c
         LEFT JOIN reports r ON c.id = r.church_id
       `),
-      execute(`
+      executeWithContext(auth, `
         SELECT
           r.id, r.church_id, r.month, r.year,
           r.diezmos, r.ofrendas, r.fondo_nacional,
@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
         ORDER BY r.created_at DESC
         LIMIT 10
       `),
-      execute(`
+      executeWithContext(auth, `
         SELECT
           c.id, c.name, c.city, c.pastor, c.grado, c.posicion, c.cedula,
           c.barrio, c.estado, c.fecha_fundacion, c.telefono, c.email,
@@ -63,13 +63,13 @@ export async function GET(req: NextRequest) {
                  c.barrio, c.estado, c.fecha_fundacion, c.telefono, c.email
         ORDER BY c.name
       `),
-      execute(`
+      executeWithContext(auth, `
         SELECT
           EXTRACT(YEAR FROM CURRENT_DATE) as current_year,
           EXTRACT(MONTH FROM CURRENT_DATE) as current_month,
           to_char(CURRENT_DATE, 'Month YYYY') as current_period
       `),
-      execute(`
+      executeWithContext(auth, `
         SELECT
           COUNT(*) as total_funds,
           COUNT(CASE WHEN active = true THEN 1 END) as active_funds,
@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
       `).catch(() => ({
         rows: [{ total_funds: 0, active_funds: 0, total_balance: 0 }]
       })),
-      execute(`
+      executeWithContext(auth, `
         SELECT
           TO_CHAR(date_trunc('month', created_at), 'Mon') as month_name,
           EXTRACT(MONTH FROM created_at) as month,

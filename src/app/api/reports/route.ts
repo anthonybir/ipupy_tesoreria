@@ -2,7 +2,7 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import { NextRequest, NextResponse } from 'next/server';
 
-import { execute } from '@/lib/db';
+import { executeWithContext } from '@/lib/db';
 import { buildCorsHeaders, handleCorsPreflight } from '@/lib/cors';
 import { requireAuth, AuthContext } from '@/lib/auth-context';
 
@@ -206,14 +206,16 @@ const recordReportStatus = async (
   reportId: number | null,
   previousStatus: string | null,
   newStatus: string | null,
-  actor: string | undefined
+  actor: string | undefined,
+  auth?: AuthContext | null
 ) => {
   if (!reportId || previousStatus === newStatus) {
     return;
   }
 
   try {
-    await execute(
+    await executeWithContext(
+      auth || null,
       `
         INSERT INTO report_status_history (report_id, previous_status, new_status, changed_by)
         VALUES ($1, $2, $3, $4)
@@ -228,7 +230,8 @@ const recordReportStatus = async (
 const queueReportNotification = async (
   reportRow: GenericRecord | undefined,
   actorEmail: string | undefined,
-  notificationType = 'submission'
+  notificationType = 'submission',
+  auth?: AuthContext | null
 ) => {
   const recipient = process.env.TREASURY_NOTIFICATION_EMAIL;
   if (!recipient || !reportRow) {
@@ -243,7 +246,8 @@ const queueReportNotification = async (
     `Acción registrada por: ${actorEmail || 'usuario'}`;
 
   try {
-    await execute(
+    await executeWithContext(
+      auth || null,
       `
         INSERT INTO report_notifications (report_id, notification_type, recipient_email, subject, body)
         VALUES ($1, $2, $3, $4, $5)
@@ -255,26 +259,27 @@ const queueReportNotification = async (
   }
 };
 
-const setAuditContext = async (actorEmail: string | undefined) => {
+const setAuditContext = async (actorEmail: string | undefined, auth?: AuthContext | null) => {
   if (!actorEmail) {
     return;
   }
 
   try {
-    await execute('SELECT set_config($1, $2, true)', ['audit.user', actorEmail]);
+    await executeWithContext(auth || null, 'SELECT set_config($1, $2, true)', ['audit.user', actorEmail]);
   } catch {
     // Safe to ignore if audit schema is not yet installed
   }
 };
 
-const getOrCreateFund = async (name: string, type: string, description: string) => {
-  let result = await execute('SELECT * FROM funds WHERE name = $1', [name]);
+const getOrCreateFund = async (name: string, type: string, description: string, auth?: AuthContext | null) => {
+  let result = await executeWithContext(auth || null, 'SELECT * FROM funds WHERE name = $1', [name]);
 
   if (result.rows.length > 0) {
     return result.rows[0];
   }
 
-  result = await execute(
+  result = await executeWithContext(
+    auth || null,
     `
       INSERT INTO funds (name, type, description, current_balance, is_active, created_by)
       VALUES ($1, $2, $3, $4, $5, $6)
@@ -286,8 +291,9 @@ const getOrCreateFund = async (name: string, type: string, description: string) 
   return result.rows[0];
 };
 
-const createTransaction = async (data: GenericRecord) => {
-  const fundResult = await execute<{ current_balance: string }>(
+const createTransaction = async (data: GenericRecord, auth?: AuthContext | null) => {
+  const fundResult = await executeWithContext<{ current_balance: string }>(
+    auth || null,
     'SELECT current_balance FROM funds WHERE id = $1',
     [data.fund_id]
   );
@@ -306,10 +312,11 @@ const createTransaction = async (data: GenericRecord) => {
     console.warn(`Warning: Transaction would result in negative balance for fund ${data.fund_id}`);
   }
 
-  await execute('BEGIN');
+  await executeWithContext(auth || null, 'BEGIN');
 
   try {
-    const transactionResult = await execute(
+    const transactionResult = await executeWithContext(
+      auth || null,
       `
         INSERT INTO transactions (
           date, church_id, report_id, fund_id, concept, provider, document_number,
@@ -335,12 +342,14 @@ const createTransaction = async (data: GenericRecord) => {
 
     const transaction = transactionResult.rows[0];
 
-    await execute(
+    await executeWithContext(
+      auth || null,
       'UPDATE funds SET current_balance = $1, updated_at = NOW() WHERE id = $2',
       [newBalance, data.fund_id]
     );
 
-    await execute(
+    await executeWithContext(
+      auth || null,
       `
         INSERT INTO fund_movements_enhanced (
           fund_id, transaction_id, previous_balance, movement, new_balance
@@ -355,10 +364,10 @@ const createTransaction = async (data: GenericRecord) => {
       ]
     );
 
-    await execute('COMMIT');
+    await executeWithContext(auth || null, 'COMMIT');
     return transaction;
   } catch (error) {
-    await execute('ROLLBACK');
+    await executeWithContext(auth || null, 'ROLLBACK');
     throw error;
   }
 };
@@ -366,11 +375,12 @@ const createTransaction = async (data: GenericRecord) => {
 const createReportTransactions = async (
   report: GenericRecord,
   totals: TransactionTotalsInput,
-  designated: Record<DesignatedKey, number>
+  designated: Record<DesignatedKey, number>,
+  auth?: AuthContext | null
 ) => {
   try {
-    const churchFund = await getOrCreateFund('Fondo General', 'nacional', 'Fondo principal de la iglesia');
-    const nationalFund = await getOrCreateFund('Fondo Nacional', 'nacional', 'Fondo nacional IPU Paraguay (10%)');
+    const churchFund = await getOrCreateFund('Fondo General', 'nacional', 'Fondo principal de la iglesia', auth);
+    const nationalFund = await getOrCreateFund('Fondo Nacional', 'nacional', 'Fondo nacional IPU Paraguay (10%)', auth);
 
     const totalEntradas = Number(totals.totalEntradas) || 0;
     const fondoNacional = Number(totals.fondoNacional) || 0;
@@ -387,7 +397,7 @@ const createReportTransactions = async (
         amount_in: totalEntradas,
         amount_out: 0,
         date: transactionDate
-      });
+      }, auth);
     }
 
     if (fondoNacional > 0) {
@@ -399,7 +409,7 @@ const createReportTransactions = async (
         amount_in: 0,
         amount_out: fondoNacional,
         date: transactionDate
-      });
+      }, auth);
 
       await createTransaction({
         church_id: report.church_id,
@@ -409,7 +419,7 @@ const createReportTransactions = async (
         amount_in: fondoNacional,
         amount_out: 0,
         date: transactionDate
-      });
+      }, auth);
     }
 
     for (const key of DESIGNATED_FORM_KEYS) {
@@ -418,7 +428,7 @@ const createReportTransactions = async (
         continue;
       }
       const fundLabel = DESIGNATED_FUND_LABELS[key];
-      const designatedFund = await getOrCreateFund(fundLabel, 'designado', `Fondo designado ${fundLabel}`);
+      const designatedFund = await getOrCreateFund(fundLabel, 'designado', `Fondo designado ${fundLabel}`, auth);
 
       await createTransaction({
         church_id: report.church_id,
@@ -428,7 +438,7 @@ const createReportTransactions = async (
         amount_in: 0,
         amount_out: amount,
         date: transactionDate
-      });
+      }, auth);
 
       await createTransaction({
         church_id: report.church_id,
@@ -438,7 +448,7 @@ const createReportTransactions = async (
         amount_in: amount,
         amount_out: 0,
         date: transactionDate
-      });
+      }, auth);
     }
 
     if (honorariosPastoral > 0) {
@@ -450,7 +460,7 @@ const createReportTransactions = async (
         amount_in: 0,
         amount_out: honorariosPastoral,
         date: transactionDate
-      });
+      }, auth);
     }
 
     if (gastosOperativos > 0) {
@@ -523,7 +533,7 @@ const handleGetReports = async (request: NextRequest, auth: AuthContext) => {
     queryParams.push(limitInt, offsetInt);
   }
 
-  const result = await execute(recordsQuery, queryParams);
+  const result = await executeWithContext(auth, recordsQuery, queryParams);
   return result.rows;
 };
 
@@ -603,7 +613,8 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
 
   await setAuditContext(auth.email);
 
-  const existingReport = await execute(
+  const existingReport = await executeWithContext(
+    auth,
     'SELECT id, estado FROM reports WHERE church_id = $1 AND month = $2 AND year = $3',
     [scopedChurchId, reportMonth, reportYear]
   );
@@ -688,7 +699,8 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
   const enteredBy = (isAdminSubmission && submissionSource !== 'admin_import') ? auth.email : null;
   const enteredAt = enteredBy ? new Date() : null;
 
-  const result = await execute(
+  const result = await executeWithContext(
+    auth,
     `
       INSERT INTO reports (
         church_id, month, year,
@@ -770,7 +782,7 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
 
   const report = result.rows[0];
 
-  await recordReportStatus(Number(report.id), null, String(report.estado), auth.email || "");
+  await recordReportStatus(Number(report.id), null, String(report.estado), auth.email || "", auth);
 
   const shouldAutoGenerateTransactions = !isChurchSubmission && String(report.estado) === 'procesado';
 
@@ -781,9 +793,10 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
       honorariosPastoral: totals.honorariosPastoral,
       gastosOperativos: totals.gastosOperativos,
       fechaDeposito: totals.fechaDeposito || (typeof data.fecha_deposito === 'string' ? data.fecha_deposito : null)
-    }, designatedForTransactions);
+    }, designatedForTransactions, auth);
 
-    await execute(
+    await executeWithContext(
+      auth,
       `
         UPDATE reports
         SET transactions_created = TRUE,
@@ -794,12 +807,12 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
       [auth.email || 'system', report.id]
     );
 
-    await queueReportNotification(report, auth.email, 'processed');
+    await queueReportNotification(report, auth.email, 'processed', auth);
   } else {
-    await queueReportNotification(report, auth.email, 'submission');
+    await queueReportNotification(report, auth.email, 'submission', auth);
   }
 
-  await replaceReportDonors(Number(report.id), scopedChurchId, donorRows);
+  await replaceReportDonors(Number(report.id), scopedChurchId, donorRows, auth);
 
   return report;
 };
@@ -807,16 +820,18 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
 const replaceReportDonors = async (
   reportId: number,
   churchId: number,
-  donors: Array<{ first_name: string; last_name: string; document: string; amount: number }>
+  donors: Array<{ first_name: string; last_name: string; document: string; amount: number }>,
+  auth?: AuthContext | null
 ) => {
-  await execute('DELETE FROM report_tithers WHERE report_id = $1', [reportId]);
+  await executeWithContext(auth || null, 'DELETE FROM report_tithers WHERE report_id = $1', [reportId]);
 
   if (!donors.length) {
     return;
   }
 
   for (const donor of donors) {
-    await execute(
+    await executeWithContext(
+      auth || null,
       `
         INSERT INTO report_tithers (report_id, church_id, first_name, last_name, document, amount)
         VALUES ($1, $2, $3, $4, $5, $6)
@@ -833,8 +848,9 @@ const replaceReportDonors = async (
   }
 };
 
-const resetAutomaticTransactions = async (reportId: number) => {
-  await execute(
+const resetAutomaticTransactions = async (reportId: number, auth?: AuthContext | null) => {
+  await executeWithContext(
+    auth || null,
     `DELETE FROM fund_movements_enhanced
       WHERE transaction_id IN (
         SELECT id FROM transactions WHERE report_id = $1 AND created_by = 'system'
@@ -842,7 +858,8 @@ const resetAutomaticTransactions = async (reportId: number) => {
     [reportId]
   );
 
-  await execute(
+  await executeWithContext(
+    auth || null,
     'DELETE FROM transactions WHERE report_id = $1 AND created_by = $2',
     [reportId, 'system']
   );
@@ -853,9 +870,10 @@ const handleUpdateReport = async (
   data: GenericRecord,
   auth: AuthContext
 ) => {
-  await setAuditContext(auth.email);
+  await setAuditContext(auth.email, auth);
 
-  const existingResult = await execute(
+  const existingResult = await executeWithContext(
+    auth,
     `
       SELECT r.*, c.name as church_name
       FROM reports r
@@ -958,7 +976,8 @@ const handleUpdateReport = async (
     processedAt = null;
   }
 
-  const updatedResult = await execute(
+  const updatedResult = await executeWithContext(
+    auth,
     `
       UPDATE reports SET
         diezmos = $1,
@@ -1051,13 +1070,13 @@ const handleUpdateReport = async (
   const updatedReport = updatedResult.rows[0];
 
   if (donorPayloadProvided) {
-    await replaceReportDonors(reportId, existing.church_id, donorRows);
+    await replaceReportDonors(reportId, existing.church_id, donorRows, auth);
   }
 
   const existingTransactionsCreated = Boolean(existing.transactions_created);
   const shouldGenerateTransactions = existingTransactionsCreated || estado === 'procesado';
 
-  await resetAutomaticTransactions(reportId);
+  await resetAutomaticTransactions(reportId, auth);
 
   if (shouldGenerateTransactions) {
     await createReportTransactions(
@@ -1069,10 +1088,12 @@ const handleUpdateReport = async (
         gastosOperativos: totals.gastosOperativos,
         fechaDeposito: totals.fechaDeposito || (typeof data.fecha_deposito === 'string' ? data.fecha_deposito : existing.fecha_deposito || null)
       },
-      designatedForTransactions
+      designatedForTransactions,
+      auth
     );
 
-    await execute(
+    await executeWithContext(
+      auth,
       `
         UPDATE reports
         SET transactions_created = TRUE,
@@ -1083,7 +1104,8 @@ const handleUpdateReport = async (
       [auth.email || existing.transactions_created_by || 'system', reportId]
     );
   } else {
-    await execute(
+    await executeWithContext(
+      auth,
       `
         UPDATE reports
         SET transactions_created = FALSE,
@@ -1095,18 +1117,18 @@ const handleUpdateReport = async (
     );
   }
 
-  await recordReportStatus(reportId, String(previousStatus), String(updatedReport.estado), auth.email || "");
+  await recordReportStatus(reportId, String(previousStatus), String(updatedReport.estado), auth.email || "", auth);
   if (previousStatus !== updatedReport.estado && updatedReport.estado === 'procesado') {
-    await queueReportNotification(updatedReport, auth.email, 'processed');
+    await queueReportNotification(updatedReport, auth.email, 'processed', auth);
   }
 
   return updatedReport;
 };
 
 const handleDeleteReport = async (reportId: number, auth: AuthContext) => {
-  await setAuditContext(auth.email);
+  await setAuditContext(auth.email, auth);
 
-  const existingResult = await execute('SELECT church_id, estado FROM reports WHERE id = $1', [reportId]);
+  const existingResult = await executeWithContext(auth, 'SELECT church_id, estado FROM reports WHERE id = $1', [reportId]);
   if (existingResult.rows.length === 0) {
     throw new BadRequestError('Informe no encontrado');
   }
@@ -1116,15 +1138,15 @@ const handleDeleteReport = async (reportId: number, auth: AuthContext) => {
     throw new BadRequestError('No tiene permisos para eliminar este informe');
   }
 
-  await resetAutomaticTransactions(reportId);
+  await resetAutomaticTransactions(reportId, auth);
 
-  const result = await execute('DELETE FROM reports WHERE id = $1 RETURNING id', [reportId]);
+  const result = await executeWithContext(auth, 'DELETE FROM reports WHERE id = $1 RETURNING id', [reportId]);
 
   if (result.rows.length === 0) {
     throw new BadRequestError('Informe no encontrado');
   }
 
-  await recordReportStatus(reportId, String(existing.estado), 'eliminado', auth.email || "");
+  await recordReportStatus(reportId, String(existing.estado), 'eliminado', auth.email || "", auth);
 
   return { message: 'Informe eliminado exitosamente' };
 };

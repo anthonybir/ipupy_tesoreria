@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import { execute } from '@/lib/db';
+import { executeWithContext } from '@/lib/db';
 import { buildCorsHeaders, handleCorsPreflight } from '@/lib/cors';
-import { requireAuth } from '@/lib/auth-context';
+import { requireAuth, type AuthContext } from '@/lib/auth-context';
 
 type NumericString = string | number | null | undefined;
 
@@ -127,13 +127,13 @@ const buildMembersWhereClause = (query: MembersQuery) => {
   const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
   return { whereClause, params };
 };
-const fetchMembers = async (query: MembersQuery) => {
+const fetchMembers = async (auth: AuthContext | null, query: MembersQuery) => {
   const { whereClause, params } = buildMembersWhereClause(query);
   const orderBy = `ORDER BY ${query.sortColumn} ${query.sortOrder}`;
   const limitPlaceholder = `$${params.length + 1}`;
   const offsetPlaceholder = `$${params.length + 2}`;
 
-  const records = await execute(
+  const records = await executeWithContext(auth, 
     `
       SELECT
         m.*, f.apellido_familia,
@@ -148,7 +148,7 @@ const fetchMembers = async (query: MembersQuery) => {
     [...params, query.limit, query.offset]
   );
 
-  const count = await execute(
+  const count = await executeWithContext(auth, 
     `SELECT COUNT(*) AS total FROM members m ${whereClause}`,
     params
   );
@@ -162,10 +162,10 @@ const fetchMembers = async (query: MembersQuery) => {
     }
   };
 };
-const createMember = async (payload: MemberPayload) => {
+const createMember = async (auth: AuthContext | null, payload: MemberPayload) => {
   validateMemberPayload(payload);
 
-  const result = await execute(
+  const result = await executeWithContext(auth, 
     `
       INSERT INTO members (
         church_id, nombre, apellido, family_id, ci_ruc, telefono,
@@ -194,13 +194,13 @@ const createMember = async (payload: MemberPayload) => {
 
   return result.rows[0];
 };
-const updateMember = async (memberId: number, payload: MemberPayload) => {
-  const existing = await execute('SELECT id FROM members WHERE id = $1', [memberId]);
+const updateMember = async (auth: AuthContext | null, memberId: number, payload: MemberPayload) => {
+  const existing = await executeWithContext(auth, 'SELECT id FROM members WHERE id = $1', [memberId]);
   if (existing.rows.length === 0) {
     throw new BadRequestError('Miembro no encontrado');
   }
 
-  const result = await execute(
+  const result = await executeWithContext(auth, 
     `
       UPDATE members SET
         church_id = COALESCE($1, church_id),
@@ -238,47 +238,47 @@ const updateMember = async (memberId: number, payload: MemberPayload) => {
 
   return result.rows[0];
 };
-const deleteMember = async (memberId: number) => {
-  const result = await execute('DELETE FROM members WHERE id = $1 RETURNING id', [memberId]);
+const deleteMember = async (auth: AuthContext | null, memberId: number) => {
+  const result = await executeWithContext(auth, 'DELETE FROM members WHERE id = $1 RETURNING id', [memberId]);
   if (result.rows.length === 0) {
     throw new BadRequestError('Miembro no encontrado');
   }
 };
-const handleMembersRequest = async (request: NextRequest) => {
+const handleMembersRequest = async (auth: AuthContext | null, request: NextRequest) => {
   switch (request.method) {
     case 'GET': {
       const query = buildMembersQuery(request);
-      const result = await fetchMembers(query);
+      const result = await fetchMembers(auth, query);
       return result;
     }
     case 'POST': {
       const payload = (await request.json()) as MemberPayload;
-      const created = await createMember(payload);
+      const created = await createMember(auth, payload);
       return { success: true, data: created };
     }
     case 'PUT': {
       const memberId = parsePositiveInt(request.nextUrl.searchParams.get('id'), 'ID de miembro');
       const payload = (await request.json()) as MemberPayload;
-      const updated = await updateMember(memberId, payload);
+      const updated = await updateMember(auth, memberId, payload);
       return { success: true, data: updated };
     }
     case 'DELETE': {
       const memberId = parsePositiveInt(request.nextUrl.searchParams.get('id'), 'ID de miembro');
-      await deleteMember(memberId);
+      await deleteMember(auth, memberId);
       return { success: true, message: 'Miembro eliminado exitosamente' };
     }
     default:
       throw new BadRequestError('Método no permitido');
   }
 };
-const handleRequest = async (request: NextRequest) => {
+const handleRequest = async (auth: AuthContext | null, request: NextRequest) => {
   const type = request.nextUrl.searchParams.get('type') ?? 'members';
 
   if (type !== 'members') {
     throw new BadRequestError('Tipo de recurso no migrado aún');
   }
 
-  return handleMembersRequest(request);
+  return handleMembersRequest(auth, request);
 };
 
 const handleError = (error: unknown, origin: string | null) => {
@@ -309,8 +309,8 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    await requireAuth(request);
-    const result = await handleRequest(request);
+    const auth = await requireAuth(request);
+    const result = await handleRequest(auth, request);
     return jsonResponse(result, origin);
   } catch (error) {
     return handleError(error, origin);
@@ -325,8 +325,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await requireAuth(request);
-    const result = await handleRequest(request);
+    const auth = await requireAuth(request);
+    const result = await handleRequest(auth, request);
     return jsonResponse(result, origin, 201);
   } catch (error) {
     return handleError(error, origin);
@@ -341,8 +341,8 @@ export async function PUT(request: NextRequest) {
   }
 
   try {
-    await requireAuth(request);
-    const result = await handleRequest(request);
+    const auth = await requireAuth(request);
+    const result = await handleRequest(auth, request);
     return jsonResponse(result, origin);
   } catch (error) {
     return handleError(error, origin);
@@ -357,8 +357,8 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    await requireAuth(request);
-    const result = await handleRequest(request);
+    const auth = await requireAuth(request);
+    const result = await handleRequest(auth, request);
     return jsonResponse(result, origin);
   } catch (error) {
     return handleError(error, origin);

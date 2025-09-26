@@ -24,7 +24,10 @@ async function handleGet(req: NextRequest) {
     const includeInactive = searchParams.get("include_inactive") === "true";
     const type = searchParams.get("type");
 
-    const fundRows = await fetchFundBalances({ includeInactive, type });
+    // Get auth context for RLS
+    const auth = await getAuthContext(req);
+
+    const fundRows = await fetchFundBalances(auth, { includeInactive, type });
 
     const fundsWithBalances = fundRows.map((row) => ({
       id: row.id,

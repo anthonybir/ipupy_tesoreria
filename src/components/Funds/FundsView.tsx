@@ -7,10 +7,20 @@ import { toast } from 'react-hot-toast';
 
 import { fetchJson } from '@/lib/api-client';
 import { useFunds } from '@/hooks/useFunds';
-import { DataTable } from '@/components/Shared/DataTable';
-import { LoadingState } from '@/components/Shared/LoadingState';
-import { ErrorState } from '@/components/Shared/ErrorState';
-import { EmptyState } from '@/components/Shared/EmptyState';
+import {
+  DataTable,
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  MetricCard,
+  PageHeader,
+  SectionCard,
+  StatusPill,
+  Toolbar,
+} from '@/components/Shared';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import type { FundCollection, FundRecord } from '@/types/financial';
 
 const formatCurrency = (value: number): string =>
@@ -78,9 +88,9 @@ export default function FundsView() {
         id: 'name',
         header: 'Fondo',
         render: (fund: FundRecord) => (
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold text-slate-800">{fund.name}</span>
-            <span className="text-xs text-slate-500">{fund.description || 'Sin descripción'}</span>
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-semibold text-[var(--absd-ink)]">{fund.name}</span>
+            <span className="text-xs text-[rgba(15,23,42,0.55)]">{fund.description || 'Sin descripción'}</span>
           </div>
         ),
       },
@@ -88,9 +98,7 @@ export default function FundsView() {
         id: 'type',
         header: 'Tipo',
         render: (fund: FundRecord) => (
-          <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-indigo-600">
-            {fund.type}
-          </span>
+          <StatusPill tone="info">{fund.type}</StatusPill>
         ),
       },
       {
@@ -98,7 +106,7 @@ export default function FundsView() {
         header: 'Saldo actual',
         align: 'right' as const,
         render: (fund: FundRecord) => (
-          <span className="text-sm font-semibold text-slate-800">
+          <span className="text-sm font-semibold text-[var(--absd-ink)]">
             {formatCurrency(fund.balances.current)}
           </span>
         ),
@@ -107,22 +115,16 @@ export default function FundsView() {
         id: 'status',
         header: 'Estado',
         render: (fund: FundRecord) => (
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
-              fund.status.isActive
-                ? 'bg-emerald-50 text-emerald-600'
-                : 'bg-slate-100 text-slate-500'
-            }`}
-          >
+          <StatusPill tone={fund.status.isActive ? 'success' : 'warning'}>
             {fund.status.isActive ? 'Activo' : 'Inactivo'}
-          </span>
+          </StatusPill>
         ),
       },
       {
         id: 'updated',
         header: 'Actualizado',
         render: (fund: FundRecord) => (
-          <span className="text-xs text-slate-500">{formatDate(fund.status.updatedAt)}</span>
+          <span className="text-xs text-[rgba(15,23,42,0.55)]">{formatDate(fund.status.updatedAt)}</span>
         ),
       },
     ],
@@ -242,96 +244,123 @@ export default function FundsView() {
   };
   const isLoading = fundsQuery.isLoading || fundsQuery.isPending;
   const isError = fundsQuery.isError;
+  const lastUpdatedLabel = fundsQuery.dataUpdatedAt
+    ? new Intl.DateTimeFormat('es-PY', {
+        hour: '2-digit',
+        minute: '2-digit',
+        day: '2-digit',
+        month: 'short',
+      }).format(fundsQuery.dataUpdatedAt)
+    : '—';
+
+  const metrics = [
+    {
+      label: 'Fondos activos',
+      value: totals ? `${totals.activeFunds}/${totals.totalFunds}` : '0/0',
+      description: 'Fondos disponibles',
+      tone: 'info' as const,
+    },
+    {
+      label: 'Saldo consolidado',
+      value: formatCurrency(totals?.totalBalance ?? 0),
+      description: 'Saldo actual sumado',
+      tone: 'neutral' as const,
+    },
+    {
+      label: 'Meta total',
+      value: formatCurrency(totals?.totalTarget ?? 0),
+      description: 'Objetivos establecidos',
+      tone: 'success' as const,
+    },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-600">
-            Administración de fondos
-          </p>
-          <h1 className="text-3xl font-semibold text-slate-900">Fondos nacionales</h1>
-          <p className="text-sm text-slate-600">
-            Gestiona los fondos disponibles, sus saldos y metas financieras.
-          </p>
+    <div className="space-y-8">
+      <PageHeader
+        title="Fondos nacionales"
+        subtitle="Gestiona los fondos disponibles, sus saldos y metas financieras."
+        actions={
+          <Button type="button" size="sm" onClick={openCreateForm}>
+            Crear fondo
+          </Button>
+        }
+      />
+
+      <Toolbar
+        variant="filters"
+        actions={
+          <div className="flex flex-col items-end gap-2 text-xs text-[rgba(15,23,42,0.6)] sm:text-sm">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={refreshFunds}
+              loading={fundsQuery.isFetching}
+            >
+              Refrescar
+            </Button>
+            <span>
+              Última actualización:{' '}
+              <span className="font-semibold text-[var(--absd-ink)]">{lastUpdatedLabel}</span>
+            </span>
+          </div>
+        }
+      >
+        <div className="flex items-center gap-3 text-sm text-[rgba(15,23,42,0.7)]">
+          <Switch
+            id="include-inactive"
+            checked={includeInactive}
+            onCheckedChange={(checked) => setIncludeInactive(checked)}
+            aria-describedby="include-inactive-helper"
+          />
+          <div className="flex flex-col">
+            <Label htmlFor="include-inactive" className="text-sm font-semibold text-[rgba(15,23,42,0.78)]">
+              Mostrar fondos inactivos
+            </Label>
+            <span id="include-inactive-helper" className="text-xs text-[rgba(15,23,42,0.55)]">
+              Incluye fondos archivados en la tabla
+            </span>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={openCreateForm}
-          className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
-        >
-          Crear fondo
-        </button>
+      </Toolbar>
+
+      <div className="absd-grid">
+        {metrics.map((metric) => (
+          <MetricCard
+            key={metric.label}
+            label={metric.label}
+            value={metric.value}
+            description={metric.description}
+            tone={metric.tone}
+          />
+        ))}
       </div>
 
-      <section className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-6 py-4 shadow-sm">
-        <div className="flex items-center gap-3 text-sm text-slate-600">
-          <input
-            id="include-inactive"
-            type="checkbox"
-            checked={includeInactive}
-            onChange={(event) => setIncludeInactive(event.target.checked)}
-            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-          />
-          <label htmlFor="include-inactive" className="text-sm font-medium text-slate-600">
-            Mostrar fondos inactivos
-          </label>
-        </div>
-        <div className="text-xs text-slate-500">
-          Última actualización:
-          {' '}
-          <strong>
-            {fundsQuery.dataUpdatedAt
-              ? new Intl.DateTimeFormat('es-PY', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  day: '2-digit',
-                  month: 'short',
-                }).format(fundsQuery.dataUpdatedAt)
-              : '—'}
-          </strong>
-        </div>
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-3">
-        <FundStatCard
-          title="Fondos activos"
-          value={totals ? `${totals.activeFunds}/${totals.totalFunds}` : '0/0'}
-          subtitle="Fondos disponibles"
-        />
-        <FundStatCard
-          title="Saldo consolidado"
-          value={formatCurrency(totals?.totalBalance ?? 0)}
-          subtitle="Saldo actual sumado"
-        />
-        <FundStatCard
-          title="Meta total"
-          value={formatCurrency(totals?.totalTarget ?? 0)}
-          subtitle="Objetivos establecidos"
-        />
-      </section>
-
-      <section>
+      <SectionCard
+        title="Fondos registrados"
+        description={
+          isLoading
+            ? 'Obteniendo información de fondos…'
+            : `${funds.length} fondo${funds.length === 1 ? '' : 's'} visibles`
+        }
+      >
         {isLoading ? (
-          <LoadingState description="Obteniendo información de fondos" fullHeight />
+          <LoadingState description="Sincronizando datos financieros" fullHeight tone="info" />
         ) : isError ? (
           <ErrorState
-            description={(fundsQuery.error as Error)?.message ?? 'Error inesperado'}
+            description={(fundsQuery.error as Error)?.message ?? 'Ocurrió un error inesperado'}
             onRetry={refreshFunds}
           />
         ) : funds.length === 0 ? (
           <EmptyState
             title="Aún no se registraron fondos"
             description="Crea un fondo para comenzar a administrar recursos."
-            icon={<span>💰</span>}
+            icon={<span aria-hidden>💰</span>}
+            tone="info"
             action={
-              <button
-                type="button"
-                onClick={openCreateForm}
-                className="rounded-full bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700"
-              >
+              <Button type="button" size="sm" onClick={openCreateForm}>
                 Crear fondo
-              </button>
+              </Button>
             }
             fullHeight
           />
@@ -341,9 +370,10 @@ export default function FundsView() {
             columns={columns}
             getRowId={(fund) => fund.id}
             onRowClick={(fund) => setSelectedFund(fund)}
+            loading={fundsQuery.isFetching}
           />
         )}
-      </section>
+      </SectionCard>
 
       <FundFormModal
         open={isFormOpen}
@@ -369,24 +399,6 @@ export default function FundsView() {
     </div>
   );
 }
-type FundStatCardProps = {
-  title: string;
-  value: string;
-  subtitle?: string;
-};
-
-function FundStatCard({ title, value, subtitle }: FundStatCardProps) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</p>
-      <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
-      {subtitle ? (
-        <p className="mt-2 text-xs text-slate-500">{subtitle}</p>
-      ) : null}
-    </div>
-  );
-}
-
 type FundFormModalProps = {
   open: boolean;
   mode: 'create' | 'edit';

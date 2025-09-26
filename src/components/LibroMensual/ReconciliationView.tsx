@@ -4,9 +4,17 @@ import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-import { EmptyState } from '@/components/Shared/EmptyState';
-import { ErrorState } from '@/components/Shared/ErrorState';
-import { LoadingState } from '@/components/Shared/LoadingState';
+import {
+  EmptyState,
+  ErrorState,
+  FormField,
+  LoadingState,
+  MetricCard,
+  PageHeader,
+  SectionCard,
+  StatusPill,
+  Toolbar,
+} from '@/components/Shared';
 import { useAdminFunds, useAdminReconciliation } from '@/hooks/useAdminData';
 
 const currencyFormatter = new Intl.NumberFormat('es-PY', {
@@ -28,17 +36,9 @@ type ReconciliationRow = {
 
 const statusTag = (status: string) => {
   if (status === 'balanced') {
-    return (
-      <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
-        Conciliado
-      </span>
-    );
+    return <StatusPill tone="success">Conciliado</StatusPill>;
   }
-  return (
-    <span className="rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">
-      Revisar
-    </span>
-  );
+  return <StatusPill tone="warning">Revisar</StatusPill>;
 };
 
 export function ReconciliationView() {
@@ -72,6 +72,24 @@ export function ReconciliationView() {
     return reconciliation.reduce((sum, row) => sum + row.difference, 0);
   }, [reconciliation]);
 
+  const metrics = [
+    {
+      label: 'Diferencia total',
+      value: currencyFormatter.format(discrepancyTotal),
+      description: 'Saldo almacenado vs. calculado',
+      tone: discrepancyTotal === 0 ? ('success' as const) : ('danger' as const),
+    },
+    {
+      label: 'Fondos conciliados',
+      value: `${summary.balanced ?? 0}/${summary.totalFunds ?? reconciliation.length}`,
+      description: 'Fondos conciliados / totales',
+      tone: 'info' as const,
+    },
+  ];
+
+  const filterSelectClasses =
+    'rounded-xl border border-[var(--absd-border)] bg-white px-3 py-2 text-sm text-[var(--absd-ink)] shadow-sm focus:border-[var(--absd-authority)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_oklab,var(--absd-authority) 40%,white)]';
+
   if (reconciliationQuery.isLoading || fundsQuery.isLoading) {
     return <LoadingState title="Generando conciliación..." fullHeight />;
   }
@@ -90,32 +108,31 @@ export function ReconciliationView() {
   }
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-indigo-100 bg-indigo-50 px-6 py-5 shadow-sm">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">
-            Conciliación del tesoro nacional
-          </p>
-          <h1 className="text-2xl font-semibold text-slate-900">Resumen de saldos por fondo</h1>
-        </div>
-        <div className="rounded-xl border border-indigo-200 bg-white px-4 py-3 text-right shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500">Diferencia total</p>
-          <p className={`text-lg font-semibold ${discrepancyTotal === 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-            {currencyFormatter.format(discrepancyTotal)}
-          </p>
-          <p className="text-[11px] text-slate-500">
-            Fondos conciliados: {summary.balanced ?? 0} / {summary.totalFunds ?? reconciliation.length}
-          </p>
-        </div>
-      </header>
+    <div className="space-y-8">
+      <PageHeader
+        title="Resumen de saldos por fondo"
+        subtitle="Conciliación del tesoro nacional"
+      />
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 rounded-lg border border-indigo-100 bg-white px-3 py-2 text-sm text-slate-600 shadow-sm">
-          <span className="font-semibold text-indigo-500">Fondo</span>
+      <div className="absd-grid">
+        {metrics.map((metric) => (
+          <MetricCard
+            key={metric.label}
+            label={metric.label}
+            value={metric.value}
+            description={metric.description}
+            tone={metric.tone}
+          />
+        ))}
+      </div>
+
+      <Toolbar variant="filters">
+        <FormField htmlFor="reconciliation-fund" label="Fondo">
           <select
+            id="reconciliation-fund"
             value={selectedFund}
             onChange={(event) => setSelectedFund(event.target.value)}
-            className="rounded-lg border border-indigo-200 px-2 py-1 text-sm focus:border-indigo-400 focus:outline-none"
+            className={filterSelectClasses}
           >
             <option value="all">Todos</option>
             {funds.map((fund) => (
@@ -124,60 +141,66 @@ export function ReconciliationView() {
               </option>
             ))}
           </select>
-        </div>
-      </div>
+        </FormField>
+      </Toolbar>
 
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Fondo</th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Saldo almacenado
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Saldo calculado
-              </th>
-              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Diferencia
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Movimientos
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Estado
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {reconciliation.map((row) => (
-              <tr key={row.id} className="hover:bg-indigo-50/30">
-                <td className="px-4 py-3 text-sm font-semibold text-slate-800">{row.name}</td>
-                <td className="px-4 py-3 text-right text-sm text-slate-600">
-                  {currencyFormatter.format(Number(row.stored_balance ?? 0))}
-                </td>
-                <td className="px-4 py-3 text-right text-sm text-slate-600">
-                  {currencyFormatter.format(Number(row.calculated_balance ?? 0))}
-                </td>
-                <td
-                  className={`px-4 py-3 text-right text-sm font-semibold ${
-                    Number(row.difference ?? 0) === 0 ? 'text-emerald-600' : 'text-rose-600'
-                  }`}
-                >
-                  {currencyFormatter.format(Number(row.difference ?? 0))}
-                </td>
-                <td className="px-4 py-3 text-xs text-slate-500">
-                  {row.transaction_count ?? 0} movimientos — último{' '}
-                  {row.last_transaction
-                    ? format(new Date(row.last_transaction), 'dd MMM yyyy', { locale: es })
-                    : 'sin registros'}
-                </td>
-                <td className="px-4 py-3">{statusTag(String(row.status ?? 'desconocido'))}</td>
+      <SectionCard
+        title="Detalle de conciliación"
+        description={`Fondos conciliados: ${summary.balanced ?? 0} / ${summary.totalFunds ?? reconciliation.length}`}
+        padding="lg"
+      >
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-[var(--absd-border)]">
+            <thead className="bg-[color-mix(in_oklab,var(--absd-authority) 6%,white)]">
+              <tr>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">Fondo</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">
+                  Saldo almacenado
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">
+                  Saldo calculado
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">
+                  Diferencia
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">
+                  Movimientos
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">
+                  Estado
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody className="divide-y divide-[var(--absd-border)] bg-[var(--absd-surface)]">
+              {reconciliation.map((row) => (
+                <tr key={row.id} className="transition hover:bg-[color-mix(in_oklab,var(--absd-authority) 6%,white)]">
+                  <td className="px-4 py-3 text-sm font-semibold text-[var(--absd-ink)]">{row.name}</td>
+                  <td className="px-4 py-3 text-right text-sm text-[rgba(15,23,42,0.7)]">
+                    {currencyFormatter.format(Number(row.stored_balance ?? 0))}
+                  </td>
+                  <td className="px-4 py-3 text-right text-sm text-[rgba(15,23,42,0.7)]">
+                    {currencyFormatter.format(Number(row.calculated_balance ?? 0))}
+                  </td>
+                  <td
+                    className={`px-4 py-3 text-right text-sm font-semibold ${
+                      Number(row.difference ?? 0) === 0 ? 'text-[var(--absd-success)]' : 'text-[var(--absd-error)]'
+                    }`}
+                  >
+                    {currencyFormatter.format(Number(row.difference ?? 0))}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-[rgba(15,23,42,0.55)]">
+                    {row.transaction_count ?? 0} movimientos — último{' '}
+                    {row.last_transaction
+                      ? format(new Date(row.last_transaction), 'dd MMM yyyy', { locale: es })
+                      : 'sin registros'}
+                  </td>
+                  <td className="px-4 py-3">{statusTag(String(row.status ?? 'desconocido'))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </SectionCard>
     </div>
   );
 }

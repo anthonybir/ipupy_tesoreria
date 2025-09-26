@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAuthContext } from "@/lib/auth-context";
-import { execute } from "@/lib/db";
+import { getAuthContext, type AuthContext } from "@/lib/auth-context";
+import { executeWithContext } from "@/lib/db";
 import { setCORSHeaders } from "@/lib/cors";
 
 interface Donor {
@@ -60,6 +60,7 @@ type DonorAction = "donor" | "contribution";
 // GET /api/donors - Search and list donors
 async function handleGet(req: NextRequest) {
   try {
+    const auth = await getAuthContext(req);
     const { searchParams } = new URL(req.url);
     const action = searchParams.get("action") || "list";
     const church_id = searchParams.get("church_id");
@@ -68,19 +69,19 @@ async function handleGet(req: NextRequest) {
     const type = searchParams.get("type");
 
     if (action === "search" && search) {
-      return await searchDonors(search, church_id);
+      return await searchDonors(auth, search, church_id);
     }
 
     if (action === "summary" && donor_id) {
-      return await getDonorSummary(donor_id);
+      return await getDonorSummary(auth, donor_id);
     }
 
     if (action === "contributions" && donor_id) {
-      return await getDonorContributions(donor_id);
+      return await getDonorContributions(auth, donor_id);
     }
 
     // Default: list donors
-    return await listDonors(church_id, type);
+    return await listDonors(auth, church_id, type);
   } catch (error) {
     console.error("Error in donors GET:", error);
     const response = NextResponse.json(
@@ -93,7 +94,7 @@ async function handleGet(req: NextRequest) {
 }
 
 // List donors with optional filters
-async function listDonors(church_id: string | null, type: string | null) {
+async function listDonors(auth: AuthContext | null, church_id: string | null, type: string | null) {
   let query = `
     SELECT
       d.*,
@@ -122,7 +123,7 @@ async function listDonors(church_id: string | null, type: string | null) {
 
   query += ` GROUP BY d.id, c.name ORDER BY d.name ASC`;
 
-  const result = await execute(query, params);
+  const result = await executeWithContext(auth, query, params);
 
   const response = NextResponse.json({
     success: true,
@@ -135,7 +136,7 @@ async function listDonors(church_id: string | null, type: string | null) {
 }
 
 // Search donors by name, email, phone, or cedula
-async function searchDonors(searchTerm: string, church_id: string | null) {
+async function searchDonors(auth: AuthContext | null, searchTerm: string, church_id: string | null) {
   let query = `
     SELECT
       d.*,
@@ -164,7 +165,7 @@ async function searchDonors(searchTerm: string, church_id: string | null) {
 
   query += ` GROUP BY d.id, c.name ORDER BY d.name ASC LIMIT 20`;
 
-  const result = await execute(query, params);
+  const result = await executeWithContext(auth, query, params);
 
   const response = NextResponse.json({
     success: true,
@@ -177,9 +178,9 @@ async function searchDonors(searchTerm: string, church_id: string | null) {
 }
 
 // Get donor summary with contribution history
-async function getDonorSummary(donor_id: string) {
+async function getDonorSummary(auth: AuthContext | null, donor_id: string) {
   // Get donor details
-  const donorResult = await execute(
+  const donorResult = await executeWithContext(auth, 
     `SELECT d.*, c.name as church_name
      FROM donors d
      LEFT JOIN churches c ON d.church_id = c.id
@@ -196,7 +197,7 @@ async function getDonorSummary(donor_id: string) {
   const donor = donorResult.rows[0];
 
   // Get contribution summary by year
-  const yearlyContributions = await execute(
+  const yearlyContributions = await executeWithContext(auth, 
     `SELECT
       EXTRACT(YEAR FROM date) as year,
       COUNT(*) as count,
@@ -210,7 +211,7 @@ async function getDonorSummary(donor_id: string) {
   );
 
   // Get contribution summary by type
-  const contributionsByType = await execute(
+  const contributionsByType = await executeWithContext(auth, 
     `SELECT
       type,
       COUNT(*) as count,
@@ -223,7 +224,7 @@ async function getDonorSummary(donor_id: string) {
   );
 
   // Get recent contributions
-  const recentContributions = await execute(
+  const recentContributions = await executeWithContext(auth, 
     `SELECT *
      FROM contributions
      WHERE donor_id = $1
@@ -247,8 +248,8 @@ async function getDonorSummary(donor_id: string) {
 }
 
 // Get all contributions for a donor
-async function getDonorContributions(donor_id: string) {
-  const result = await execute(
+async function getDonorContributions(auth: AuthContext | null, donor_id: string) {
+  const result = await executeWithContext(auth, 
     `SELECT
       c.*,
       ch.name as church_name
@@ -289,11 +290,11 @@ async function handlePost(req: NextRequest) {
     const action = (typeof body.type === "string" ? body.type : "donor") as DonorAction;
 
     if (action === "contribution") {
-      return await createContribution(body as ContributionCreatePayload, user.email || "");
+      return await createContribution(user, body as ContributionCreatePayload, user.email || "");
     }
 
     // Create donor
-    return await createDonor(body as DonorCreatePayload, user.email || "");
+    return await createDonor(user, body as DonorCreatePayload, user.email || "");
   } catch (error) {
     console.error("Error in donors POST:", error);
     const response = NextResponse.json(
@@ -306,7 +307,7 @@ async function handlePost(req: NextRequest) {
 }
 
 // Create new donor
-async function createDonor(data: DonorCreatePayload, userEmail: string) {
+async function createDonor(auth: AuthContext | null, data: DonorCreatePayload, userEmail: string) {
   const required: Array<keyof DonorCreatePayload> = ["church_id", "name", "type"];
   for (const field of required) {
     if (data[field] === undefined || data[field] === null || data[field] === "") {
@@ -318,7 +319,7 @@ async function createDonor(data: DonorCreatePayload, userEmail: string) {
 
   // Check for duplicate cedula if provided
   if (data.cedula) {
-    const existing = await execute(
+    const existing = await executeWithContext(auth, 
       `SELECT id FROM donors WHERE cedula = $1 AND church_id = $2`,
       [data.cedula, data.church_id]
     );
@@ -330,7 +331,7 @@ async function createDonor(data: DonorCreatePayload, userEmail: string) {
     }
   }
 
-  const result = await execute<Donor>(
+  const result = await executeWithContext<Donor>(auth,
     `INSERT INTO donors (
       church_id, name, email, phone, address,
       cedula, type, active, created_by
@@ -359,7 +360,7 @@ async function createDonor(data: DonorCreatePayload, userEmail: string) {
 }
 
 // Create contribution
-async function createContribution(data: ContributionCreatePayload, userEmail: string) {
+async function createContribution(auth: AuthContext | null, data: ContributionCreatePayload, userEmail: string) {
   const required: Array<keyof ContributionCreatePayload> = [
     "donor_id",
     "church_id",
@@ -378,7 +379,7 @@ async function createContribution(data: ContributionCreatePayload, userEmail: st
   // Generate receipt number if not provided
   const receiptNumber = data.receipt_number ?? `REC-${data.church_id}-${Date.now().toString(36).toUpperCase()}`;
 
-  const result = await execute<Contribution>(
+  const result = await executeWithContext<Contribution>(auth,
     `INSERT INTO contributions (
       donor_id, church_id, date, amount, type,
       method, receipt_number, notes, created_by
@@ -424,7 +425,7 @@ async function handlePut(req: NextRequest) {
 
     if (contribution_id) {
       const payload = (await req.json()) as ContributionUpdatePayload;
-      return await updateContribution(contribution_id, payload);
+      return await updateContribution(user, contribution_id, payload);
     }
 
     if (!donor_id) {
@@ -434,7 +435,7 @@ async function handlePut(req: NextRequest) {
     }
 
     const payload = (await req.json()) as DonorUpdatePayload;
-    return await updateDonor(donor_id, payload);
+    return await updateDonor(user, donor_id, payload);
   } catch (error) {
     console.error("Error in donors PUT:", error);
     const response = NextResponse.json(
@@ -447,7 +448,7 @@ async function handlePut(req: NextRequest) {
 }
 
 // Update donor
-async function updateDonor(donor_id: string, data: DonorUpdatePayload) {
+async function updateDonor(auth: AuthContext | null, donor_id: string, data: DonorUpdatePayload) {
   const updates: string[] = [];
   const values: (string | number | boolean | null)[] = [];
   let paramCount = 0;
@@ -479,7 +480,7 @@ async function updateDonor(donor_id: string, data: DonorUpdatePayload) {
   updates.push(`updated_at = CURRENT_TIMESTAMP`);
   values.push(donor_id);
 
-  const result = await execute(
+  const result = await executeWithContext(auth, 
     `UPDATE donors SET ${updates.join(", ")} WHERE id = $${paramCount} RETURNING *`,
     values
   );
@@ -501,7 +502,7 @@ async function updateDonor(donor_id: string, data: DonorUpdatePayload) {
 }
 
 // Update contribution
-async function updateContribution(contribution_id: string, data: ContributionUpdatePayload) {
+async function updateContribution(auth: AuthContext | null, contribution_id: string, data: ContributionUpdatePayload) {
   const updates: string[] = [];
   const values: (string | number | null)[] = [];
   let paramCount = 0;
@@ -531,7 +532,7 @@ async function updateContribution(contribution_id: string, data: ContributionUpd
   paramCount++;
   values.push(contribution_id);
 
-  const result = await execute(
+  const result = await executeWithContext(auth, 
     `UPDATE contributions SET ${updates.join(", ")} WHERE id = $${paramCount} RETURNING *`,
     values
   );
@@ -567,7 +568,7 @@ async function handleDelete(req: NextRequest) {
     const contribution_id = searchParams.get("contribution_id");
 
     if (contribution_id) {
-      await execute(`DELETE FROM contributions WHERE id = $1`, [contribution_id]);
+      await executeWithContext(user, `DELETE FROM contributions WHERE id = $1`, [contribution_id]);
       const response = NextResponse.json({ success: true, message: "Contribution deleted" });
       setCORSHeaders(response);
       return response;
@@ -580,7 +581,7 @@ async function handleDelete(req: NextRequest) {
     }
 
     // Soft delete donor (mark as inactive)
-    await execute(`UPDATE donors SET active = false WHERE id = $1`, [donor_id]);
+    await executeWithContext(user, `UPDATE donors SET active = false WHERE id = $1`, [donor_id]);
 
     const response = NextResponse.json({ success: true, message: "Donor deactivated" });
     setCORSHeaders(response);

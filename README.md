@@ -19,7 +19,10 @@ Sistema integral de gestión de tesorería para la **Iglesia Pentecostal Unida d
 - 💰 **Cálculos Automáticos** - Fondo nacional (10%) y balances
 - 🏦 **Control Bancario** - Seguimiento de depósitos y transacciones
 - 📱 **Diseño Responsivo** - Optimizado para móviles y escritorio
-- 👥 **Sistema de Roles** - 8 niveles de acceso granular
+- 👥 **Sistema de Roles** - 6 roles simplificados y jerárquicos
+- ⚙️ **Panel de Configuración** - Sistema administrable de configuración
+- 🔒 **Seguridad Mejorada** - RLS con contexto de usuario robusto
+- 📋 **Transacciones ACID** - Integridad de datos garantizada
 
 ## 🚀 Inicio Rápido
 
@@ -58,12 +61,12 @@ Visitar [http://localhost:3000](http://localhost:3000)
 ### Stack Tecnológico
 
 - **Frontend**: Next.js 15 (App Router), React 19, TypeScript
-- **Styling**: Tailwind CSS 4, HeadlessUI
+- **Styling**: Tailwind CSS 4, shadcn/ui, Radix UI
 - **Backend**: Next.js API Routes (Serverless)
-- **Database**: PostgreSQL via Supabase
-- **Auth**: Supabase Auth con Google OAuth
+- **Database**: PostgreSQL via Supabase con custom pooling
+- **Auth**: Supabase Auth con Google OAuth + Magic Link
 - **Hosting**: Vercel
-- **State**: Zustand, React Query
+- **State**: React State + Custom hooks, TanStack Query v5
 
 ### Estructura del Proyecto
 
@@ -91,34 +94,46 @@ ipupy-tesoreria/
 - **Dominio Restringido**: Solo @ipupy.org.py
 - **Admin Principal**: administracion@ipupy.org.py
 
-### Roles del Sistema
+### Roles del Sistema (Simplificado v2.0)
 
-1. **super_admin** - Control total del sistema
-2. **admin** - Administradores de plataforma
-3. **district_supervisor** - Supervisores regionales
-4. **church_admin** - Líderes de iglesia
-5. **treasurer** - Tesoreros
-6. **secretary** - Secretarios
-7. **member** - Miembros
-8. **viewer** - Solo lectura
+El sistema se ha simplificado de 8 a 6 roles jerárquicos:
+
+1. **admin** - Administradores de plataforma (consolidado desde super_admin)
+2. **district_supervisor** - Supervisores regionales
+3. **pastor** - Líderes de iglesia (renombrado desde church_admin)
+4. **treasurer** - Tesoreros
+5. **secretary** - Secretarios
+6. **member** - Miembros (convertido desde viewer)
+
+**Roles Migrados (Migration 023):**
+- `super_admin` → `admin`
+- `church_admin` → `pastor`
+- `viewer` → `member`
 
 ### Seguridad
 
-- Row Level Security (RLS) en todas las tablas
+- Row Level Security (RLS) con contexto de usuario mejorado
+- `executeWithContext` para queries seguras con RLS
 - Autenticación server-side con middleware
 - Cookies httpOnly para sesiones
+- CORS estricto con dominios permitidos
 - HTTPS obligatorio en producción
+- Rate limiting en API routes
+- Audit trail completo con `user_activity`
 
 ## 📊 Base de Datos
 
 ### Tablas Principales
 
 - `churches` - 22 iglesias con información pastoral
-- `reports` - Reportes financieros mensuales
-- `profiles` - Perfiles de usuarios con roles
+- `monthly_reports` - Reportes financieros mensuales (expandido)
+- `profiles` - Perfiles de usuarios con 6 roles simplificados
+- `system_configuration` - Configuración administrable del sistema
+- `fund_balances` - Balances de fondos por iglesia
 - `fund_transactions` - Transacciones de fondos
 - `donors` - Registro de donantes
-- `user_activity` - Auditoría de actividades
+- `user_activity` - Auditoría completa de actividades
+- `role_permissions` - Matriz de permisos por rol
 
 ### Migraciones
 
@@ -147,14 +162,44 @@ npm run db:migrate
 
 Ver [`.env.example`](./.env.example) para la lista completa de variables requeridas.
 
+## 🆕 Novedades v2.0
+
+### Sistema de Configuración Administrable
+- **Panel Admin Completo**: Configuración por secciones (General, Financiera, Seguridad, etc.)
+- **Configuración en DB**: Almacenamiento persistente con `system_configuration`
+- **Audit Trail**: Seguimiento completo de cambios de configuración
+
+### Arquitectura de Base de Datos Mejorada
+- **executeWithContext**: Ejecución segura con contexto RLS
+- **executeTransaction**: Transacciones ACID para operaciones complejas
+- **Connection Pool Health**: Monitoreo y recuperación automática de conexiones
+- **Retry Logic**: Recuperación automática con backoff exponencial
+
+### Simplificación de Roles (Migration 023)
+- **6 Roles**: Simplificado desde 8 roles para mejor claridad
+- **Role Hierarchy**: Sistema jerárquico con niveles de permisos
+- **Permission Matrix**: Documentación clara de permisos por rol
+
+### Seguridad Reforzada
+- **RLS Context Fix**: Corrección crítica del fallback de autenticación
+- **CORS Security**: Restricción estricta de orígenes permitidos
+- **Environment Validation**: Validación de variables críticas al inicio
+
+### Experiencia de Usuario
+- **shadcn/ui**: Migración a componentes modernos con Radix UI
+- **TanStack Query v5**: Migration completa con nuevas APIs
+- **Type Safety**: Mejoras en TypeScript en toda la aplicación
+
 ## 📖 Documentación
 
 - [Guía de Inicio Rápido](./docs/QUICK_START.md)
 - [Arquitectura del Sistema](./docs/ARCHITECTURE.md)
-- [Guía de Configuración](./docs/SETUP_GUIDE.md)
+- **[Sistema de Configuración](./docs/CONFIGURATION.md)** ✨
+- **[Database Layer](./docs/DATABASE.md)** ✨
+- **[Seguridad y RLS](./docs/SECURITY.md)** ✨
 - [API Reference](./docs/API_REFERENCE.md)
 - [Guía de Desarrollo](./docs/DEVELOPER_GUIDE.md)
-- [Guía de Deployment](./docs/DEPLOYMENT.md)
+- [Historial de Migraciones](./docs/MIGRATION_HISTORY.md)
 
 ## 🛠 Desarrollo
 
