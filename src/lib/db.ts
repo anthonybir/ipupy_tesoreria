@@ -250,14 +250,19 @@ export const executeTransaction = async (
   ]);
 
   try {
-    // Set RLS context once for the entire transaction
+    // Set RLS context once for the entire transaction (batched for performance)
     if (authContext) {
-      await client.query("SELECT set_config('app.current_user_id', $1, true)",
-        [authContext.userId || '00000000-0000-0000-0000-000000000000']);
-      await client.query("SELECT set_config('app.current_user_role', $1, true)",
-        [authContext.role || '']);  // Empty string for unauthenticated users
-      await client.query("SELECT set_config('app.current_user_church_id', $1, true)",
-        [String(authContext.churchId || 0)]);
+      await client.query(
+        `SELECT
+          set_config('app.current_user_id', $1, true),
+          set_config('app.current_user_role', $2, true),
+          set_config('app.current_user_church_id', $3, true)`,
+        [
+          authContext.userId || '00000000-0000-0000-0000-000000000000',
+          authContext.role || '',
+          String(authContext.churchId || 0)
+        ]
+      );
     }
 
     // Start transaction
@@ -273,11 +278,14 @@ export const executeTransaction = async (
     await client.query('ROLLBACK');
     throw error;
   } finally {
-    // Clear context before releasing connection
+    // Clear context before releasing connection (batched for performance)
     if (authContext) {
-      await client.query("SELECT set_config('app.current_user_id', '00000000-0000-0000-0000-000000000000', true)");
-      await client.query("SELECT set_config('app.current_user_role', '', true)");
-      await client.query("SELECT set_config('app.current_user_church_id', '0', true)");
+      await client.query(
+        `SELECT
+          set_config('app.current_user_id', '00000000-0000-0000-0000-000000000000', true),
+          set_config('app.current_user_role', '', true),
+          set_config('app.current_user_church_id', '0', true)`
+      );
     }
     client.release();
   }
@@ -306,14 +314,19 @@ export const executeWithContext = async <T extends QueryResultRow = QueryResultR
       const { text, params: boundParams } = normalizeStatement(statement, params);
 
       try {
-        // Set RLS context BEFORE executing the query
+        // Set RLS context BEFORE executing the query (batched for performance)
         if (authContext) {
-          await client.query("SELECT set_config('app.current_user_id', $1, true)",
-            [authContext.userId || '00000000-0000-0000-0000-000000000000']);
-          await client.query("SELECT set_config('app.current_user_role', $1, true)",
-            [authContext.role || '']);  // Empty string for unauthenticated users
-          await client.query("SELECT set_config('app.current_user_church_id', $1, true)",
-            [String(authContext.churchId || 0)]);
+          await client.query(
+            `SELECT
+              set_config('app.current_user_id', $1, true),
+              set_config('app.current_user_role', $2, true),
+              set_config('app.current_user_church_id', $3, true)`,
+            [
+              authContext.userId || '00000000-0000-0000-0000-000000000000',
+              authContext.role || '',
+              String(authContext.churchId || 0)
+            ]
+          );
         }
 
         return await Promise.race([
@@ -323,11 +336,14 @@ export const executeWithContext = async <T extends QueryResultRow = QueryResultR
           })
         ]);
       } finally {
-        // Clear context before releasing connection
+        // Clear context before releasing connection (batched for performance)
         if (authContext) {
-          await client.query("SELECT set_config('app.current_user_id', '00000000-0000-0000-0000-000000000000', true)");
-          await client.query("SELECT set_config('app.current_user_role', '', true)");  // Clear to empty string
-          await client.query("SELECT set_config('app.current_user_church_id', '0', true)");
+          await client.query(
+            `SELECT
+              set_config('app.current_user_id', '00000000-0000-0000-0000-000000000000', true),
+              set_config('app.current_user_role', '', true),
+              set_config('app.current_user_church_id', '0', true)`
+          );
         }
         client.release();
       }
