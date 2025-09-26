@@ -1,11 +1,12 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { Button } from '@/components/ui/button';
 import { useCreateReport } from '@/hooks/useReportMutations';
 import { useChurches } from '@/hooks/useChurches';
+import { useLastReport } from '@/hooks/useReports';
 import type { CreateReportPayload } from '@/hooks/useReportMutations';
 import { FormField, FormSection } from '@/components/Shared';
 
@@ -177,10 +178,65 @@ export function ReportForm() {
   const createReport = useCreateReport();
   const { data: churches = [], isLoading: churchesLoading } = useChurches();
 
+  const selectedChurchId = form.church_id ? Number(form.church_id) : null;
+  const { data: lastReportData } = useLastReport(selectedChurchId);
+
   const filteredChurches = useMemo(
     () => [...churches].sort((a, b) => a.name.localeCompare(b.name, 'es')),
     [churches]
   );
+
+  useEffect(() => {
+    if (!selectedChurchId) {
+      return;
+    }
+
+    if (!lastReportData) {
+      return;
+    }
+
+    if (!lastReportData.lastReport) {
+      const now = new Date();
+      const fallbackMonth = String(now.getMonth() + 1);
+      const fallbackYear = String(now.getFullYear());
+
+      setForm((prev) => {
+        if (prev.month === fallbackMonth && prev.year === fallbackYear) {
+          return prev;
+        }
+        return {
+          ...prev,
+          month: fallbackMonth,
+          year: fallbackYear,
+        };
+      });
+      return;
+    }
+
+    const { year, month } = lastReportData.lastReport;
+
+    let nextMonth = month + 1;
+    let nextYear = year;
+
+    if (nextMonth > 12) {
+      nextMonth = 1;
+      nextYear = year + 1;
+    }
+
+    const nextMonthValue = String(nextMonth);
+    const nextYearValue = String(nextYear);
+
+    setForm((prev) => {
+      if (prev.month === nextMonthValue && prev.year === nextYearValue) {
+        return prev;
+      }
+      return {
+        ...prev,
+        month: nextMonthValue,
+        year: nextYearValue,
+      };
+    });
+  }, [selectedChurchId, lastReportData]);
 
   const totals = useMemo<ComputedTotals>(() => {
     const totalIngresos = [...baseIncomeFields, ...designatedIncomeFields].reduce(

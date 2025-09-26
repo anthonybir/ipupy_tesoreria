@@ -1197,6 +1197,33 @@ export async function GET(request: NextRequest) {
       return jsonResponse([], origin);
     }
 
+    const searchParams = request.nextUrl.searchParams;
+    const lastReportParam = searchParams.get('last_report');
+
+    if (lastReportParam === 'true') {
+      const churchIdParam = searchParams.get('church_id');
+      if (!churchIdParam) {
+        return jsonResponse({ error: 'church_id is required for last_report query' }, origin, 400);
+      }
+
+      const churchId = parseOptionalChurchId(churchIdParam);
+      if (churchId === null) {
+        return jsonResponse({ error: 'Invalid church_id' }, origin, 400);
+      }
+
+      const lastReportResult = await executeWithContext(
+        auth,
+        `SELECT year, month FROM reports WHERE church_id = $1 ORDER BY year DESC, month DESC LIMIT 1`,
+        [churchId]
+      );
+
+      if (lastReportResult.rows.length === 0) {
+        return jsonResponse({ lastReport: null }, origin);
+      }
+
+      return jsonResponse({ lastReport: lastReportResult.rows[0] }, origin);
+    }
+
     const rows = await handleGetReports(request, auth);
     return jsonResponse(rows, origin);
   } catch (error) {

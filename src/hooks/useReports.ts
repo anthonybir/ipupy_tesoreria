@@ -102,3 +102,23 @@ export function useReports(filters: ReportFilters) {
     refetchOnReconnect: true
   });
 }
+
+type LastReportResponse = {
+  lastReport: { year: number; month: number } | null;
+};
+
+export function useLastReport(churchId: number | null) {
+  return useQuery<LastReportResponse, Error>({
+    queryKey: ['last-report', churchId],
+    queryFn: async () => {
+      if (!churchId) {
+        return { lastReport: null };
+      }
+      const url = `/api/reports?last_report=true&church_id=${churchId}`;
+      return fetchJson<LastReportResponse>(url);
+    },
+    enabled: Boolean(churchId),
+    staleTime: 30 * 1000,
+    gcTime: 5 * 60 * 1000
+  });
+}
