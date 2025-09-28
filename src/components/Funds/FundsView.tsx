@@ -7,6 +7,7 @@ import { toast } from 'react-hot-toast';
 
 import { fetchJson } from '@/lib/api-client';
 import { useFunds } from '@/hooks/useFunds';
+import { useProfile } from '@/hooks/useProfile';
 import {
   DataTable,
   EmptyState,
@@ -62,6 +63,7 @@ export default function FundsView() {
   const [formState, setFormState] = useState<FundFormState>(defaultFormState);
   const [formMode, setFormMode] = useState<'create' | 'edit'>('create');
 
+  const { isReadOnly, isFundDirector } = useProfile();
   const fundsQuery = useFunds({ includeInactive });
   const fundCollection: FundCollection | undefined = fundsQuery.data;
   const funds = fundCollection?.records ?? [];
@@ -277,11 +279,17 @@ export default function FundsView() {
     <div className="space-y-8">
       <PageHeader
         title="Fondos nacionales"
-        subtitle="Gestiona los fondos disponibles, sus saldos y metas financieras."
+        subtitle={
+          isFundDirector
+            ? "Vista de solo lectura de fondos asignados"
+            : "Gestiona los fondos disponibles, sus saldos y metas financieras."
+        }
         actions={
-          <Button type="button" size="sm" onClick={openCreateForm}>
-            Crear fondo
-          </Button>
+          !isReadOnly ? (
+            <Button type="button" size="sm" onClick={openCreateForm}>
+              Crear fondo
+            </Button>
+          ) : undefined
         }
       />
 
@@ -357,9 +365,11 @@ export default function FundsView() {
             icon={<span aria-hidden>💰</span>}
             tone="info"
             action={
-              <Button type="button" size="sm" onClick={openCreateForm}>
-                Crear fondo
-              </Button>
+              !isReadOnly ? (
+                <Button type="button" size="sm" onClick={openCreateForm}>
+                  Crear fondo
+                </Button>
+              ) : undefined
             }
             fullHeight
           />
@@ -386,14 +396,14 @@ export default function FundsView() {
       <FundDetailsSheet
         fund={selectedFund}
         onClose={() => setSelectedFund(null)}
-        onEdit={(fund) => {
+        onEdit={!isReadOnly ? (fund) => {
           if (!fund) {
             return;
           }
           openEditForm(fund);
-        }}
-        onToggleActive={handleToggleActive}
-        onDelete={handleDeleteFund}
+        } : undefined}
+        onToggleActive={!isReadOnly ? handleToggleActive : undefined}
+        onDelete={!isReadOnly ? handleDeleteFund : undefined}
       />
     </div>
   );
@@ -571,9 +581,9 @@ function FundFormModal({ open, mode, data, onChange, onClose, onSubmit }: FundFo
 type FundDetailsSheetProps = {
   fund: FundRecord | null;
   onClose: () => void;
-  onEdit: (fund: FundRecord | null) => void;
-  onToggleActive: (fund: FundRecord) => void;
-  onDelete: (fund: FundRecord) => void;
+  onEdit?: (fund: FundRecord | null) => void;
+  onToggleActive?: (fund: FundRecord) => void;
+  onDelete?: (fund: FundRecord) => void;
 };
 
 function FundDetailsSheet({ fund, onClose, onEdit, onToggleActive, onDelete }: FundDetailsSheetProps) {
@@ -663,29 +673,37 @@ function FundDetailsSheet({ fund, onClose, onEdit, onToggleActive, onDelete }: F
                           <span>Actualizado: {formatDate(fund.status.updatedAt)}</span>
                         </div>
 
-                        <div className="flex flex-col gap-3 pt-4">
-                          <button
-                            type="button"
-                            onClick={() => onEdit(fund)}
-                            className="w-full rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-indigo-500 hover:text-indigo-600"
-                          >
-                            Editar fondo
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onToggleActive(fund)}
-                            className="w-full rounded-full border border-indigo-500 px-4 py-2 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-50"
-                          >
-                            {fund.status.isActive ? 'Desactivar' : 'Activar'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onDelete(fund)}
-                            className="w-full rounded-full bg-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-600"
-                          >
-                            Eliminar
-                          </button>
-                        </div>
+                        {(onEdit || onToggleActive || onDelete) && (
+                          <div className="flex flex-col gap-3 pt-4">
+                            {onEdit && (
+                              <button
+                                type="button"
+                                onClick={() => onEdit(fund)}
+                                className="w-full rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-indigo-500 hover:text-indigo-600"
+                              >
+                                Editar fondo
+                              </button>
+                            )}
+                            {onToggleActive && (
+                              <button
+                                type="button"
+                                onClick={() => onToggleActive(fund)}
+                                className="w-full rounded-full border border-indigo-500 px-4 py-2 text-sm font-semibold text-indigo-600 transition hover:bg-indigo-50"
+                              >
+                                {fund.status.isActive ? 'Desactivar' : 'Activar'}
+                              </button>
+                            )}
+                            {onDelete && (
+                              <button
+                                type="button"
+                                onClick={() => onDelete(fund)}
+                                className="w-full rounded-full bg-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-600"
+                              >
+                                Eliminar
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ) : null}
                   </div>

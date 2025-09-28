@@ -310,6 +310,13 @@ const ConfigurationPage = () => {
         editable: true,
       },
       {
+        id: 'fund_director',
+        name: 'Director de Fondos',
+        description: 'Acceso de solo lectura a fondos asignados',
+        permissions: ['funds.view.assigned', 'transactions.view.assigned', 'reports.view.assigned'],
+        editable: false,
+      },
+      {
         id: 'member',
         name: 'Miembro',
         description: 'Acceso básico de solo lectura',

@@ -9,6 +9,7 @@ import { fetchJson } from '@/lib/api-client';
 import { useFunds } from '@/hooks/useFunds';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useChurches } from '@/hooks/useChurches';
+import { useProfile } from '@/hooks/useProfile';
 import { DataTable } from '@/components/Shared/DataTable';
 import { LoadingState } from '@/components/Shared/LoadingState';
 import { ErrorState } from '@/components/Shared/ErrorState';
@@ -128,6 +129,7 @@ export default function TransactionsView() {
   const [formMode, setFormMode] = useState<FormMode>('create');
   const [formData, setFormData] = useState<TransactionFormData>(() => defaultFormState());
 
+  const { isReadOnly } = useProfile();
   const queryFilters = useMemo(
     () => buildTransactionFilters(filters, offset),
     [filters, offset],
@@ -374,13 +376,15 @@ export default function TransactionsView() {
               solo lugar.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={handleOpenCreate}
-            className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
-          >
-            Registrar transacción
-          </button>
+          {!isReadOnly && (
+            <button
+              type="button"
+              onClick={handleOpenCreate}
+              className="rounded-full bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+            >
+              Registrar transacción
+            </button>
+          )}
         </div>
       </div>
 
@@ -517,13 +521,15 @@ export default function TransactionsView() {
             description="Ajusta los filtros o registra una nueva transacción para comenzar."
             icon={<span>💳</span>}
             action={
-              <button
-                type="button"
-                onClick={handleOpenCreate}
-                className="rounded-full bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700"
-              >
-                Registrar transacción
-              </button>
+              !isReadOnly ? (
+                <button
+                  type="button"
+                  onClick={handleOpenCreate}
+                  className="rounded-full bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-700"
+                >
+                  Registrar transacción
+                </button>
+              ) : undefined
             }
             fullHeight
           />
@@ -605,14 +611,14 @@ export default function TransactionsView() {
       <TransactionDetailsSheet
         transaction={selectedTransaction}
         onClose={() => setSelectedTransaction(null)}
-        onEdit={(transaction) => {
+        onEdit={!isReadOnly ? (transaction) => {
           if (!transaction) {
             return;
           }
           setSelectedTransaction(null);
           handleOpenEdit(transaction);
-        }}
-        onDelete={(transaction) => handleDeleteTransaction(transaction)}
+        } : undefined}
+        onDelete={!isReadOnly ? (transaction) => handleDeleteTransaction(transaction) : undefined}
       />
     </div>
   );
@@ -886,8 +892,8 @@ function TransactionFormModal({
 type TransactionDetailsSheetProps = {
   transaction: TransactionRecord | null;
   onClose: () => void;
-  onEdit: (transaction: TransactionRecord | null) => void;
-  onDelete: (transaction: TransactionRecord) => void;
+  onEdit?: (transaction: TransactionRecord | null) => void;
+  onDelete?: (transaction: TransactionRecord) => void;
 };
 
 function TransactionDetailsSheet({
@@ -1031,22 +1037,28 @@ function TransactionDetailsSheet({
                           ) : null}
                         </dl>
 
-                        <div className="flex justify-between gap-3 pt-4">
-                          <button
-                            type="button"
-                            onClick={() => onEdit(transaction)}
-                            className="flex-1 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-indigo-500 hover:text-indigo-600"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => onDelete(transaction)}
-                            className="flex-1 rounded-full bg-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-600"
-                          >
-                            Eliminar
-                          </button>
-                        </div>
+                        {(onEdit || onDelete) && (
+                          <div className="flex justify-between gap-3 pt-4">
+                            {onEdit && (
+                              <button
+                                type="button"
+                                onClick={() => onEdit(transaction)}
+                                className="flex-1 rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:border-indigo-500 hover:text-indigo-600"
+                              >
+                                Editar
+                              </button>
+                            )}
+                            {onDelete && (
+                              <button
+                                type="button"
+                                onClick={() => onDelete(transaction)}
+                                className="flex-1 rounded-full bg-rose-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-600"
+                              >
+                                Eliminar
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ) : null}
                   </div>

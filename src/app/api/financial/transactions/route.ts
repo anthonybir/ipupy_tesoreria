@@ -153,6 +153,12 @@ async function handlePost(req: NextRequest) {
       return response;
     }
 
+    if (user.role === 'fund_director') {
+      const response = NextResponse.json({ error: "Fund directors have read-only access" }, { status: 403 });
+      setCORSHeaders(response);
+      return response;
+    }
+
     const body = await req.json();
     const transactions = Array.isArray(body) ? body : [body];
 
@@ -255,6 +261,12 @@ async function handlePut(req: NextRequest) {
     const user = await getAuthContext(req);
     if (!user) {
       const response = NextResponse.json({ error: "Authentication required" }, { status: 401 });
+      setCORSHeaders(response);
+      return response;
+    }
+
+    if (user.role === 'fund_director') {
+      const response = NextResponse.json({ error: "Fund directors have read-only access" }, { status: 403 });
       setCORSHeaders(response);
       return response;
     }
@@ -382,6 +394,12 @@ async function handleDelete(req: NextRequest) {
     const user = await getAuthContext(req);
     if (!user) {
       const response = NextResponse.json({ error: "Authentication required" }, { status: 401 });
+      setCORSHeaders(response);
+      return response;
+    }
+
+    if (user.role === 'fund_director') {
+      const response = NextResponse.json({ error: "Fund directors have read-only access" }, { status: 403 });
       setCORSHeaders(response);
       return response;
     }

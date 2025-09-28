@@ -12,6 +12,8 @@ export type AuthContext = {
   permissions?: Record<string, boolean | string | number>;
   preferredLanguage?: string;
   isProfileComplete?: boolean;
+  assignedFunds?: number[];
+  assignedChurches?: number[];
 };
 
 /**
@@ -54,7 +56,7 @@ export const getAuthContext = async (_request?: NextRequest): Promise<AuthContex
   // Update last seen timestamp
   await supabase.rpc('update_last_seen');
 
-  return {
+  const authContext: AuthContext = {
     userId: profile.id,
     email: profile.email,
     role: profile.role || 'viewer',
@@ -66,6 +68,25 @@ export const getAuthContext = async (_request?: NextRequest): Promise<AuthContex
     preferredLanguage: profile.preferred_language || 'es',
     isProfileComplete: !!(profile.full_name && profile.phone)
   };
+
+  // Fetch fund director assignments if applicable
+  if (profile.role === 'fund_director') {
+    const { data: assignments } = await supabase
+      .from('fund_director_assignments')
+      .select('fund_id, church_id')
+      .eq('profile_id', user.id);
+
+    if (assignments) {
+      authContext.assignedFunds = assignments
+        .filter(a => a.fund_id !== null)
+        .map(a => a.fund_id as number);
+      authContext.assignedChurches = assignments
+        .filter(a => a.church_id !== null)
+        .map(a => a.church_id as number);
+    }
+  }
+
+  return authContext;
 };
 
 /**
@@ -81,11 +102,11 @@ export const requireAuth = async (request?: NextRequest): Promise<AuthContext> =
 };
 
 /**
- * Check if user has admin role (including super_admin)
+ * Check if user has admin role
  */
 export const requireAdmin = async (request?: NextRequest): Promise<AuthContext> => {
   const context = await requireAuth(request);
-  if (!['admin', 'super_admin'].includes(context.role)) {
+  if (context.role !== 'admin') {
     throw new Error('Permisos de administrador requeridos');
   }
   return context;
@@ -95,11 +116,40 @@ export const requireAdmin = async (request?: NextRequest): Promise<AuthContext> 
  * Check if user has specific permission
  */
 export const hasPermission = (context: AuthContext, permission: string): boolean => {
-  // Super admins have all permissions
-  if (context.role === 'super_admin') return true;
+  // Admins have all permissions
+  if (context.role === 'admin') return true;
 
   // Check specific permission in permissions object
   return context.permissions?.[permission] === true;
+};
+
+/**
+ * Check if user is a fund director
+ */
+export const isFundDirector = (context: AuthContext): boolean => {
+  return context.role === 'fund_director';
+};
+
+/**
+ * Check if fund director has access to specific fund
+ */
+export const hasFundAccess = (context: AuthContext, fundId: number): boolean => {
+  if (context.role === 'admin' || context.role === 'treasurer') return true;
+  if (context.role === 'fund_director') {
+    return context.assignedFunds?.includes(fundId) ?? false;
+  }
+  return true;
+};
+
+/**
+ * Check if fund director has access to specific church
+ */
+export const hasChurchAccess = (context: AuthContext, churchId: number): boolean => {
+  if (context.role === 'admin' || context.role === 'treasurer') return true;
+  if (context.role === 'fund_director') {
+    return context.assignedChurches?.includes(churchId) ?? false;
+  }
+  return true;
 };
 
 /**
@@ -112,14 +162,19 @@ export const isSystemOwner = (email: string): boolean =>
  * Check if user can access a specific church
  */
 export const canAccessChurch = (context: AuthContext, churchId: number): boolean => {
-  // Super admins and admins can access all churches
-  if (['super_admin', 'admin', 'district_supervisor'].includes(context.role)) {
+  // Tier 1: Unrestricted cross-church access
+  if (['admin', 'district_supervisor'].includes(context.role)) {
     return true;
   }
 
-  // Church-specific roles can only access their assigned church
-  if (['church_admin', 'treasurer', 'secretary'].includes(context.role) && context.churchId === churchId) {
-    return true;
+  // Tier 2: Fund directors check explicit assignments
+  if (context.role === 'fund_director') {
+    return context.assignedChurches?.includes(churchId) ?? false;
+  }
+
+  // Tier 3: Church-scoped roles (own church only)
+  if (['pastor', 'treasurer', 'secretary'].includes(context.role)) {
+    return context.churchId === churchId;
   }
 
   return false;

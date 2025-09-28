@@ -1,0 +1,97 @@
+import { useEffect, useState } from 'react';
+import { useAuth } from '@/components/Auth/SupabaseAuthProvider';
+import { createClient } from '@/lib/supabase/client';
+
+export type UserProfile = {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: string;
+  church_id: number | null;
+  phone: string | null;
+  avatar_url: string | null;
+  permissions: Record<string, boolean | string | number> | null;
+  preferred_language: string | null;
+  is_active: boolean;
+  assigned_funds?: number[];
+  assigned_churches?: number[];
+};
+
+export function useProfile() {
+  const { user, loading: authLoading } = useAuth();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    if (authLoading) return;
+
+    if (!user) {
+      setProfile(null);
+      setLoading(false);
+      return;
+    }
+
+    const fetchProfile = async () => {
+      try {
+        const supabase = createClient();
+
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (profileError) throw profileError;
+
+        let assignedFunds: number[] = [];
+        let assignedChurches: number[] = [];
+
+        if (profileData.role === 'fund_director') {
+          const { data: assignments } = await supabase
+            .from('fund_director_assignments')
+            .select('fund_id, church_id')
+            .eq('profile_id', user.id);
+
+          if (assignments) {
+            assignedFunds = assignments
+              .filter(a => a.fund_id !== null)
+              .map(a => a.fund_id as number);
+            assignedChurches = assignments
+              .filter(a => a.church_id !== null)
+              .map(a => a.church_id as number);
+          }
+        }
+
+        setProfile({
+          ...profileData,
+          assigned_funds: assignedFunds,
+          assigned_churches: assignedChurches,
+        });
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching profile:', err);
+        setError(err instanceof Error ? err : new Error('Unknown error'));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, [user, authLoading]);
+
+  const isAdmin = profile?.role === 'admin';
+  const isTreasurer = profile?.role === 'treasurer';
+  const isFundDirector = profile?.role === 'fund_director';
+  const isReadOnly = isFundDirector;
+
+  return {
+    profile,
+    loading,
+    error,
+    isAdmin,
+    isTreasurer,
+    isFundDirector,
+    isReadOnly,
+  };
+}
