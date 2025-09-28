@@ -6,6 +6,8 @@ import { PlusIcon, MinusIcon } from '@heroicons/react/24/outline';
 
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { rawValueToNumber } from '@/lib/utils/currency';
+import { ProviderSelector } from '@/components/Providers/ProviderSelector';
+import { Provider } from '@/hooks/useProviders';
 
 interface ExternalTransactionFormProps {
   funds: Array<{ id: number; name: string }>;
@@ -21,6 +23,7 @@ interface TransactionData {
   date: string;
   provider?: string;
   document_number?: string;
+  provider_id?: number;
 }
 
 export default function ExternalTransactionForm({
@@ -30,6 +33,7 @@ export default function ExternalTransactionForm({
 }: ExternalTransactionFormProps) {
   const [isIncome, setIsIncome] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
   const [formData, setFormData] = useState<TransactionData>({
     fund_id: funds[0]?.id || 1,
     concept: '',
@@ -54,11 +58,13 @@ export default function ExternalTransactionForm({
 
       await onSubmit({
         ...data,
-        provider: formData.provider?.trim() || undefined,
+        provider_id: selectedProvider?.id,
+        provider: selectedProvider?.nombre || formData.provider?.trim() || undefined,
         document_number: formData.document_number?.trim() || undefined
       });
 
       // Reset form
+      setSelectedProvider(null);
       setFormData({
         fund_id: funds[0]?.id || 1,
         concept: '',
@@ -181,18 +187,22 @@ export default function ExternalTransactionForm({
           />
         </div>
 
-        {/* Provider Name (optional) */}
+        {/* Provider Selector */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Proveedor/Beneficiario (opcional)
+            Proveedor/Beneficiario
           </label>
-          <input
-            type="text"
-            value={formData.provider}
-            onChange={(e) => setFormData(prev => ({ ...prev, provider: e.target.value }))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
-            placeholder="Nombre del proveedor o beneficiario"
+          <ProviderSelector
+            value={selectedProvider}
+            onChange={setSelectedProvider}
+            placeholder="Buscar por nombre o RUC..."
           />
+          {selectedProvider && (
+            <p className="mt-1 text-xs text-gray-500">
+              RUC: {selectedProvider.ruc}
+              {selectedProvider.categoria && ` • ${selectedProvider.categoria}`}
+            </p>
+          )}
         </div>
 
         {/* Reference Number (optional) */}

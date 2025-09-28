@@ -62,17 +62,21 @@ export async function GET(request: NextRequest) {
       ? `WHERE ${conditions.join(' AND ')}`
       : '';
 
-    // Get transactions with fund and church details
+    // Get transactions with fund, church, and provider details
     params.push(limit, offset);
     const result = await executeWithContext(auth, `
       SELECT
         t.*,
         f.name as fund_name,
         c.name as church_name,
+        p.nombre as provider_name,
+        p.ruc as provider_ruc,
+        p.categoria as provider_categoria,
         (SUM(t.amount_in - t.amount_out) OVER (ORDER BY t.date, t.id)) as running_balance
       FROM transactions t
       LEFT JOIN funds f ON t.fund_id = f.id
       LEFT JOIN churches c ON t.church_id = c.id
+      LEFT JOIN providers p ON t.provider_id = p.id
       ${whereClause}
       ORDER BY t.date DESC, t.id DESC
       LIMIT $${params.length - 1}
@@ -127,15 +131,16 @@ export async function POST(request: NextRequest) {
       // Insert transaction
       const result = await executeWithContext(auth, `
         INSERT INTO transactions (
-          fund_id, concept, provider, document_number,
+          fund_id, concept, provider, provider_id, document_number,
           amount_in, amount_out, date, created_by, created_at
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, 'treasurer', NOW()
+          $1, $2, $3, $4, $5, $6, $7, $8, 'treasurer', NOW()
         ) RETURNING *
       `, [
         fund_id,
         concept,
         provider ?? null,
+        data.provider_id ?? null,
         document_number ?? null,
         amount_in,
         amount_out,

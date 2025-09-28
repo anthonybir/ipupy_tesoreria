@@ -14,6 +14,7 @@ import {
   Bars3Icon,
   XMarkIcon,
   Cog6ToothIcon,
+  UserGroupIcon,
 } from "@heroicons/react/24/outline";
 
 import { useAuth } from "@/components/Auth/SupabaseAuthProvider";
@@ -52,6 +53,11 @@ const NAVIGATION: NavItem[] = [
     icon: CalendarIcon,
   },
   {
+    name: "Proveedores",
+    href: "/providers",
+    icon: UserGroupIcon,
+  },
+  {
     name: "Iglesias",
     href: "/churches",
     icon: BuildingLibraryIcon,
@@ -80,6 +86,9 @@ export default function MainNav() {
     let items = NAVIGATION.filter(item => {
       if (item.name === 'Eventos') {
         return role === 'admin' || role === 'treasurer' || role === 'fund_director';
+      }
+      if (item.name === 'Proveedores') {
+        return role === 'admin' || role === 'treasurer';
       }
       return true;
     });

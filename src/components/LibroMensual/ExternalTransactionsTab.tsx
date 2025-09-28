@@ -25,6 +25,9 @@ type AdminTransaction = {
   amount_out: number;
   created_by?: string | null;
   provider?: string | null;
+  provider_name?: string | null;
+  provider_ruc?: string | null;
+  provider_categoria?: string | null;
   document_number?: string | null;
 };
 
@@ -76,6 +79,9 @@ export function ExternalTransactionsTab({ funds }: ExternalTransactionsTabProps)
       amount_out: Number(row.amount_out ?? 0),
       created_by: row.created_by ? String(row.created_by) : undefined,
       provider: row.provider ? String(row.provider) : undefined,
+      provider_name: row.provider_name ? String(row.provider_name) : undefined,
+      provider_ruc: row.provider_ruc ? String(row.provider_ruc) : undefined,
+      provider_categoria: row.provider_categoria ? String(row.provider_categoria) : undefined,
       document_number: row.document_number ? String(row.document_number) : undefined,
     }));
   }, [rawTransactions]);
@@ -141,8 +147,11 @@ export function ExternalTransactionsTab({ funds }: ExternalTransactionsTabProps)
                     <td className="px-4 py-3 text-sm font-medium text-slate-800">
                       <div className="flex flex-col">
                         <span>{txn.concept}</span>
-                        {txn.provider ? (
-                          <span className="text-xs text-slate-500">Proveedor: {txn.provider}</span>
+                        {(txn.provider_name || txn.provider) ? (
+                          <span className="text-xs text-slate-500">
+                            Proveedor: {txn.provider_name || txn.provider}
+                            {txn.provider_ruc && ` (RUC: ${txn.provider_ruc})`}
+                          </span>
                         ) : null}
                         {txn.document_number ? (
                           <span className="text-xs text-slate-400">Comprobante: {txn.document_number}</span>
