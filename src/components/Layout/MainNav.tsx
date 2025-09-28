@@ -17,6 +17,7 @@ import {
 } from "@heroicons/react/24/outline";
 
 import { useAuth } from "@/components/Auth/SupabaseAuthProvider";
+import { useProfile } from "@/hooks/useProfile";
 
 type NavItem = {
   name: string;
@@ -65,12 +66,11 @@ const NAVIGATION: NavItem[] = [
 export default function MainNav() {
   const pathname = usePathname();
   const { user } = useAuth();
+  const { profile } = useProfile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const items = useMemo(() => {
-    const role = (user?.app_metadata?.role ?? user?.user_metadata?.role ?? user?.role) as
-      | string
-      | undefined;
+    const role = profile?.role;
 
     let items = NAVIGATION.filter(item => {
       if (item.name === 'Eventos') {
@@ -84,7 +84,7 @@ export default function MainNav() {
     }
 
     return items;
-  }, [user?.app_metadata?.role, user?.user_metadata?.role, user?.role]);
+  }, [profile?.role]);
 
   const toggleMobileMenu = () => setMobileMenuOpen((open) => !open);
 
