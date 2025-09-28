@@ -26,3 +26,27 @@ export function StatusPill({ children, tone = "neutral", icon }: StatusPillProps
     </span>
   );
 }
+
+export type EventStatus = 'draft' | 'pending_revision' | 'submitted' | 'approved' | 'rejected' | 'cancelled';
+
+const eventStatusConfig: Record<EventStatus, { label: string; tone: StatusPillTone }> = {
+  draft: { label: 'Borrador', tone: 'neutral' },
+  pending_revision: { label: 'Requiere Revisión', tone: 'warning' },
+  submitted: { label: 'Pendiente', tone: 'info' },
+  approved: { label: 'Aprobado', tone: 'success' },
+  rejected: { label: 'Rechazado', tone: 'critical' },
+  cancelled: { label: 'Cancelado', tone: 'neutral' },
+};
+
+export type EventStatusPillProps = {
+  status: EventStatus;
+};
+
+export function EventStatusPill({ status }: EventStatusPillProps) {
+  const config = eventStatusConfig[status];
+  return (
+    <StatusPill tone={config.tone}>
+      {config.label}
+    </StatusPill>
+  );
+}

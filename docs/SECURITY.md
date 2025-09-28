@@ -132,6 +132,54 @@ $$;
 'events.view' -> 'own'
 ```
 
+### Fund Director Role (Migration 025)
+
+The fund_director role was added to enable designated users to plan and manage events for specific funds.
+
+**Scope**: Assigned fund(s) only
+**Permissions**:
+```sql
+'events.create' -> 'assigned'       -- Create events for assigned funds
+'events.edit' -> 'own_draft'        -- Edit own draft/pending_revision events
+'events.view' -> 'assigned'         -- View events in assigned funds
+'funds.view' -> 'assigned'          -- View assigned fund details
+'churches.view' -> 'assigned'       -- View churches in assigned funds
+```
+
+**Database Functions**:
+```sql
+CREATE OR REPLACE FUNCTION app_user_is_fund_director()
+RETURNS BOOLEAN
+LANGUAGE SQL
+STABLE
+AS $$
+  SELECT app_current_user_role() = 'fund_director';
+$$;
+
+CREATE OR REPLACE FUNCTION app_user_has_fund_access(p_fund_id INTEGER)
+RETURNS BOOLEAN
+LANGUAGE SQL
+STABLE
+AS $$
+  SELECT
+    app_current_user_role() = 'admin' OR
+    (app_current_user_role() = 'fund_director' AND p_fund_id = ANY(app_user_assigned_funds()));
+$$;
+
+CREATE OR REPLACE FUNCTION app_user_assigned_funds()
+RETURNS INTEGER[]
+LANGUAGE SQL
+STABLE
+AS $$
+  SELECT COALESCE(
+    (SELECT assigned_fund_ids
+     FROM profiles
+     WHERE id = app_current_user_id()),
+    ARRAY[]::INTEGER[]
+  );
+$$;
+```
+
 ### Role Management Functions
 
 ```sql
@@ -278,6 +326,257 @@ CREATE POLICY "profiles_access" ON profiles
     id = app_current_user_id() OR  -- Users manage their own profile
     (app_user_is_church_manager() AND church_id = app_current_user_church_id())  -- Church managers manage their church users
   );
+```
+
+### Fund Events RLS Policies (Migration 026)
+
+The fund events system implements comprehensive RLS policies to ensure proper access control throughout the event lifecycle.
+
+#### Fund Events Table RLS
+
+```sql
+-- Policy: Fund directors can manage their draft/pending events
+CREATE POLICY "Fund directors manage draft events"
+ON fund_events FOR ALL TO authenticated
+USING (
+  (app_user_is_fund_director() AND app_user_has_fund_access(fund_id) AND status IN ('draft', 'pending_revision'))
+  OR app_current_user_role() IN ('admin', 'treasurer')
+);
+
+-- Policy: View access for all authenticated users (filtered by fund access)
+CREATE POLICY "Fund events read access"
+ON fund_events FOR SELECT TO authenticated
+USING (
+  app_current_user_role() = 'admin'
+  OR (app_user_is_fund_director() AND app_user_has_fund_access(fund_id))
+  OR app_current_user_role() = 'treasurer'
+);
+```
+
+#### Fund Event Budget Items RLS
+
+```sql
+-- Budget items inherit access from parent event
+CREATE POLICY "Budget items follow event access"
+ON fund_event_budget_items FOR ALL TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM fund_events
+    WHERE id = event_id
+      AND (
+        (app_user_is_fund_director() AND app_user_has_fund_access(fund_id) AND status IN ('draft', 'pending_revision'))
+        OR app_current_user_role() IN ('admin', 'treasurer')
+      )
+  )
+);
+
+CREATE POLICY "Budget items read access"
+ON fund_event_budget_items FOR SELECT TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM fund_events
+    WHERE id = event_id
+      AND (
+        app_current_user_role() = 'admin'
+        OR (app_user_is_fund_director() AND app_user_has_fund_access(fund_id))
+        OR app_current_user_role() = 'treasurer'
+      )
+  )
+);
+```
+
+#### Fund Event Actuals RLS
+
+```sql
+-- Actuals can be added by event creator or treasurer/admin
+CREATE POLICY "Event actuals management"
+ON fund_event_actuals FOR ALL TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM fund_events
+    WHERE id = event_id
+      AND (
+        created_by = app_current_user_id()
+        OR app_current_user_role() IN ('admin', 'treasurer')
+      )
+  )
+);
+
+CREATE POLICY "Event actuals read access"
+ON fund_event_actuals FOR SELECT TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM fund_events
+    WHERE id = event_id
+      AND (
+        app_current_user_role() = 'admin'
+        OR (app_user_is_fund_director() AND app_user_has_fund_access(fund_id))
+        OR app_current_user_role() = 'treasurer'
+      )
+  )
+);
+```
+
+#### Fund Event Audit Trail RLS
+
+```sql
+-- Audit trail is read-only for authorized users
+CREATE POLICY "Event audit read access"
+ON fund_event_audit FOR SELECT TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM fund_events
+    WHERE id = event_id
+      AND (
+        app_current_user_role() = 'admin'
+        OR (app_user_is_fund_director() AND app_user_has_fund_access(fund_id))
+        OR app_current_user_role() = 'treasurer'
+      )
+  )
+);
+```
+
+### Fund Events Workflow Functions
+
+#### Event Approval Process
+
+```sql
+-- Function to process event approval and create transactions
+CREATE OR REPLACE FUNCTION process_fund_event_approval(
+  p_event_id UUID,
+  p_approved_by UUID
+)
+RETURNS JSON
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_event RECORD;
+  v_total_income NUMERIC;
+  v_total_expense NUMERIC;
+  v_income_transaction_id BIGINT;
+  v_expense_transaction_id BIGINT;
+BEGIN
+  -- Get event details
+  SELECT * INTO v_event FROM fund_events WHERE id = p_event_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Event not found';
+  END IF;
+
+  IF v_event.status != 'submitted' THEN
+    RAISE EXCEPTION 'Event must be in submitted status';
+  END IF;
+
+  -- Calculate totals from actuals
+  SELECT
+    COALESCE(SUM(amount) FILTER (WHERE line_type = 'income'), 0),
+    COALESCE(SUM(amount) FILTER (WHERE line_type = 'expense'), 0)
+  INTO v_total_income, v_total_expense
+  FROM fund_event_actuals
+  WHERE event_id = p_event_id;
+
+  -- Create income transaction if there's income
+  IF v_total_income > 0 THEN
+    INSERT INTO transactions (fund_id, church_id, concept, amount_in, amount_out, date, created_by, created_at)
+    VALUES (
+      v_event.fund_id,
+      v_event.church_id,
+      format('Evento: %s - Ingresos', v_event.name),
+      v_total_income,
+      0,
+      v_event.event_date,
+      'system',
+      now()
+    )
+    RETURNING id INTO v_income_transaction_id;
+  END IF;
+
+  -- Create expense transaction if there's expense
+  IF v_total_expense > 0 THEN
+    INSERT INTO transactions (fund_id, church_id, concept, amount_in, amount_out, date, created_by, created_at)
+    VALUES (
+      v_event.fund_id,
+      v_event.church_id,
+      format('Evento: %s - Gastos', v_event.name),
+      0,
+      v_total_expense,
+      v_event.event_date,
+      'system',
+      now()
+    )
+    RETURNING id INTO v_expense_transaction_id;
+  END IF;
+
+  -- Update event status
+  UPDATE fund_events
+  SET
+    status = 'approved',
+    approved_by = p_approved_by,
+    approved_at = now()
+  WHERE id = p_event_id;
+
+  -- Log audit trail
+  INSERT INTO fund_event_audit (event_id, action, performed_by, notes)
+  VALUES (
+    p_event_id,
+    'approved',
+    p_approved_by,
+    format('Event approved. Income TX: %s, Expense TX: %s', v_income_transaction_id, v_expense_transaction_id)
+  );
+
+  -- Return result
+  RETURN json_build_object(
+    'success', true,
+    'income_transaction_id', v_income_transaction_id,
+    'expense_transaction_id', v_expense_transaction_id,
+    'total_income', v_total_income,
+    'total_expense', v_total_expense,
+    'net_amount', v_total_income - v_total_expense
+  );
+END;
+$$;
+```
+
+#### Event Summary Function
+
+```sql
+-- Function to get event summary with aggregated data
+CREATE OR REPLACE FUNCTION get_fund_event_summary(p_event_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+STABLE
+AS $$
+DECLARE
+  v_result JSON;
+BEGIN
+  SELECT json_build_object(
+    'event', row_to_json(e.*),
+    'budget_total', (
+      SELECT COALESCE(SUM(projected_amount), 0)
+      FROM fund_event_budget_items
+      WHERE event_id = p_event_id
+    ),
+    'actuals', json_build_object(
+      'total_income', (
+        SELECT COALESCE(SUM(amount), 0)
+        FROM fund_event_actuals
+        WHERE event_id = p_event_id AND line_type = 'income'
+      ),
+      'total_expense', (
+        SELECT COALESCE(SUM(amount), 0)
+        FROM fund_event_actuals
+        WHERE event_id = p_event_id AND line_type = 'expense'
+      )
+    )
+  )
+  INTO v_result
+  FROM fund_events e
+  WHERE e.id = p_event_id;
+
+  RETURN v_result;
+END;
+$$;
 ```
 
 ## Authentication

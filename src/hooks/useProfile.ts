@@ -83,7 +83,7 @@ export function useProfile() {
   const isAdmin = profile?.role === 'admin';
   const isTreasurer = profile?.role === 'treasurer';
   const isFundDirector = profile?.role === 'fund_director';
-  const isReadOnly = isFundDirector;
+  const isReadOnly = !profile?.role || profile.role === 'member';
 
   return {
     profile,

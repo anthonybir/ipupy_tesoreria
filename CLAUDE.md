@@ -88,6 +88,13 @@ npm run build  # Just echoes "No build needed"
   - Tithes (`diezmos`), Offerings (`ofrendas`)
   - Automatic 10% national fund calculation (`fondo_nacional`)
   - Bank deposit tracking
+- **Fund Events Management**: Event budgeting and tracking system
+  - Event budget planning with line items (venue, materials, food, transport, etc.)
+  - Actual income/expense tracking after events
+  - Treasurer approval workflow (draft → submitted → approved/rejected)
+  - Automatic transaction creation in ledger upon approval
+  - Variance analysis (budget vs. actuals)
+  - Fund director role with restricted access to assigned funds
 - **Excel Export/Import**: Full XLSX compatibility
 - **Mobile Interface**: Optimized for church phones
 
@@ -106,7 +113,7 @@ npm run build  # Just echoes "No build needed"
   // ... additional financial fields
 }
 
-// Church Schema  
+// Church Schema
 {
   name: String,
   city: String,
@@ -114,6 +121,36 @@ npm run build  # Just echoes "No build needed"
   cedula: String,           // Paraguayan ID
   grado: String,            // Ministerial rank
   posicion: String          // Church position
+}
+
+// Fund Event Schema
+{
+  id: UUID,
+  fund_id: Integer,
+  church_id: Integer (optional),
+  name: String,
+  description: String,
+  event_date: Date,
+  status: 'draft' | 'pending_revision' | 'submitted' | 'approved' | 'rejected' | 'cancelled',
+  budget_items: [{
+    category: 'venue' | 'materials' | 'food' | 'transport' | 'honoraria' | 'marketing' | 'other',
+    description: String,
+    projected_amount: Decimal,
+    notes: String
+  }],
+  actuals: [{
+    line_type: 'income' | 'expense',
+    description: String,
+    amount: Decimal,
+    receipt_url: String (optional),
+    notes: String (optional)
+  }],
+  audit: {
+    created_by: UUID,
+    created_at: Timestamp,
+    approved_by: UUID (optional),
+    approved_at: Timestamp (optional)
+  }
 }
 ```
 

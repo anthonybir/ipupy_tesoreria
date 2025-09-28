@@ -357,3 +357,329 @@ export type DataExportParams = {
   month?: number;
   type: ExportType;
 };
+
+export type EventStatus = 'draft' | 'pending_revision' | 'submitted' | 'approved' | 'rejected' | 'cancelled';
+
+export type EventCategory = 'venue' | 'materials' | 'food' | 'transport' | 'honoraria' | 'marketing' | 'other';
+
+export type EventLineType = 'income' | 'expense';
+
+export type RawFundEvent = {
+  id: string;
+  fund_id: number;
+  church_id: number | null;
+  name: string;
+  description: string | null;
+  event_date: string;
+  status: EventStatus;
+  created_by: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  submitted_at: string | null;
+  rejection_reason: string | null;
+  created_at: string;
+  updated_at: string;
+  fund_name?: string | null;
+  church_name?: string | null;
+  created_by_name?: string | null;
+  total_budget?: RawNumeric;
+  total_income?: RawNumeric;
+  total_expense?: RawNumeric;
+};
+
+export type FundEvent = {
+  id: string;
+  name: string;
+  description: string | null;
+  eventDate: string;
+  status: EventStatus;
+  fund: {
+    id: number;
+    name: string | null;
+  };
+  church: {
+    id: number | null;
+    name: string | null;
+  };
+  budget: {
+    total: number;
+    items?: EventBudgetItem[];
+  };
+  actuals: {
+    totalIncome: number;
+    totalExpense: number;
+    netAmount: number;
+    variance: number;
+    entries?: EventActual[];
+  };
+  audit: {
+    createdBy: string;
+    createdByName: string | null;
+    createdAt: string;
+    approvedBy: string | null;
+    approvedAt: string | null;
+    submittedAt: string | null;
+    history?: EventAuditEntry[];
+  };
+  rejectionReason: string | null;
+};
+
+export const normalizeFundEvent = (raw: RawFundEvent): FundEvent => {
+  const totalBudget = toNumber(raw.total_budget, 0);
+  const totalIncome = toNumber(raw.total_income, 0);
+  const totalExpense = toNumber(raw.total_expense, 0);
+  const netAmount = totalIncome - totalExpense;
+
+  return {
+    id: raw.id,
+    name: raw.name,
+    description: raw.description,
+    eventDate: raw.event_date,
+    status: raw.status,
+    fund: {
+      id: raw.fund_id,
+      name: raw.fund_name ?? null,
+    },
+    church: {
+      id: raw.church_id,
+      name: raw.church_name ?? null,
+    },
+    budget: {
+      total: totalBudget,
+      items: [],
+    },
+    actuals: {
+      totalIncome,
+      totalExpense,
+      netAmount,
+      variance: netAmount - totalBudget,
+    },
+    audit: {
+      createdBy: raw.created_by,
+      createdByName: raw.created_by_name ?? null,
+      createdAt: raw.created_at,
+      approvedBy: raw.approved_by ?? null,
+      approvedAt: raw.approved_at ?? null,
+      submittedAt: raw.submitted_at ?? null,
+    },
+    rejectionReason: raw.rejection_reason,
+  };
+};
+
+export type RawEventBudgetItem = {
+  id: string;
+  event_id: string;
+  category: EventCategory;
+  description: string;
+  projected_amount: RawNumeric;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EventBudgetItem = {
+  id: string;
+  eventId: string;
+  category: EventCategory;
+  description: string;
+  projectedAmount: number;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export const normalizeEventBudgetItem = (raw: RawEventBudgetItem): EventBudgetItem => ({
+  id: raw.id,
+  eventId: raw.event_id,
+  category: raw.category,
+  description: raw.description,
+  projectedAmount: toNumber(raw.projected_amount, 0),
+  notes: raw.notes,
+  createdAt: raw.created_at,
+  updatedAt: raw.updated_at,
+});
+
+export type RawEventActual = {
+  id: string;
+  event_id: string;
+  line_type: EventLineType;
+  description: string;
+  amount: RawNumeric;
+  receipt_url: string | null;
+  notes: string | null;
+  recorded_at: string;
+  recorded_by: string;
+};
+
+export type EventActual = {
+  id: string;
+  eventId: string;
+  lineType: EventLineType;
+  description: string;
+  amount: number;
+  receiptUrl: string | null;
+  notes: string | null;
+  recordedAt: string;
+  recordedBy: string;
+  recordedByName?: string | null;
+};
+
+export const normalizeEventActual = (raw: RawEventActual): EventActual => ({
+  id: raw.id,
+  eventId: raw.event_id,
+  lineType: raw.line_type,
+  description: raw.description,
+  amount: toNumber(raw.amount, 0),
+  receiptUrl: raw.receipt_url,
+  notes: raw.notes,
+  recordedAt: raw.recorded_at,
+  recordedBy: raw.recorded_by,
+  recordedByName: (raw as { recorded_by_name?: string | null }).recorded_by_name ?? null,
+});
+
+export type RawEventAuditEntry = {
+  id: string;
+  event_id: string;
+  previous_status: string | null;
+  new_status: string;
+  changed_by: string | null;
+  comment: string | null;
+  changed_at: string;
+};
+
+export type EventAuditEntry = {
+  id: string;
+  eventId: string;
+  previousStatus: string | null;
+  newStatus: string;
+  changedBy: string | null;
+  comment: string | null;
+  changedAt: string;
+};
+
+export const normalizeEventAuditEntry = (raw: RawEventAuditEntry): EventAuditEntry => ({
+  id: raw.id,
+  eventId: raw.event_id,
+  previousStatus: raw.previous_status,
+  newStatus: raw.new_status,
+  changedBy: raw.changed_by,
+  comment: raw.comment,
+  changedAt: raw.changed_at,
+});
+
+export type FundEventsApiResponse = {
+  success?: boolean;
+  data: RawFundEvent[];
+  stats?: {
+    draft: number;
+    submitted: number;
+    approved: number;
+    rejected: number;
+    pending_revision: number;
+  };
+};
+
+export type FundEventCollection = {
+  records: FundEvent[];
+  stats?: {
+    draft: number;
+    submitted: number;
+    approved: number;
+    rejected: number;
+    pendingRevision: number;
+  };
+};
+
+export const normalizeFundEventsResponse = (payload: FundEventsApiResponse): FundEventCollection => ({
+  records: payload.data.map(normalizeFundEvent),
+  stats: payload.stats ? {
+    draft: payload.stats.draft,
+    submitted: payload.stats.submitted,
+    approved: payload.stats.approved,
+    rejected: payload.stats.rejected,
+    pendingRevision: payload.stats.pending_revision,
+  } : undefined,
+});
+
+export type RawFundEventDetail = RawFundEvent & {
+  budget_items: RawEventBudgetItem[];
+  actuals: Array<RawEventActual & { recorded_by_name?: string | null }>;
+  audit_trail: RawEventAuditEntry[];
+};
+
+export type FundEventDetail = FundEvent & {
+  budget: {
+    total: number;
+    items: EventBudgetItem[];
+  };
+  actuals: {
+    totalIncome: number;
+    totalExpense: number;
+    netAmount: number;
+    variance: number;
+    entries: EventActual[];
+  };
+  audit: FundEvent['audit'] & {
+    history: EventAuditEntry[];
+  };
+};
+
+export const normalizeFundEventDetail = (raw: RawFundEventDetail): FundEventDetail => {
+  const base = normalizeFundEvent(raw);
+
+  const budgetItems = (raw.budget_items ?? []).map(normalizeEventBudgetItem);
+  const totalBudget = budgetItems.reduce((sum, item) => sum + item.projectedAmount, 0);
+
+  const actualEntries = (raw.actuals ?? []).map(normalizeEventActual);
+  const totalIncome = actualEntries
+    .filter((entry) => entry.lineType === 'income')
+    .reduce((sum, entry) => sum + entry.amount, 0);
+  const totalExpense = actualEntries
+    .filter((entry) => entry.lineType === 'expense')
+    .reduce((sum, entry) => sum + entry.amount, 0);
+  const netAmount = totalIncome - totalExpense;
+  const variance = netAmount - totalBudget;
+
+  const auditHistory = (raw.audit_trail ?? []).map(normalizeEventAuditEntry);
+
+  return {
+    ...base,
+    budget: {
+      total: totalBudget,
+      items: budgetItems,
+    },
+    actuals: {
+      totalIncome,
+      totalExpense,
+      netAmount,
+      variance,
+      entries: actualEntries,
+    },
+    audit: {
+      ...base.audit,
+      history: auditHistory,
+    },
+  };
+};
+
+export type CreateEventInput = {
+  fund_id: number;
+  church_id?: number | null;
+  name: string;
+  description?: string;
+  event_date: string;
+  budget_items?: Array<{
+    category: EventCategory;
+    description: string;
+    projected_amount: number;
+    notes?: string;
+  }>;
+};
+
+export type EventFilters = {
+  status?: EventStatus;
+  fundId?: number;
+  churchId?: number;
+  dateFrom?: string;
+  dateTo?: string;
+};

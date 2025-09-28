@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ForwardRefExoticComponent, type SVGProps } from "react";
 import {
   ChartBarIcon,
   DocumentTextIcon,
@@ -10,6 +10,7 @@ import {
   BanknotesIcon,
   BuildingLibraryIcon,
   ArrowDownTrayIcon,
+  CalendarIcon,
   Bars3Icon,
   XMarkIcon,
   Cog6ToothIcon,
@@ -17,7 +18,13 @@ import {
 
 import { useAuth } from "@/components/Auth/SupabaseAuthProvider";
 
-const NAVIGATION = [
+type NavItem = {
+  name: string;
+  href: string;
+  icon: ForwardRefExoticComponent<SVGProps<SVGSVGElement>>;
+};
+
+const NAVIGATION: NavItem[] = [
   {
     name: "Dashboard",
     href: "/",
@@ -37,6 +44,11 @@ const NAVIGATION = [
     name: "Fondos",
     href: "/funds",
     icon: BanknotesIcon,
+  },
+  {
+    name: "Eventos",
+    href: "/fund-director/events",
+    icon: CalendarIcon,
   },
   {
     name: "Iglesias",
@@ -59,10 +71,19 @@ export default function MainNav() {
     const role = (user?.app_metadata?.role ?? user?.user_metadata?.role ?? user?.role) as
       | string
       | undefined;
+
+    let items = NAVIGATION.filter(item => {
+      if (item.name === 'Eventos') {
+        return role === 'admin' || role === 'treasurer' || role === 'fund_director';
+      }
+      return true;
+    });
+
     if (role === 'admin') {
-      return [...NAVIGATION, { name: 'Configuración', href: '/admin/configuration', icon: Cog6ToothIcon }];
+      items = [...items, { name: 'Configuración', href: '/admin/configuration', icon: Cog6ToothIcon }];
     }
-    return NAVIGATION;
+
+    return items;
   }, [user?.app_metadata?.role, user?.user_metadata?.role, user?.role]);
 
   const toggleMobileMenu = () => setMobileMenuOpen((open) => !open);
