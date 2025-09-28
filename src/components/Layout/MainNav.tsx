@@ -69,8 +69,13 @@ export default function MainNav() {
   const { profile } = useProfile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
+  const authRole =
+    (user?.app_metadata?.role as string | undefined) ??
+    (user?.user_metadata?.role as string | undefined) ??
+    (user ? (user as { role?: string }).role : undefined);
+
   const items = useMemo(() => {
-    const role = profile?.role;
+    const role = profile?.role ?? authRole;
 
     let items = NAVIGATION.filter(item => {
       if (item.name === 'Eventos') {
@@ -84,7 +89,7 @@ export default function MainNav() {
     }
 
     return items;
-  }, [profile?.role]);
+  }, [profile?.role, authRole]);
 
   const toggleMobileMenu = () => setMobileMenuOpen((open) => !open);
 
