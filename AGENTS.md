@@ -1,37 +1,41 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- Root offline build: `index.html` hosts the tesorero dashboard, `mobile.html` handles congregational input, and optional `server.py` + `ipupy_treasurer.db` persist shared data while timestamped uploads land in `uploads/`.
-- Helper scripts: `start.sh` (workflow menu) and `test_codex.sh` (environment check) live at the top level for quick onboarding.
-- Cloud deployment lives in `cloud-gateway/`: `api/` for serverless endpoints, `server.js` for the Node 18 Express gateway, `lib/db.js` for Postgres wiring, and `public/` for static assets including the legacy HTML.
+- `src/app/` hosts the Next.js App Router; route groups such as `admin/`, `funds/`, `reports/`, and `transactions/` map to feature verticals with server actions and RLS-aware loaders.
+- `src/components/`, `src/hooks/`, and `src/lib/` provide shared UI, reusable React logic, and Supabase adapters (DB pool, auth context, env validation, rate limiting).
+- `src/styles/` and `src/types/` centralize Tailwind tokens and TypeScript contracts; import via the `@/*` alias defined in `tsconfig.json`.
+- `public/` contains exported assets (favicons, brand images) served at build time, while `.next/` is disposable output.
+- `migrations/` stores ordered SQL files (`NNN_description.sql`) applied to Supabase; keep new migrations additive and documented in `docs/MIGRATION_HISTORY.md`.
+- `scripts/` houses Node utilities (`migrate.js`, `check-migrations.js`, `validate-env.js`, data import fixes) and `tests/` provides integration smoke scripts; review their headers before running against production data.
+- `docs/` is the source of truth for architecture, configuration, and rollout playbooks—update the relevant guide when contracts change.
 
 ## Build, Test, and Development Commands
-- `bash start.sh`: guided launcher; option 1 opens the offline HTML in the default browser, option 2 boots the Python server.
-- `python3 server.py`: initialize SQLite schema and serve `index.html` at `http://localhost:8000`.
-- `npm install && npm run dev` (inside `cloud-gateway/`): install dependencies and run the Express gateway for API iteration.
-- `npm start`: mimic production entry on Vercel using the same `server.js`.
-- `bash test_codex.sh`: sanity-check Codex config, local SQLite artefacts, and the `mcp-sqlite` CLI.
+- `npm install`: install workspace dependencies (Node 20+).
+- `npm run dev` / `npm run dev:turbo`: start the App Router dev server (Turbopack optional for large refactors).
+- `npm run build` followed by `npm run start`: create and serve an optimized production build locally.
+- `npm run lint`: run Next.js/TypeScript ESLint rules; required before submitting a PR.
+- `node scripts/validate-env.js`: confirm required Supabase credentials and JWT secrets.
+- `node run-migration.js` or `node scripts/migrate.js`: execute pending SQL migrations once `.env.local` points to the target database.
 
 ## Coding Style & Naming Conventions
-- HTML/CSS/JS in `index.html` and `mobile.html` use 4-space indentation; keep inline `<style>` blocks at the top and `<script>` logic consolidated at the end.
-- JavaScript identifiers follow camelCase (`saveReport`, `loadDashboard`); preserve Spanish UI copy and storage keys to avoid breaking existing data.
-- Python in `server.py` should follow PEP 8 (4 spaces, snake_case) and log concise messages.
-- Node/Express code prefers `const` imports, 2-space indentation, and async-aware helpers that return JSON with explicit status codes.
-- Database columns mirror snake_case names; add new fields through migrations rather than ad-hoc writes.
+- TypeScript modules use named exports with 2-space indentation; React components and hooks follow `PascalCase` and `useCamelCase` naming.
+- Server utilities in `src/lib/` stay camelCase; migration files and route segments use kebab-case (`providers-table`, `fund-director`).
+- Tailwind utilities live in component files; keep shared tokens in `src/styles/variables.css` and prefer shadcn/ui primitives.
+- Run `npm run lint` or the workspace formatter before committing—ESLint enforces Next core-web-vitals and TypeScript strictness.
 
 ## Testing Guidelines
-- Offline mode: reload `index.html`, clear `localStorage`, and recreate a sample church/report to validate dashboards, exports, and alerts.
-- Python server: run `python3 server.py`, POST a dummy image to `/api/upload`, and verify the file appears in `uploads/` with a timestamped name.
-- Vercel app: with `npm run dev`, call `curl http://localhost:3000/api/dashboard` to confirm aggregates and round-trip through `api/reports`.
-- Document manual test scenarios in pull requests; no automated coverage exists yet, so regression risk is mitigated through checklist testing.
+- Linting is the enforced baseline; treat a clean `npm run lint` as mandatory CI parity.
+- With Supabase credentials loaded, run smoke scripts like `node tests/integration/test-connection.js` or `node test-auth.js` to verify DB connectivity, auth, and data integrity.
+- Manual QA remains critical: start the dev server, authenticate via Google, validate dashboard summaries, church detail flows, and Excel export/import paths.
+- Log every manual scenario in the PR description; there is no automated coverage requirement yet, so reviewers rely on this checklist.
 
 ## Commit & Pull Request Guidelines
-- Repository snapshots are often shared without `.git`; when using Git, adopt Conventional Commits (`feat:`, `fix:`, `chore:`) and keep the subject under 72 characters.
-- Scope each commit to a single concern (e.g., `feat: add church export filters`) and detail schema or config updates in the body.
-- Pull requests should include a purpose summary, manual test evidence (screenshots or command logs), notes about database changes, and rollout steps for both offline and Vercel deployments.
-- Link tracking issues when available and request review from both frontend and backend maintainers when altering shared contracts.
+- Use Conventional Commits (`feat:`, `fix:`, `chore:`) with focused scopes; include migration IDs or script names when relevant.
+- PRs must summarize intent, list manual test evidence (commands, screenshots, or curl output), and call out database, auth, or configuration impacts.
+- Update the matching document in `docs/` when you alter contracts (API payloads, schema, RBAC) and link it in the PR notes.
+- Request reviews from both frontend and data maintainers when changes touch `src/lib/db.ts`, Supabase migrations, or shared UI contracts.
 
-## Data & Security Notes
-- Do not commit populated databases, `.env*` files, or anything under `uploads/`; provide sanitized fixtures instead.
-- Rotate JWT secrets and database URLs via environment variables before deploying to Vercel; ensure `JWT_SECRET` is at least 32 characters.
-- When handling uploads, enforce the existing Multer size limit, scrub temporary files after export, and avoid storing sensitive receipts in version control.
+## Security & Configuration Tips
+- Never commit `.env*`, Supabase service keys, or real database exports; rely on `.env.example` for placeholders and keep sanitized fixtures in `legacy_data/`.
+- JWT secrets must be ≥32 characters; rotate `SUPABASE_SERVICE_KEY` and related credentials before deploying to Vercel.
+- Prefer `validate-env.js` and `docs/SECURITY.md` when introducing new settings, and document any required secrets in the PR rollout checklist.
