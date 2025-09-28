@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAuthContext, type AuthContext } from "@/lib/auth-context";
 import { executeWithContext } from "@/lib/db";
 import { setCORSHeaders } from "@/lib/cors";
+import { createTransaction as createLedgerTransaction } from "@/app/api/reports/route-helpers";
 
 interface FundMovement {
   id: number;
@@ -9,7 +10,7 @@ interface FundMovement {
   church_id: number;
   fund_category_id: number;
   monto: number;
-  tipo_movimiento: "automatic" | "manual";
+  tipo_movimiento: "entrada" | "salida";
   concepto: string;
   fecha_movimiento: string;
   created_at: string;
@@ -20,7 +21,7 @@ interface FundMovementInput {
   church_id: number;
   fund_category_id: number;
   monto: number;
-  tipo_movimiento?: "automatic" | "manual";
+  tipo_movimiento?: "entrada" | "salida";
   concepto?: string;
 }
 
@@ -197,8 +198,22 @@ async function handlePost(req: NextRequest) {
           continue;
         }
 
-        // Create fund movement record
-        const result = await executeWithContext<FundMovement>(user,
+        const rawAmount = Number(movement.monto);
+        if (!Number.isFinite(rawAmount) || rawAmount === 0) {
+          errors.push({ movement, error: "Movement amount must be a non-zero number" });
+          continue;
+        }
+
+        const absAmount = Math.abs(rawAmount);
+        const inferredType = rawAmount >= 0 ? 'entrada' : 'salida';
+        const tipoMovimiento = movement.tipo_movimiento ?? inferredType;
+
+        if (!['entrada', 'salida'].includes(tipoMovimiento)) {
+          errors.push({ movement, error: "tipo_movimiento must be 'entrada' or 'salida'" });
+          continue;
+        }
+
+        const movementResult = await executeWithContext<FundMovement>(user,
           `INSERT INTO fund_movements (
             report_id, church_id, fund_category_id,
             monto, tipo_movimiento, concepto, fecha_movimiento
@@ -208,38 +223,24 @@ async function handlePost(req: NextRequest) {
             movement.report_id,
             movement.church_id,
             movement.fund_category_id,
-            movement.monto,
-            movement.tipo_movimiento ?? "manual",
+            absAmount,
+            tipoMovimiento,
             movement.concepto ?? ""
           ]
         );
 
-        // Create corresponding transaction (using fund_category_id as fund_id for now)
-        await executeWithContext(user, 
-          `INSERT INTO transactions (
-            date, fund_id, church_id, report_id,
-            concept, amount_in, amount_out, created_by
-          ) VALUES (CURRENT_DATE, $1, $2, $3, $4, $5, 0, $6)`,
-          [
-            movement.fund_category_id,
-            movement.church_id,
-            movement.report_id,
-            movement.concepto ?? "Movimiento de fondo",
-            movement.monto,
-            user.email || ""
-          ]
-        );
+        await createLedgerTransaction({
+          date: new Date().toISOString().slice(0, 10),
+          fund_id: movement.fund_category_id,
+          church_id: movement.church_id,
+          report_id: movement.report_id,
+          concept: movement.concepto ?? "Movimiento de fondo",
+          amount_in: tipoMovimiento === 'salida' ? 0 : absAmount,
+          amount_out: tipoMovimiento === 'salida' ? absAmount : 0,
+          created_by: user.email ?? 'system'
+        }, user);
 
-        // Update fund balance (using fund_category_id as fund id)
-        await executeWithContext(user, 
-          `UPDATE funds
-           SET current_balance = current_balance + $1,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = $2`,
-          [movement.monto, movement.fund_category_id]
-        );
-
-        results.push(result.rows[0]);
+        results.push(movementResult.rows[0]);
       } catch (error) {
         errors.push({
           movement: movement || movementRaw,
@@ -281,6 +282,7 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
       diezmos: string;
       ofrendas: string;
       fondo_nacional: string;
+      fecha_deposito?: string | null;
     }>(auth,
       `SELECT r.*, c.name as church_name
        FROM reports r
@@ -296,10 +298,13 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
     }
 
     const report = reportResult.rows[0];
+    const movementDate = report.fecha_deposito
+      ? new Date(report.fecha_deposito).toISOString().slice(0, 10)
+      : new Date().toISOString().slice(0, 10);
 
     // Check if movements already processed
     const existing = await executeWithContext<{ count: string }>(auth,
-      `SELECT COUNT(*) as count FROM fund_movements WHERE report_id = $1 AND type = 'automatic'`,
+      `SELECT COUNT(*) as count FROM fund_movements WHERE report_id = $1`,
       [reportId]
     );
 
@@ -323,11 +328,11 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
       fundMap[fund.name] = fund.id;
     }
 
-    // Create missing funds if needed
+    // Create missing funds if needed (using correct schema)
     if (!fundMap["Fondo Nacional"]) {
       const result = await executeWithContext<{ id: number }>(auth,
-        `INSERT INTO funds (name, category, initial_balance, current_balance, active, created_by)
-         VALUES ('Fondo Nacional', 'automatic', 0, 0, true, $1)
+        `INSERT INTO funds (name, type, description, current_balance, is_active, created_by)
+         VALUES ('Fondo Nacional', 'nacional', 'Fondo nacional IPU Paraguay', 0, true, $1)
          RETURNING id`,
         [userEmail]
       );
@@ -336,8 +341,8 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
 
     if (!fundMap["Diezmos"]) {
       const result = await executeWithContext<{ id: number }>(auth,
-        `INSERT INTO funds (name, category, initial_balance, current_balance, active, created_by)
-         VALUES ('Diezmos', 'automatic', 0, 0, true, $1)
+        `INSERT INTO funds (name, type, description, current_balance, is_active, created_by)
+         VALUES ('Diezmos', 'nacional', 'Fondo de diezmos', 0, true, $1)
          RETURNING id`,
         [userEmail]
       );
@@ -346,8 +351,8 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
 
     if (!fundMap["Ofrendas"]) {
       const result = await executeWithContext<{ id: number }>(auth,
-        `INSERT INTO funds (name, category, initial_balance, current_balance, active, created_by)
-         VALUES ('Ofrendas', 'automatic', 0, 0, true, $1)
+        `INSERT INTO funds (name, type, description, current_balance, is_active, created_by)
+         VALUES ('Ofrendas', 'nacional', 'Fondo de ofrendas', 0, true, $1)
          RETURNING id`,
         [userEmail]
       );
@@ -356,120 +361,93 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
 
     // Process diezmos
     if (report.diezmos && parseFloat(report.diezmos) > 0) {
-      const diezmoMovement = await executeWithContext(auth, 
+      const amount = parseFloat(report.diezmos);
+      const diezmoMovement = await executeWithContext(auth,
         `INSERT INTO fund_movements (
           report_id, church_id, fund_category_id, monto, tipo_movimiento, concepto, fecha_movimiento
-        ) VALUES ($1, $2, $3, $4, 'automatic', $5, CURRENT_DATE)
+        ) VALUES ($1, $2, $3, $4, 'entrada', $5, CURRENT_DATE)
         RETURNING *`,
         [
           reportId,
           report.church_id,
           fundMap["Diezmos"],
-          report.diezmos,
+          amount,
           `Diezmos - ${report.church_name} (${report.month}/${report.year})`
         ]
       );
 
-      // Create transaction
-      await executeWithContext(auth, 
-        `INSERT INTO transactions (
-          date, fund_id, church_id, report_id, concept, amount_in, amount_out, created_by
-        ) VALUES (CURRENT_DATE, $1, $2, $3, $4, $5, 0, $6)`,
-        [
-          fundMap["Diezmos"],
-          report.church_id,
-          reportId,
-          `Diezmos - ${report.church_name}`,
-          report.diezmos,
-          userEmail
-        ]
-      );
-
-      // Update fund balance
-      await executeWithContext(auth, 
-        `UPDATE funds SET current_balance = current_balance + $1 WHERE id = $2`,
-        [report.diezmos, fundMap["Diezmos"]]
-      );
+      await createLedgerTransaction({
+        date: movementDate,
+        fund_id: fundMap["Diezmos"],
+        church_id: report.church_id,
+        report_id: reportId,
+        concept: `Diezmos - ${report.church_name}`,
+        amount_in: amount,
+        amount_out: 0,
+        created_by: userEmail ?? 'system'
+      }, auth);
 
       movements.push(diezmoMovement.rows[0]);
     }
 
     // Process ofrendas
     if (report.ofrendas && parseFloat(report.ofrendas) > 0) {
-      const ofrendaMovement = await executeWithContext(auth, 
+      const amount = parseFloat(report.ofrendas);
+      const ofrendaMovement = await executeWithContext(auth,
         `INSERT INTO fund_movements (
           report_id, church_id, fund_category_id, monto, tipo_movimiento, concepto, fecha_movimiento
-        ) VALUES ($1, $2, $3, $4, 'automatic', $5, CURRENT_DATE)
+        ) VALUES ($1, $2, $3, $4, 'entrada', $5, CURRENT_DATE)
         RETURNING *`,
         [
           reportId,
           report.church_id,
           fundMap["Ofrendas"],
-          report.ofrendas,
+          amount,
           `Ofrendas - ${report.church_name} (${report.month}/${report.year})`
         ]
       );
 
-      // Create transaction
-      await executeWithContext(auth, 
-        `INSERT INTO transactions (
-          date, fund_id, church_id, report_id, concept, amount_in, amount_out, created_by
-        ) VALUES (CURRENT_DATE, $1, $2, $3, $4, $5, 0, $6)`,
-        [
-          fundMap["Ofrendas"],
-          report.church_id,
-          reportId,
-          `Ofrendas - ${report.church_name}`,
-          report.ofrendas,
-          userEmail
-        ]
-      );
-
-      // Update fund balance
-      await executeWithContext(auth, 
-        `UPDATE funds SET current_balance = current_balance + $1 WHERE id = $2`,
-        [report.ofrendas, fundMap["Ofrendas"]]
-      );
+      await createLedgerTransaction({
+        date: movementDate,
+        fund_id: fundMap["Ofrendas"],
+        church_id: report.church_id,
+        report_id: reportId,
+        concept: `Ofrendas - ${report.church_name}`,
+        amount_in: amount,
+        amount_out: 0,
+        created_by: userEmail ?? 'system'
+      }, auth);
 
       movements.push(ofrendaMovement.rows[0]);
     }
 
     // Process fondo nacional (10% of total)
     if (report.fondo_nacional && parseFloat(report.fondo_nacional) > 0) {
-      const fondoMovement = await executeWithContext(auth, 
+      const amount = parseFloat(report.fondo_nacional);
+      const fondoMovement = await executeWithContext(auth,
         `INSERT INTO fund_movements (
           report_id, church_id, fund_category_id, monto, tipo_movimiento, concepto, fecha_movimiento
-        ) VALUES ($1, $2, $3, $4, 'automatic', $5, CURRENT_DATE)
+        ) VALUES ($1, $2, $3, $4, 'entrada', $5, CURRENT_DATE)
         RETURNING *`,
         [
           reportId,
           report.church_id,
           fundMap["Fondo Nacional"],
-          report.fondo_nacional,
+          amount,
           `Fondo Nacional 10% - ${report.church_name} (${report.month}/${report.year})`
         ]
       );
 
-      // Create transaction
-      await executeWithContext(auth, 
-        `INSERT INTO transactions (
-          date, fund_id, church_id, report_id, concept, amount_in, amount_out, created_by
-        ) VALUES (CURRENT_DATE, $1, $2, $3, $4, $5, 0, $6)`,
-        [
-          fundMap["Fondo Nacional"],
-          report.church_id,
-          reportId,
-          `Fondo Nacional 10% - ${report.church_name}`,
-          report.fondo_nacional,
-          userEmail
-        ]
-      );
-
-      // Update fund balance
-      await executeWithContext(auth, 
-        `UPDATE funds SET current_balance = current_balance + $1 WHERE id = $2`,
-        [report.fondo_nacional, fundMap["Fondo Nacional"]]
-      );
+      await createLedgerTransaction({
+        date: movementDate,
+        fund_id: fundMap["Fondo Nacional"],
+        church_id: report.church_id,
+        report_id: reportId,
+        concept: `Fondo Nacional 10% - ${report.church_name}`,
+        amount_in: amount,
+        amount_out: 0,
+        created_by: userEmail ?? 'system'
+      }, auth);
 
       movements.push(fondoMovement.rows[0]);
     }

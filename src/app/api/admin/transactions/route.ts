@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { executeWithContext } from '@/lib/db';
+import { executeWithContext, executeTransaction } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth-supabase';
 import { withRateLimit } from '@/lib/rate-limit';
+import { createTransaction as createLedgerTransaction } from '@/app/api/reports/route-helpers';
 
 // Admin endpoint for full transaction management
 export async function GET(request: NextRequest) {
@@ -124,45 +125,24 @@ export async function POST(request: NextRequest) {
       document_number
     } = data;
 
-    // Begin transaction for atomicity
-    await executeWithContext(auth, 'BEGIN');
-
     try {
-      // Insert transaction
-      const result = await executeWithContext(auth, `
-        INSERT INTO transactions (
-          fund_id, concept, provider, provider_id, document_number,
-          amount_in, amount_out, date, created_by, created_at
-        ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, 'treasurer', NOW()
-        ) RETURNING *
-      `, [
+      const transaction = await createLedgerTransaction({
         fund_id,
         concept,
-        provider ?? null,
-        data.provider_id ?? null,
-        document_number ?? null,
+        provider: provider ?? null,
+        provider_id: data.provider_id ?? null,
+        document_number: document_number ?? null,
         amount_in,
         amount_out,
-        date
-      ]);
-
-      // Update fund balance
-      await executeWithContext(auth, `
-        UPDATE funds
-        SET current_balance = current_balance + $1 - $2,
-            updated_at = NOW()
-        WHERE id = $3
-      `, [amount_in, amount_out, fund_id]);
-
-      await executeWithContext(auth, 'COMMIT');
+        date,
+        created_by: 'treasurer'
+      }, auth);
 
       return NextResponse.json({
         success: true,
-        data: result.rows[0]
+        data: transaction
       });
     } catch (error) {
-      await executeWithContext(auth, 'ROLLBACK');
       throw error;
     }
   } catch (error) {
@@ -189,52 +169,50 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    await executeWithContext(auth, 'BEGIN');
+    let deletedFundId: number | null = null;
 
-    try {
-      // Get transaction details
-      const txn = await executeWithContext(auth, `
-        SELECT * FROM transactions WHERE id = $1
-      `, [transaction_id]);
+    await executeTransaction(auth, async (client) => {
+      const txn = await client.query(
+        `SELECT * FROM transactions WHERE id = $1`,
+        [transaction_id]
+      );
 
       if (txn.rowCount === 0) {
-        await executeWithContext(auth, 'ROLLBACK');
-        return NextResponse.json(
-          { success: false, error: 'Transaction not found' },
-          { status: 404 }
-        );
+        throw new Error('Transaction not found');
       }
 
       const transaction = txn.rows[0];
+      deletedFundId = transaction.fund_id;
 
-      // Delete transaction
-      await executeWithContext(auth, `
-        DELETE FROM transactions WHERE id = $1
-      `, [transaction_id]);
+      await client.query(`DELETE FROM fund_movements_enhanced WHERE transaction_id = $1`, [transaction_id]);
+      await client.query(`DELETE FROM transactions WHERE id = $1`, [transaction_id]);
 
-      // Adjust fund balance
-      await executeWithContext(auth, `
-        UPDATE funds
-        SET current_balance = current_balance - $1 + $2,
-            updated_at = NOW()
-        WHERE id = $3
-      `, [transaction.amount_in, transaction.amount_out, transaction.fund_id]);
+      await client.query(
+        `UPDATE funds
+         SET current_balance = COALESCE((
+           SELECT SUM(amount_in - amount_out)
+           FROM transactions
+           WHERE fund_id = $1
+         ), 0),
+             updated_at = NOW()
+         WHERE id = $1`,
+        [transaction.fund_id]
+      );
+    });
 
-      await executeWithContext(auth, 'COMMIT');
-
-      return NextResponse.json({
-        success: true,
-        message: 'Transaction deleted successfully'
-      });
-    } catch (error) {
-      await executeWithContext(auth, 'ROLLBACK');
-      throw error;
-    }
+    return NextResponse.json({
+      success: true,
+      message: 'Transaction deleted successfully',
+      fundId: deletedFundId
+    });
   } catch (error) {
-    console.error('Error deleting transaction:', error);
+    const isNotFound = error instanceof Error && error.message === 'Transaction not found';
+    if (!isNotFound) {
+      console.error('Error deleting transaction:', error);
+    }
     return NextResponse.json(
-      { success: false, error: 'Failed to delete transaction' },
-      { status: 500 }
+      { success: false, error: isNotFound ? 'Transaction not found' : 'Failed to delete transaction' },
+      { status: isNotFound ? 404 : 500 }
     );
   }
 }

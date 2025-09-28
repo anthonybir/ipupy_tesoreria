@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { executeWithContext } from '@/lib/db';
 import { buildCorsHeaders, handleCorsPreflight } from '@/lib/cors';
 import { requireAuth, AuthContext } from '@/lib/auth-context';
+import { createReportTransactions } from './route-helpers';
 
 type GenericRecord = Record<string, unknown>;
 
@@ -134,18 +135,6 @@ const DESIGNATED_FIELD_MAP: Record<DesignatedKey, string> = {
   ninos: 'ninos'
 };
 
-const DESIGNATED_FUND_LABELS: Record<DesignatedKey, string> = {
-  misiones: 'Misiones',
-  lazos_amor: 'Lazos de Amor',
-  mision_posible: 'Misión Posible',
-  apy: 'APY',
-  iba: 'IBA',
-  caballeros: 'Caballeros',
-  damas: 'Damas',
-  jovenes: 'Jóvenes',
-  ninos: 'Niños'
-};
-
 const EXPENSE_KEYS = [
   'energia_electrica',
   'agua',
@@ -157,14 +146,6 @@ const EXPENSE_KEYS = [
 ] as const;
 
 type ExpenseKey = typeof EXPENSE_KEYS[number];
-
-type TransactionTotalsInput = {
-  totalEntradas: number;
-  fondoNacional: number;
-  honorariosPastoral: number;
-  gastosOperativos: number;
-  fechaDeposito?: string | null;
-};
 
 const ensureUploadsDir = async () => {
   try {
@@ -271,213 +252,8 @@ const setAuditContext = async (actorEmail: string | undefined, auth?: AuthContex
   }
 };
 
-const getOrCreateFund = async (name: string, type: string, description: string, auth?: AuthContext | null) => {
-  let result = await executeWithContext(auth || null, 'SELECT * FROM funds WHERE name = $1', [name]);
 
-  if (result.rows.length > 0) {
-    return result.rows[0];
-  }
 
-  result = await executeWithContext(
-    auth || null,
-    `
-      INSERT INTO funds (name, type, description, current_balance, is_active, created_by)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING *
-    `,
-    [name, type, description, 0, true, 'system']
-  );
-
-  return result.rows[0];
-};
-
-const createTransaction = async (data: GenericRecord, auth?: AuthContext | null) => {
-  const fundResult = await executeWithContext<{ current_balance: string }>(
-    auth || null,
-    'SELECT current_balance FROM funds WHERE id = $1',
-    [data.fund_id]
-  );
-
-  if (fundResult.rows.length === 0) {
-    throw new Error('Fund not found');
-  }
-
-  const currentBalance = parseFloat(fundResult.rows[0].current_balance) || 0;
-  const amountIn = Number(data.amount_in) || 0;
-  const amountOut = Number(data.amount_out) || 0;
-  const movement = amountIn > 0 ? amountIn : -amountOut;
-  const newBalance = currentBalance + movement;
-
-  if (newBalance < 0) {
-    console.warn(`Warning: Transaction would result in negative balance for fund ${data.fund_id}`);
-  }
-
-  await executeWithContext(auth || null, 'BEGIN');
-
-  try {
-    const transactionResult = await executeWithContext(
-      auth || null,
-      `
-        INSERT INTO transactions (
-          date, church_id, report_id, fund_id, concept, provider, document_number,
-          amount_in, amount_out, balance, created_by
-        ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
-        ) RETURNING *
-      `,
-      [
-        data.date,
-        data.church_id || null,
-        data.report_id || null,
-        data.fund_id,
-        data.concept,
-        data.provider || 'Informe automático',
-        data.document_number || '',
-        data.amount_in || 0,
-        data.amount_out || 0,
-        newBalance,
-        'system'
-      ]
-    );
-
-    const transaction = transactionResult.rows[0];
-
-    await executeWithContext(
-      auth || null,
-      'UPDATE funds SET current_balance = $1, updated_at = NOW() WHERE id = $2',
-      [newBalance, data.fund_id]
-    );
-
-    await executeWithContext(
-      auth || null,
-      `
-        INSERT INTO fund_movements_enhanced (
-          fund_id, transaction_id, previous_balance, movement, new_balance
-        ) VALUES ($1, $2, $3, $4, $5)
-      `,
-      [
-        data.fund_id,
-        transaction.id,
-        currentBalance,
-        movement,
-        newBalance
-      ]
-    );
-
-    await executeWithContext(auth || null, 'COMMIT');
-    return transaction;
-  } catch (error) {
-    await executeWithContext(auth || null, 'ROLLBACK');
-    throw error;
-  }
-};
-
-const createReportTransactions = async (
-  report: GenericRecord,
-  totals: TransactionTotalsInput,
-  designated: Record<DesignatedKey, number>,
-  auth?: AuthContext | null
-) => {
-  try {
-    const churchFund = await getOrCreateFund('Fondo General', 'nacional', 'Fondo principal de la iglesia', auth);
-    const nationalFund = await getOrCreateFund('Fondo Nacional', 'nacional', 'Fondo nacional IPU Paraguay (10%)', auth);
-
-    const totalEntradas = Number(totals.totalEntradas) || 0;
-    const fondoNacional = Number(totals.fondoNacional) || 0;
-    const honorariosPastoral = Number(totals.honorariosPastoral) || 0;
-    const gastosOperativos = Number(totals.gastosOperativos) || 0;
-    const transactionDate = totals.fechaDeposito || new Date().toISOString().split('T')[0];
-
-    if (totalEntradas > 0) {
-      await createTransaction({
-        church_id: report.church_id,
-        fund_id: churchFund.id,
-        report_id: report.id,
-        concept: `Ingresos del mes ${report.month}/${report.year} - Diezmos y Ofrendas`,
-        amount_in: totalEntradas,
-        amount_out: 0,
-        date: transactionDate
-      }, auth);
-    }
-
-    if (fondoNacional > 0) {
-      await createTransaction({
-        church_id: report.church_id,
-        fund_id: churchFund.id,
-        report_id: report.id,
-        concept: `Transferencia fondo nacional ${report.month}/${report.year} (10%)`,
-        amount_in: 0,
-        amount_out: fondoNacional,
-        date: transactionDate
-      }, auth);
-
-      await createTransaction({
-        church_id: report.church_id,
-        fund_id: nationalFund.id,
-        report_id: report.id,
-        concept: `Ingreso fondo nacional desde ${report.church_name || 'iglesia'} ${report.month}/${report.year}`,
-        amount_in: fondoNacional,
-        amount_out: 0,
-        date: transactionDate
-      }, auth);
-    }
-
-    for (const key of DESIGNATED_FORM_KEYS) {
-      const amount = designated[key] ?? 0;
-      if (amount <= 0) {
-        continue;
-      }
-      const fundLabel = DESIGNATED_FUND_LABELS[key];
-      const designatedFund = await getOrCreateFund(fundLabel, 'designado', `Fondo designado ${fundLabel}`, auth);
-
-      await createTransaction({
-        church_id: report.church_id,
-        fund_id: churchFund.id,
-        report_id: report.id,
-        concept: `Salida designada ${fundLabel} ${report.month}/${report.year}`,
-        amount_in: 0,
-        amount_out: amount,
-        date: transactionDate
-      }, auth);
-
-      await createTransaction({
-        church_id: report.church_id,
-        fund_id: designatedFund.id,
-        report_id: report.id,
-        concept: `Ingreso designado ${fundLabel} desde ${report.church_name || 'iglesia'} ${report.month}/${report.year}`,
-        amount_in: amount,
-        amount_out: 0,
-        date: transactionDate
-      }, auth);
-    }
-
-    if (honorariosPastoral > 0) {
-      await createTransaction({
-        church_id: report.church_id,
-        fund_id: churchFund.id,
-        report_id: report.id,
-        concept: `Honorarios pastorales ${report.month}/${report.year}`,
-        amount_in: 0,
-        amount_out: honorariosPastoral,
-        date: transactionDate
-      }, auth);
-    }
-
-    if (gastosOperativos > 0) {
-      await createTransaction({
-        church_id: report.church_id,
-        fund_id: churchFund.id,
-        report_id: report.id,
-        concept: `Servicios y gastos operativos ${report.month}/${report.year}`,
-        amount_in: 0,
-        amount_out: gastosOperativos,
-        date: transactionDate
-      });
-    }
-  } catch (error) {
-    console.error('Error creating automatic transactions:', error);
-  }
-};
 
 const handleGetReports = async (request: NextRequest, auth: AuthContext) => {
   const searchParams = request.nextUrl.searchParams;
@@ -488,7 +264,10 @@ const handleGetReports = async (request: NextRequest, auth: AuthContext) => {
   const filters: string[] = [];
   const params: unknown[] = [];
 
-  if (auth.role === 'church') {
+  // Church-level roles can only see their own church's reports
+  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer' || auth.role === 'church' || auth.role === 'secretary' || auth.role === 'member';
+
+  if (isChurchRole) {
     const scopedChurchId = parseRequiredChurchId(auth.churchId);
     params.push(scopedChurchId);
     filters.push(`r.church_id = $${params.length}`);
@@ -591,20 +370,24 @@ const extractReportPayload = (data: GenericRecord) => {
 };
 
 const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
-  // Check if user is admin/super_admin
-  const isAdminRole = auth.role === 'admin' || auth.role === 'super_admin';
+  // Check if user has admin privileges
+  const isAdminRole = auth.role === 'admin' || auth.role === 'super_admin' || auth.role === 'district_supervisor';
 
-  const scopedChurchId = auth.role === 'church'
+  // Church-level roles that can create reports: pastor, treasurer, and legacy 'church' role
+  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer' || auth.role === 'church';
+
+  // Determine which church this report is for
+  const scopedChurchId = isChurchRole
     ? parseRequiredChurchId(auth.churchId)
     : parseRequiredChurchId(data.church_id);
 
-  // Church users can only submit for their own church
-  if (auth.role === 'church' && data.church_id && parseRequiredChurchId(data.church_id) !== scopedChurchId) {
+  // Church-level users can only submit for their own church
+  if (isChurchRole && data.church_id && parseRequiredChurchId(data.church_id) !== scopedChurchId) {
     throw new BadRequestError('No puede registrar informes para otra iglesia');
   }
 
-  // Admin users can submit for any church
-  if (!isAdminRole && auth.role !== 'church') {
+  // Only admin or church-level roles can create reports
+  if (!isAdminRole && !isChurchRole) {
     throw new BadRequestError('No tiene permisos para crear informes');
   }
 
@@ -670,7 +453,7 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
   const fotoInforme = await saveBase64Attachment(attachments?.summary, `${attachmentPrefix}-resumen`);
   const fotoDeposito = await saveBase64Attachment(attachments?.deposit, `${attachmentPrefix}-deposito`);
 
-  const isChurchSubmission = auth.role === 'church';
+  const isChurchSubmission = auth.role === 'church' || auth.role === 'pastor' || auth.role === 'treasurer';
   const isAdminSubmission = isAdminRole;
 
   // Determine submission source based on role and data
@@ -889,7 +672,15 @@ const handleUpdateReport = async (
 
   const existing = existingResult.rows[0];
 
-  if (auth.role === 'church' && parseRequiredChurchId(auth.churchId) !== existing.church_id) {
+  // Check if user has permission to modify this report
+  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer' || auth.role === 'church';
+  const isAdminRole = auth.role === 'admin' || auth.role === 'super_admin' || auth.role === 'district_supervisor';
+
+  if (isChurchRole && parseRequiredChurchId(auth.churchId) !== existing.church_id) {
+    throw new BadRequestError('No tiene permisos para modificar este informe');
+  }
+
+  if (!isAdminRole && !isChurchRole) {
     throw new BadRequestError('No tiene permisos para modificar este informe');
   }
 
@@ -955,7 +746,7 @@ const handleUpdateReport = async (
     ? toNumber(data.monto_depositado)
     : toNumber(existing.monto_depositado ?? totals.fondoNacional + totals.totalDesignados);
 
-  const isChurchUpdate = auth.role === 'church';
+  const isChurchUpdate = auth.role === 'church' || auth.role === 'pastor' || auth.role === 'treasurer';
   const submissionType = data.submission_type || existing.submission_type || (isChurchUpdate ? 'online' : 'manual');
 
   let estado = data.estado || existing.estado || (isChurchUpdate ? 'pendiente_admin' : 'importado_excel');
@@ -1134,7 +925,15 @@ const handleDeleteReport = async (reportId: number, auth: AuthContext) => {
   }
 
   const existing = existingResult.rows[0];
-  if (auth.role === 'church' && parseRequiredChurchId(auth.churchId) !== existing.church_id) {
+  // Check if user has permission to delete this report
+  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer' || auth.role === 'church';
+  const isAdminRole = auth.role === 'admin' || auth.role === 'super_admin' || auth.role === 'district_supervisor';
+
+  if (isChurchRole && parseRequiredChurchId(auth.churchId) !== existing.church_id) {
+    throw new BadRequestError('No tiene permisos para eliminar este informe');
+  }
+
+  if (!isAdminRole && !isChurchRole) {
     throw new BadRequestError('No tiene permisos para eliminar este informe');
   }
 

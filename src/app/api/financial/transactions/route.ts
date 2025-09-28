@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAuthContext } from "@/lib/auth-context";
-import { executeWithContext } from "@/lib/db";
+import { executeWithContext, executeTransaction } from "@/lib/db";
 import { setCORSHeaders } from "@/lib/cors";
+import { createTransaction as createLedgerTransaction } from "@/app/api/reports/route-helpers";
+
+type GenericRecord = Record<string, unknown>;
 
 interface Transaction {
   id: number;
@@ -13,6 +16,7 @@ interface Transaction {
   report_id?: number;
   concept: string;
   provider?: string;
+  provider_id?: number;
   document_number?: string;
   amount_in: number;
   amount_out: number;
@@ -28,6 +32,7 @@ interface TransactionInput {
   report_id?: number;
   concept: string;
   provider?: string;
+  provider_id?: number;
   document_number?: string;
   amount_in?: number;
   amount_out?: number;
@@ -168,8 +173,8 @@ async function handlePost(req: NextRequest) {
       return response;
     }
 
-    const results = [];
-    const errors = [];
+    const results: GenericRecord[] = [];
+    const errors: { transaction: unknown; error: string }[] = [];
 
     for (const transaction of transactions) {
       try {
@@ -194,39 +199,22 @@ async function handlePost(req: NextRequest) {
           continue;
         }
 
-        // Insert transaction
-        const result = await executeWithContext<Transaction>(user,
-          `INSERT INTO transactions (
-            date, fund_id, church_id, report_id,
-            concept, provider, document_number,
-            amount_in, amount_out, created_by
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-          RETURNING *`,
-          [
-            transaction.date,
-            transaction.fund_id,
-            transaction.church_id || null,
-            transaction.report_id || null,
-            transaction.concept,
-            transaction.provider || "",
-            transaction.document_number || "",
-            amountIn,
-            amountOut,
-            user.email
-          ]
-        );
+        // Insert transaction using shared helper for consistency
+        const createdTransaction = await createLedgerTransaction({
+          date: transaction.date,
+          fund_id: transaction.fund_id,
+          church_id: transaction.church_id ?? null,
+          report_id: transaction.report_id ?? null,
+          concept: transaction.concept,
+          provider: transaction.provider ?? null,
+          provider_id: transaction.provider_id ?? null,
+          document_number: transaction.document_number ?? null,
+          amount_in: amountIn,
+          amount_out: amountOut,
+          created_by: user.email
+        }, user);
 
-        // Update fund balance
-        const balanceChange = amountIn - amountOut;
-        await executeWithContext(user, 
-          `UPDATE funds
-           SET current_balance = current_balance + $1,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = $2`,
-          [balanceChange, transaction.fund_id]
-        );
-
-        results.push(result.rows[0]);
+        results.push(createdTransaction);
       } catch (error) {
         errors.push({
           transaction,
@@ -413,45 +401,56 @@ async function handleDelete(req: NextRequest) {
       return response;
     }
 
-    // Get transaction details for balance adjustment
-    const existing = await executeWithContext<Transaction>(user,
-      `SELECT * FROM transactions WHERE id = $1`,
-      [transactionId]
-    );
+    let deletedFundId: number | null = null;
 
-    if (existing.rows.length === 0) {
-      const response = NextResponse.json({ error: "Transaction not found" }, { status: 404 });
-      setCORSHeaders(response);
-      return response;
-    }
+    await executeTransaction(user ?? null, async (client) => {
+      const existing = await client.query<Transaction>(
+        `SELECT * FROM transactions WHERE id = $1`,
+        [transactionId]
+      );
 
-    const transaction = existing.rows[0];
+      if (existing.rows.length === 0) {
+        throw new Error('Transaction not found');
+      }
 
-    // Delete transaction
-    await executeWithContext(user, `DELETE FROM transactions WHERE id = $1`, [transactionId]);
+      const transaction = existing.rows[0];
+      deletedFundId = transaction.fund_id;
 
-    // Adjust fund balance
-    const balanceAdjustment = Number(transaction.amount_out) - Number(transaction.amount_in);
-    await executeWithContext(user, 
-      `UPDATE funds
-       SET current_balance = current_balance + $1,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $2`,
-      [balanceAdjustment, transaction.fund_id]
-    );
+      await client.query(`DELETE FROM fund_movements_enhanced WHERE transaction_id = $1`, [transactionId]);
+      await client.query(`DELETE FROM transactions WHERE id = $1`, [transactionId]);
+
+      await client.query(
+        `UPDATE funds
+         SET current_balance = COALESCE((
+           SELECT SUM(amount_in - amount_out)
+           FROM transactions
+           WHERE fund_id = $1
+         ), 0),
+             updated_at = NOW()
+         WHERE id = $1`,
+        [transaction.fund_id]
+      );
+    });
 
     const response = NextResponse.json({
       success: true,
-      message: "Transaction deleted successfully"
+      message: "Transaction deleted successfully",
+      fundId: deletedFundId
     });
 
     setCORSHeaders(response);
     return response;
   } catch (error) {
-    console.error("Error deleting transaction:", error);
+    const isNotFound = error instanceof Error && error.message === 'Transaction not found';
+    if (!isNotFound) {
+      console.error("Error deleting transaction:", error);
+    }
     const response = NextResponse.json(
-      { error: "Error deleting transaction", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+      {
+        error: isNotFound ? "Transaction not found" : "Error deleting transaction",
+        details: error instanceof Error ? error.message : "Unknown error"
+      },
+      { status: isNotFound ? 404 : 500 }
     );
     setCORSHeaders(response);
     return response;

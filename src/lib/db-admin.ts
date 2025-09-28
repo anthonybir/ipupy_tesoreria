@@ -1,5 +1,9 @@
 import { executeWithContext } from '@/lib/db';
 import { AuthContext } from '@/lib/auth-context';
+import {
+  createReportTransactions,
+  createTransaction as createLedgerTransaction,
+} from '@/app/api/reports/route-helpers';
 
 type FundBalanceRow = {
   id: number;
@@ -63,125 +67,97 @@ export async function fetchFundBalances(auth: AuthContext | null, filters: FundB
 
 // Process report approval and create fund transactions
 export async function processReportApproval(auth: AuthContext | null, reportId: number, approvedBy: string) {
-  await executeWithContext(auth, 'BEGIN');
+  // Get report details
+  const reportResult = await executeWithContext(auth, `
+    SELECT r.*, c.name as church_name
+    FROM reports r
+    JOIN churches c ON r.church_id = c.id
+    WHERE r.id = $1
+  `, [reportId]);
 
-  try {
-    // Get report details
-    const reportResult = await executeWithContext(auth, `
-      SELECT r.*, c.name as church_name
-      FROM reports r
-      JOIN churches c ON r.church_id = c.id
-      WHERE r.id = $1
-    `, [reportId]);
-
-    if (reportResult.rowCount === 0) {
-      throw new Error('Report not found');
-    }
-
-    const report = reportResult.rows[0];
-
-    const toNumber = (value: unknown) => {
-      const parsed = Number(value ?? 0);
-      return Number.isFinite(parsed) ? parsed : 0;
-    };
-
-    const diezmos = toNumber(report.diezmos);
-    const ofrendas = toNumber(report.ofrendas);
-    const transactionDate = report.fecha_deposito
-      ? new Date(report.fecha_deposito).toISOString().slice(0, 10)
-      : `${report.year}-${String(report.month).padStart(2, '0')}-01`;
-
-    // Create transactions for each fund
-    const transactions = [];
-
-    // 10% of tithes and offerings to General fund
-    if (diezmos > 0 || ofrendas > 0) {
-      const totalBase = diezmos + ofrendas;
-      const generalAmount = totalBase * 0.1;
-
-      const txn = await executeWithContext(auth, `
-        INSERT INTO transactions (
-          fund_id, church_id, report_id, concept,
-          amount_in, amount_out, date, created_by, created_at
-        ) VALUES (
-          1, $1, $2, $3, $4, 0, $5,
-          'system', NOW()
-        ) RETURNING id
-      `, [
-        report.church_id,
-        reportId,
-        `Diezmos Nacionales - ${report.church_name}`,
-        generalAmount,
-        transactionDate
-      ]);
-      transactions.push(txn.rows[0]);
-    }
-
-    // 100% of designated funds to respective funds
-    const designatedFunds = [
-      { field: 'misiones', fund_id: 2, name: 'Misiones' },
-      { field: 'lazos_amor', fund_id: 3, name: 'Lazos de Amor' },
-      { field: 'mision_posible', fund_id: 4, name: 'Misión Posible' },
-      { field: 'caballeros', fund_id: 5, name: 'Caballeros' },
-      { field: 'apy', fund_id: 6, name: 'APY' },
-      { field: 'iba', fund_id: 7, name: 'IBA' },
-      { field: 'ninos', fund_id: 8, name: 'Niños' },
-      { field: 'damas', fund_id: 9, name: 'Damas' }
-    ];
-
-    for (const fund of designatedFunds) {
-      const designatedAmount = toNumber(report[fund.field]);
-      if (designatedAmount > 0) {
-        const txn = await executeWithContext(auth, `
-          INSERT INTO transactions (
-            fund_id, church_id, report_id, concept,
-            amount_in, amount_out, date, created_by, created_at
-          ) VALUES (
-            $1, $2, $3, $4, $5, 0, $6,
-            'system', NOW()
-          ) RETURNING id
-        `, [
-          fund.fund_id,
-          report.church_id,
-          reportId,
-          `Ofrenda ${fund.name} - ${report.church_name}`,
-          designatedAmount,
-          transactionDate
-        ]);
-        transactions.push(txn.rows[0]);
-      }
-    }
-
-    // Update report status metadata
-    await executeWithContext(auth, `
-      UPDATE reports
-      SET estado = 'aprobado_admin',
-          processed_by = $1,
-          processed_at = NOW(),
-          transactions_created = TRUE,
-          transactions_created_at = NOW(),
-          transactions_created_by = $1,
-          updated_at = NOW()
-      WHERE id = $2
-    `, [approvedBy, reportId]);
-
-    // Update fund balances
-    await executeWithContext(auth, `
-      UPDATE funds f
-      SET current_balance = COALESCE((
-        SELECT SUM(t.amount_in - t.amount_out)
-        FROM transactions t
-        WHERE t.fund_id = f.id
-      ), 0),
-      updated_at = NOW()
-    `);
-
-    await executeWithContext(auth, 'COMMIT');
-    return { success: true, transactions };
-  } catch (error) {
-    await executeWithContext(auth, 'ROLLBACK');
-    throw error;
+  if (reportResult.rowCount === 0) {
+    throw new Error('Report not found');
   }
+
+  const report = reportResult.rows[0];
+
+  const toNumber = (value: unknown) => {
+    const parsed = Number(value ?? 0);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  // Extract financial data from report
+  const diezmos = toNumber(report.diezmos);
+  const ofrendas = toNumber(report.ofrendas);
+  const otros = toNumber(report.otros);
+  const anexos = toNumber(report.anexos);
+
+  // Calculate totals
+  const congregationalBase = diezmos + ofrendas;
+  const totalDesignados = toNumber(report.ofrendas_directas_misiones) +
+                          toNumber(report.lazos_amor) +
+                          toNumber(report.mision_posible) +
+                          toNumber(report.aporte_caballeros) +
+                          toNumber(report.apy) +
+                          toNumber(report.instituto_biblico) +
+                          toNumber(report.caballeros) +
+                          toNumber(report.damas) +
+                          toNumber(report.jovenes) +
+                          toNumber(report.ninos);
+
+  const gastosOperativos = toNumber(report.servicios) +
+                           toNumber(report.energia_electrica) +
+                           toNumber(report.agua) +
+                           toNumber(report.recoleccion_basura) +
+                           toNumber(report.mantenimiento) +
+                           toNumber(report.materiales) +
+                           toNumber(report.otros_gastos);
+
+  const totalIngresos = congregationalBase + anexos + otros + totalDesignados;
+  const fondoNacional = Math.round(congregationalBase * 0.1);
+  const honorariosPastoral = Math.max(0, totalIngresos - (totalDesignados + gastosOperativos + fondoNacional));
+
+  // Prepare designated funds object
+  const designated = {
+    misiones: toNumber(report.ofrendas_directas_misiones),
+    lazos_amor: toNumber(report.lazos_amor),
+    mision_posible: toNumber(report.mision_posible),
+    apy: toNumber(report.apy),
+    iba: toNumber(report.instituto_biblico),
+    caballeros: toNumber(report.aporte_caballeros || report.caballeros),
+    damas: toNumber(report.damas),
+    jovenes: toNumber(report.jovenes),
+    ninos: toNumber(report.ninos)
+  };
+
+  // Use the createReportTransactions helper for consistent transaction creation
+  await createReportTransactions(
+    report,
+    {
+      totalEntradas: totalIngresos,
+      fondoNacional,
+      honorariosPastoral,
+      gastosOperativos,
+      fechaDeposito: report.fecha_deposito
+    },
+    designated,
+    auth
+  );
+
+  // Update report status metadata
+  await executeWithContext(auth, `
+    UPDATE reports
+    SET estado = 'procesado',
+        processed_by = $1,
+        processed_at = NOW(),
+        transactions_created = TRUE,
+        transactions_created_at = NOW(),
+        transactions_created_by = $1,
+        updated_at = NOW()
+    WHERE id = $2
+  `, [approvedBy, reportId]);
+
+  return { success: true, reportId, approvedBy };
 }
 
 // Add external transaction (treasurer manual entry)
@@ -192,43 +168,22 @@ export async function addExternalTransaction(auth: AuthContext | null, data: {
   amount_out: number;
   date: string;
   provider?: string | null;
+  provider_id?: number | null;
   document_number?: string | null;
 }) {
-  await executeWithContext(auth, 'BEGIN');
+  const transaction = await createLedgerTransaction({
+    fund_id: data.fund_id,
+    concept: data.concept,
+    provider: data.provider ?? null,
+    provider_id: data.provider_id ?? null,
+    document_number: data.document_number ?? null,
+    amount_in: data.amount_in,
+    amount_out: data.amount_out,
+    date: data.date,
+    created_by: 'treasurer'
+  }, auth);
 
-  try {
-    // Insert transaction
-    const result = await executeWithContext(auth, `
-      INSERT INTO transactions (
-        fund_id, concept, provider, document_number,
-        amount_in, amount_out, date, created_by, created_at
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, 'treasurer', NOW()
-      ) RETURNING *
-    `, [
-      data.fund_id,
-      data.concept,
-      data.provider ?? null,
-      data.document_number ?? null,
-      data.amount_in,
-      data.amount_out,
-      data.date
-    ]);
-
-    // Update fund balance
-    await executeWithContext(auth, `
-      UPDATE funds
-      SET current_balance = current_balance + $1 - $2,
-          updated_at = NOW()
-      WHERE id = $3
-    `, [data.amount_in, data.amount_out, data.fund_id]);
-
-    await executeWithContext(auth, 'COMMIT');
-    return result.rows[0];
-  } catch (error) {
-    await executeWithContext(auth, 'ROLLBACK');
-    throw error;
-  }
+  return transaction;
 }
 
 // Generate reconciliation report
