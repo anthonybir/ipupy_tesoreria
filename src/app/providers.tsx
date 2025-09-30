@@ -36,7 +36,7 @@ export function Providers({ children }: { children: ReactNode }) {
       }
 
       // Clear Cache Storage API
-      if (window.caches?.keys) {
+      if (typeof window !== 'undefined' && 'caches' in window) {
         caches.keys().then(keys => {
           keys.forEach(key => caches.delete(key));
         });
