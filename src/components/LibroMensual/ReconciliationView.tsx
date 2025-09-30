@@ -107,6 +107,11 @@ export function ReconciliationView() {
       <PageHeader
         title="Resumen de saldos por fondo"
         subtitle="Conciliación del tesoro nacional"
+        breadcrumbs={[
+          { label: "Inicio", href: "/" },
+          { label: "Libro Mensual", href: "/ledger" },
+          { label: "Conciliación" },
+        ]}
       />
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">

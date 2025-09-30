@@ -58,46 +58,70 @@ export default function SupabaseAuth() {
   };
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col justify-center bg-[color-mix(in_oklab,var(--absd-authority) 6%,white)] px-4 py-12 sm:px-6">
-      <PageHeader
-        title="Acceso seguro"
-        subtitle="Utiliza tu cuenta institucional para continuar"
-      />
-      <SectionCard
-        title="IPU PY Tesorería"
-        description="Sistema Nacional de Gestión Financiera"
-        padding="lg"
-        leading={
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--absd-authority)] text-sm font-semibold text-white">
-            IPU
-          </span>
-        }
-      >
-        <div className="space-y-6">
-          {error && (
-            <Alert variant="danger">
-              <AlertTitle>Error de autenticación</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+    <main className="relative mx-auto flex min-h-screen max-w-xl flex-col justify-center px-4 py-12 sm:px-6">
+      {/* Gradient background */}
+      <div className="fixed inset-0 -z-10 bg-gradient-to-br from-[color-mix(in_oklab,var(--absd-authority)_12%,white)] via-[color-mix(in_oklab,var(--absd-authority)_6%,white)] to-[color-mix(in_oklab,var(--absd-prosperity)_8%,white)]" />
 
-          <Button
-            type="button"
-            onClick={handleGoogleLogin}
-            loading={loading}
-            icon={<GoogleIcon />}
-            iconPosition="left"
-            className="w-full justify-center"
-            variant="secondary"
-          >
-            {loading ? 'Iniciando sesión…' : 'Iniciar sesión con Google'}
-          </Button>
-
-          <p className="text-center text-xs text-[rgba(15,23,42,0.55)]">
-            Solo usuarios con correos @ipupy.org.py o @ipupy.org pueden acceder.
-          </p>
+      <div className="space-y-8">
+        <div className="text-center">
+          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-[var(--absd-authority)] shadow-lg">
+            <span className="text-2xl font-bold text-white">IPU</span>
+          </div>
+          <PageHeader
+            title="Acceso seguro"
+            subtitle="Utiliza tu cuenta institucional para continuar"
+          />
         </div>
-      </SectionCard>
+
+        <SectionCard
+          title="IPU PY Tesorería"
+          description="Sistema Nacional de Gestión Financiera"
+          padding="lg"
+        >
+          <div className="space-y-6">
+            {error && (
+              <Alert variant="danger">
+                <AlertTitle>Error de autenticación</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <Button
+              type="button"
+              onClick={handleGoogleLogin}
+              loading={loading}
+              icon={<GoogleIcon />}
+              iconPosition="left"
+              className="w-full justify-center text-base h-12"
+              variant="secondary"
+              size="lg"
+            >
+              {loading ? 'Iniciando sesión…' : 'Iniciar sesión con Google'}
+            </Button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-[var(--absd-border)]" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-[rgba(15,23,42,0.55)]">
+                  Acceso autorizado
+                </span>
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-[color-mix(in_oklab,var(--absd-info)_8%,white)] border border-[rgba(14,165,233,0.2)] p-4">
+              <p className="text-center text-xs text-[var(--absd-info)]">
+                <strong>Dominio restringido:</strong> Solo usuarios con correos @ipupy.org.py o @ipupy.org pueden acceder al sistema.
+              </p>
+            </div>
+          </div>
+        </SectionCard>
+
+        <p className="text-center text-xs text-[rgba(15,23,42,0.5)]">
+          © {new Date().getFullYear()} Iglesia Pentecostal Unida del Paraguay
+        </p>
+      </div>
     </main>
   );
 }

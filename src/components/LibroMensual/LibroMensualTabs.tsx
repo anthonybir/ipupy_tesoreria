@@ -91,6 +91,10 @@ export function LibroMensualTabs() {
         title="Centro de control IPU Paraguay"
         subtitle="Libro mensual del tesorero"
         badge={{ label: 'Libro mensual' }}
+        breadcrumbs={[
+          { label: "Inicio", href: "/" },
+          { label: "Libro Mensual" },
+        ]}
       />
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">

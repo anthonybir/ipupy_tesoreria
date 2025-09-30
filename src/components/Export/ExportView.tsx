@@ -111,6 +111,10 @@ export default function ExportView() {
       <PageHeader
         title="Descarga de reportes"
         subtitle="Genera archivos Excel con la información consolidada para respaldos y reportes oficiales."
+        breadcrumbs={[
+          { label: "Inicio", href: "/" },
+          { label: "Exportar" },
+        ]}
       />
 
       <SectionCard title="Generar exportación" description={helperText} padding="lg">

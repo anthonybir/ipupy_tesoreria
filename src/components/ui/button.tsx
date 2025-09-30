@@ -6,24 +6,24 @@ import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-60 active:scale-[0.99]',
+  'inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-all duration-200 ease-in-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] shadow-sm hover:shadow-md',
   {
     variants: {
       variant: {
         primary:
-          'bg-[var(--absd-authority)] text-white hover:brightness-110 focus-visible:ring-[var(--absd-authority)]',
+          'bg-[var(--absd-authority)] text-white hover:brightness-110 hover:shadow-lg focus-visible:ring-[var(--absd-authority)] active:brightness-95',
         secondary:
-          'bg-[var(--absd-prosperity)] text-[var(--absd-authority)] hover:brightness-110 focus-visible:ring-[var(--absd-prosperity)]',
+          'bg-[var(--absd-prosperity)] text-[var(--absd-authority)] hover:brightness-105 hover:shadow-md focus-visible:ring-[var(--absd-prosperity)] border border-[rgba(0,37,86,0.15)]',
         outline:
-          'border border-[var(--absd-authority)] text-[var(--absd-authority)] hover:bg-[color-mix(in_oklab,var(--absd-authority) 6%,white)] focus-visible:ring-[var(--absd-authority)]',
+          'border-2 border-[var(--absd-authority)] text-[var(--absd-authority)] bg-white hover:bg-[color-mix(in_oklab,var(--absd-authority) 8%,white)] focus-visible:ring-[var(--absd-authority)] hover:border-[color-mix(in_oklab,var(--absd-authority) 85%,white)]',
         ghost:
-          'text-[var(--absd-authority)] hover:bg-[color-mix(in_oklab,var(--absd-authority) 8%,white)] focus-visible:ring-[var(--absd-authority)]',
+          'text-[var(--absd-authority)] hover:bg-[color-mix(in_oklab,var(--absd-authority) 10%,white)] focus-visible:ring-[var(--absd-authority)] shadow-none hover:shadow-sm',
         danger:
-          'bg-[var(--absd-error)] text-white hover:brightness-110 focus-visible:ring-[var(--absd-error)]',
+          'bg-[var(--absd-error)] text-white hover:brightness-110 hover:shadow-lg focus-visible:ring-[var(--absd-error)] active:brightness-95',
         success:
-          'bg-[var(--absd-success)] text-white hover:brightness-110 focus-visible:ring-[var(--absd-success)]',
+          'bg-[var(--absd-success)] text-white hover:brightness-110 hover:shadow-lg focus-visible:ring-[var(--absd-success)] active:brightness-95',
         link:
-          'text-[var(--absd-authority)] underline underline-offset-4 hover:text-[color-mix(in_oklab,var(--absd-authority) 85%,white)] focus-visible:ring-[var(--absd-authority)]'
+          'text-[var(--absd-authority)] underline underline-offset-4 hover:text-[color-mix(in_oklab,var(--absd-authority) 75%,black)] focus-visible:ring-[var(--absd-authority)] shadow-none hover:shadow-none'
       },
       size: {
         sm: 'h-9 rounded-md px-3 text-sm',

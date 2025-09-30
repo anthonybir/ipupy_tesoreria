@@ -5,6 +5,8 @@ import { MagnifyingGlassIcon, PencilIcon, TrashIcon, PlusIcon } from '@heroicons
 import { useProviders, Provider } from '@/hooks/useProviders';
 import { AddProviderDialog } from './AddProviderDialog';
 import { EditProviderDialog } from './EditProviderDialog';
+import { PageHeader } from '@/components/Shared';
+import { Button } from '@/components/ui/button';
 
 export function ProviderManagementView() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -42,21 +44,24 @@ export function ProviderManagementView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Gestión de Proveedores</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Administra los proveedores y beneficiarios del sistema
-          </p>
-        </div>
-        <button
-          onClick={() => setShowAddDialog(true)}
-          className="flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700"
-        >
-          <PlusIcon className="h-5 w-5" />
-          Nuevo Proveedor
-        </button>
-      </div>
+      <PageHeader
+        title="Gestión de Proveedores"
+        subtitle="Administra los proveedores y beneficiarios del sistema con registro centralizado de RUC"
+        breadcrumbs={[
+          { label: "Inicio", href: "/" },
+          { label: "Proveedores" },
+        ]}
+        actions={
+          <Button
+            type="button"
+            onClick={() => setShowAddDialog(true)}
+            icon={<PlusIcon className="h-5 w-5" />}
+            size="sm"
+          >
+            Nuevo Proveedor
+          </Button>
+        }
+      />
 
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 p-4">

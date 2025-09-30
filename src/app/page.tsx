@@ -265,6 +265,9 @@ export default async function DashboardLanding() {
         title="Panel de administración"
         subtitle="Monitorea el pulso financiero nacional y los pendientes críticos de la migración Next.js en un solo lugar."
         badge={{ label: "Migración Next.js" }}
+        breadcrumbs={[
+          { label: "Inicio", href: "/" },
+        ]}
       />
 
       <div className="absd-grid">
@@ -445,40 +448,37 @@ export default async function DashboardLanding() {
       </SectionCard>
 
       <SectionCard title="Últimos informes registrados" description="Monitorea el flujo más reciente de reportes nacionales.">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-[var(--absd-border)] text-sm" role="grid">
-            <thead className="bg-[color-mix(in_oklab,var(--absd-authority) 6%,white)]">
+        <div className="overflow-x-auto rounded-lg border border-[var(--absd-border)]">
+          <table className="absd-table" role="grid">
+            <thead>
               <tr>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.65)]">
-                  Iglesia
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.65)]">
-                  Periodo
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.65)]">
-                  Total
-                </th>
-                <th scope="col" className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.65)]">
-                  Estado
-                </th>
+                <th scope="col">Iglesia</th>
+                <th scope="col">Periodo</th>
+                <th scope="col">Total</th>
+                <th scope="col">Estado</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[var(--absd-border)] bg-white">
+            <tbody>
               {recentReports.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-4 text-center text-[rgba(15,23,42,0.65)]" colSpan={4}>
-                    Aún no existen informes migrados.
+                  <td colSpan={4}>
+                    <div className="absd-empty-state">
+                      <p className="absd-empty-state-title">No hay informes registrados</p>
+                      <p className="absd-empty-state-description">
+                        Aún no existen informes migrados en el sistema.
+                      </p>
+                    </div>
                   </td>
                 </tr>
               ) : (
                 recentReports.map((report) => (
                   <tr key={report.id}>
-                    <td className="px-3 py-2 text-[var(--absd-ink)]">{report.church_name}</td>
-                    <td className="px-3 py-2 text-[var(--absd-ink)]">{`${report.month}/${report.year}`}</td>
-                    <td className="px-3 py-2 text-[var(--absd-ink)]">
+                    <td className="font-medium">{report.church_name}</td>
+                    <td>{`${report.month}/${report.year}`}</td>
+                    <td className="font-semibold">
                       {formatCurrencyDisplay(report.total_entradas)}
                     </td>
-                    <td className="px-3 py-2">
+                    <td>
                       <StatusPill
                         tone={report.estado === 'procesado' ? 'success' : 'warning'}
                       >

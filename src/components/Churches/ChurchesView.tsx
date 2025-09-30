@@ -93,6 +93,10 @@ export default function ChurchesView() {
       <PageHeader
         title="Iglesias activas"
         subtitle="Registra nuevas congregaciones, actualiza información de contacto y consulta el estado de sus reportes."
+        breadcrumbs={[
+          { label: "Inicio", href: "/" },
+          { label: "Iglesias" },
+        ]}
       />
 
       <ChurchForm />

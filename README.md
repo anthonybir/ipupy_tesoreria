@@ -11,18 +11,22 @@ Sistema integral de gestión de tesorería para la **Iglesia Pentecostal Unida d
 
 ## ✨ Características Principales
 
-- 📊 **Dashboard Centralizado** - Métricas financieras en tiempo real
+- 📊 **Dashboard Centralizado** - Métricas financieras en tiempo real con visualizaciones
 - ⛪ **Gestión Multi-Iglesia** - Administración de 22 iglesias con información pastoral completa
 - 📈 **Reportes Mensuales** - Sistema integral de informes financieros
 - 🔐 **Autenticación Segura** - Google OAuth via Supabase para @ipupy.org.py
 - 📤 **Excel Compatible** - Importación/exportación con formatos existentes
 - 💰 **Cálculos Automáticos** - Fondo nacional (10%) y balances
 - 🏦 **Control Bancario** - Seguimiento de depósitos y transacciones
-- 📱 **Diseño Responsivo** - Optimizado para móviles y escritorio
+- 📱 **Diseño Responsivo** - Optimizado para móviles y escritorio con touch targets
 - 👥 **Sistema de Roles** - 6 roles simplificados y jerárquicos
 - ⚙️ **Panel de Configuración** - Sistema administrable de configuración
 - 🔒 **Seguridad Mejorada** - RLS con contexto de usuario robusto
 - 📋 **Transacciones ACID** - Integridad de datos garantizada
+- 🎨 **Design System Moderno** - Tokens, animaciones, y componentes coherentes
+- ⌨️ **Navegación por Teclado** - 15+ atajos para usuarios avanzados
+- 📉 **Visualizaciones Ligeras** - Charts SVG sin dependencias pesadas (~5KB)
+- ♿ **Accesibilidad WCAG 2.1** - Level AA compliant con soporte para motion reducido
 
 ## 🚀 Inicio Rápido
 
@@ -162,7 +166,38 @@ npm run db:migrate
 
 Ver [`.env.example`](./.env.example) para la lista completa de variables requeridas.
 
-## 🆕 Novedades v2.0
+## 🆕 Novedades v3.3 - UX & Design System
+
+### Design System Completo
+- **Design Tokens**: Sistema completo de tokens CSS (tipografía, espaciado, sombras, animaciones)
+- **Micro-Interacciones**: 9 tipos de animaciones GPU-accelerated (fade, slide, scale, bounce, etc.)
+- **Dark Mode Mejorado**: Glassmorphism, sombras ajustadas, contraste optimizado
+- **Componentes Visuales**: StatusPill con iconos, botones con elevación, cards interactivas
+
+### Navegación Mejorada
+- **Breadcrumbs**: Navegación consistente en 12+ páginas principales
+- **Keyboard Shortcuts**: 15+ atajos estilo Vim (g h = home, g i = iglesias, ? = ayuda)
+- **Skeleton Loaders**: 7 variantes de loading states que previenen layout shift
+
+### Visualización de Datos
+- **Charts Ligeros**: 3 componentes SVG personalizados (~5KB vs ~85KB Recharts)
+  - MiniLineChart: Sparklines para tendencias
+  - ProgressBar: Indicadores de progreso con variantes
+  - SimpleBarChart: Gráficos de barras y comparaciones
+- **StatCards Mejoradas**: Arrows de tendencia, porcentajes, mini charts embebidos
+
+### Mobile & Accesibilidad
+- **Touch Targets**: Mínimo 44x44px en todos los controles
+- **Responsive Tables**: Vista de cards en móviles
+- **WCAG 2.1 AA**: Cumplimiento completo con reduced motion support
+- **iOS Optimizations**: Prevención de zoom en inputs, safe areas
+
+### Bundle Impact
+- **Total additions**: ~15KB gzipped
+- **Charts**: 94% más pequeños que Recharts
+- **Performance**: Sin impacto negativo, mejoras en perceived performance
+
+## 🆕 Novedades v3.0-3.2
 
 ### Sistema de Configuración Administrable
 - **Panel Admin Completo**: Configuración por secciones (General, Financiera, Seguridad, etc.)

@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import MainNav from "./MainNav";
 import UserMenu from "./UserMenu";
 import { Toaster } from "react-hot-toast";
+import { KeyboardShortcutsDialog } from "@/components/Shared/KeyboardShortcuts";
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -125,6 +126,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
           },
         }}
       />
+
+      {!isMinimal && <KeyboardShortcutsDialog />}
     </div>
   );
 }

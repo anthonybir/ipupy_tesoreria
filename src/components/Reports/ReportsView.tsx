@@ -244,6 +244,10 @@ export default function ReportsView() {
       <PageHeader
         title="Centro de reportes"
         subtitle="Gestiona los informes mensuales, revisa métricas nacionales y mantiene actualizado el directorio congregacional."
+        breadcrumbs={[
+          { label: "Inicio", href: "/" },
+          { label: "Informes" },
+        ]}
       >
         <div className="flex flex-wrap items-center gap-2">
           {tabs.map((tab) => {
