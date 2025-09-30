@@ -19,7 +19,6 @@ import {
   StatusPill,
   Toolbar,
 } from '@/components/Shared';
-import { ProgressBar } from '@/components/Shared/Charts';
 import { Button } from '@/components/ui/button';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
@@ -103,33 +102,12 @@ export default function FundsView() {
       },
       {
         id: 'balance',
-        header: 'Saldo / Meta',
-        render: (fund: FundRecord) => {
-          const target = fund.balances.target || fund.balances.current * 1.2; // Default target if not set
-          const hasTarget = fund.balances.target && fund.balances.target > 0;
-          return (
-            <div className="min-w-[180px] space-y-1">
-              <div className="flex items-baseline justify-between gap-2 text-xs">
-                <span className="font-semibold text-[var(--absd-ink)]">
-                  {formatCurrency(fund.balances.current)}
-                </span>
-                {hasTarget && (
-                  <span className="text-[rgba(15,23,42,0.55)]">
-                    / {formatCurrency(target)}
-                  </span>
-                )}
-              </div>
-              {hasTarget && (
-                <ProgressBar
-                  value={fund.balances.current}
-                  max={target}
-                  size="sm"
-                  color={fund.balances.current >= target ? 'success' : fund.balances.current >= target * 0.7 ? 'warning' : 'primary'}
-                />
-              )}
-            </div>
-          );
-        },
+        header: 'Saldo',
+        render: (fund: FundRecord) => (
+          <span className="font-semibold text-[var(--absd-ink)]">
+            {formatCurrency(fund.balances.current)}
+          </span>
+        ),
       },
       {
         id: 'status',
