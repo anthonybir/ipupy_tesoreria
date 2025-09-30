@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Security headers + Cache control
+  // Security headers + Cache control (v3.3.0 rebuild)
   async headers() {
     return [
       // Security headers for API routes
