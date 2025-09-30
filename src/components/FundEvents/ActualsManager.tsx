@@ -56,7 +56,10 @@ export function ActualsManager({ event, canEdit }: ActualsManagerProps) {
   const [deleteTarget, setDeleteTarget] = useState<RawEventActual | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const actuals: RawEventActual[] = actualsData;
+  const actuals: RawEventActual[] = useMemo(
+    () => (actualsData as RawEventActual[]) || [],
+    [actualsData]
+  );
 
   const closeFormDialog = () => {
     setIsDialogOpen(false);

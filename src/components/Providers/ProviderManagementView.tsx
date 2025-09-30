@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { MagnifyingGlassIcon, PencilIcon, TrashIcon, PlusIcon } from '@heroicons/react/24/outline';
+import toast from 'react-hot-toast';
+import { MagnifyingGlassIcon, PencilIcon, TrashIcon, PlusIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { useProviders, Provider } from '@/hooks/useProviders';
 import { AddProviderDialog } from './AddProviderDialog';
 import { EditProviderDialog } from './EditProviderDialog';
@@ -11,12 +12,13 @@ import { Button } from '@/components/ui/button';
 export function ProviderManagementView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState<string>('');
+  const [showInactive, setShowInactive] = useState(false);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
 
-  const { data, isLoading, deleteProvider } = useProviders({
+  const { data, isLoading, deleteProvider, reactivateProvider } = useProviders({
     categoria: selectedCategoria || undefined,
-    es_activo: true,
+    es_activo: showInactive ? undefined : true,
     limit: 100,
   });
 
@@ -36,8 +38,20 @@ export function ProviderManagementView() {
     if (window.confirm(`¿Está seguro de desactivar el proveedor "${nombre}"?`)) {
       try {
         await deleteProvider.mutateAsync(id);
-      } catch {
-        alert('Error al desactivar proveedor');
+        toast.success(`Proveedor "${nombre}" desactivado correctamente`);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Error al desactivar proveedor');
+      }
+    }
+  };
+
+  const handleReactivate = async (id: number, nombre: string) => {
+    if (window.confirm(`¿Está seguro de reactivar el proveedor "${nombre}"?`)) {
+      try {
+        await reactivateProvider.mutateAsync(id);
+        toast.success(`Proveedor "${nombre}" reactivado correctamente`);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Error al reactivar proveedor');
       }
     }
   };
@@ -65,7 +79,7 @@ export function ProviderManagementView() {
 
       <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 p-4">
-          <div className="flex flex-col gap-4 sm:flex-row">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
             <div className="relative flex-1">
               <MagnifyingGlassIcon className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
               <input
@@ -88,6 +102,15 @@ export function ProviderManagementView() {
               <option value="construccion">Construcción</option>
               <option value="otros">Otros</option>
             </select>
+            <label className="flex items-center gap-2 whitespace-nowrap text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={showInactive}
+                onChange={(e) => setShowInactive(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              Mostrar inactivos
+            </label>
           </div>
         </div>
 
@@ -134,16 +157,21 @@ export function ProviderManagementView() {
                   <tr key={provider.id} className="hover:bg-slate-50">
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
-                        <span className="font-medium text-gray-900">
+                        <span className={`font-medium ${provider.es_activo ? 'text-gray-900' : 'text-gray-400'}`}>
                           {provider.nombre}
                           {provider.es_especial && (
                             <span className="ml-2 inline-flex items-center rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800">
                               Especial
                             </span>
                           )}
+                          {!provider.es_activo && (
+                            <span className="ml-2 inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                              Inactivo
+                            </span>
+                          )}
                         </span>
                         {provider.razon_social && (
-                          <span className="text-sm text-gray-500">
+                          <span className={`text-sm ${provider.es_activo ? 'text-gray-500' : 'text-gray-400'}`}>
                             {provider.razon_social}
                           </span>
                         )}
@@ -186,13 +214,23 @@ export function ProviderManagementView() {
                         >
                           <PencilIcon className="h-5 w-5" />
                         </button>
-                        <button
-                          onClick={() => handleDelete(provider.id, provider.nombre)}
-                          className="rounded-lg p-1 text-gray-400 hover:bg-red-100 hover:text-red-600"
-                          title="Desactivar"
-                        >
-                          <TrashIcon className="h-5 w-5" />
-                        </button>
+                        {provider.es_activo ? (
+                          <button
+                            onClick={() => handleDelete(provider.id, provider.nombre)}
+                            className="rounded-lg p-1 text-gray-400 hover:bg-red-100 hover:text-red-600"
+                            title="Desactivar"
+                          >
+                            <TrashIcon className="h-5 w-5" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleReactivate(provider.id, provider.nombre)}
+                            className="rounded-lg p-1 text-gray-400 hover:bg-green-100 hover:text-green-600"
+                            title="Reactivar"
+                          >
+                            <ArrowPathIcon className="h-5 w-5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

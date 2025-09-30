@@ -3,6 +3,7 @@ import { getAuthContext } from "@/lib/auth-context";
 import { createClient } from "@/lib/supabase/server";
 import { setCORSHeaders } from "@/lib/cors";
 import { fetchFundBalances } from "@/lib/db-admin";
+import { handleApiError, ValidationError } from "@/lib/api-errors";
 
 
 interface FundCreateInput {
@@ -24,8 +25,9 @@ async function handleGet(req: NextRequest) {
     const includeInactive = searchParams.get("include_inactive") === "true";
     const type = searchParams.get("type");
 
-    // Get auth context for RLS
-    const auth = await getAuthContext(req);
+    // Require auth context for RLS - financial data should not be public
+    const { requireAuth } = await import('@/lib/auth-context');
+    const auth = await requireAuth(req);
 
     const fundRows = await fetchFundBalances(auth, { includeInactive, type });
 
@@ -62,13 +64,7 @@ async function handleGet(req: NextRequest) {
     setCORSHeaders(response);
     return response;
   } catch (error) {
-    console.error("Error fetching funds:", error);
-    const response = NextResponse.json(
-      { error: "Error fetching funds", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
-    setCORSHeaders(response);
-    return response;
+    return handleApiError(error, req.headers.get('origin'), 'GET /api/financial/funds');
   }
 }
 
@@ -92,9 +88,7 @@ async function handlePost(req: NextRequest) {
 
     // Validate required fields
     if (!body.name) {
-      const response = NextResponse.json({ error: "Fund name is required" }, { status: 400 });
-      setCORSHeaders(response);
-      return response;
+      throw new ValidationError("Fund name is required");
     }
 
     // Check for duplicate name
@@ -134,13 +128,7 @@ async function handlePost(req: NextRequest) {
     setCORSHeaders(response);
     return response;
   } catch (error) {
-    console.error("Error creating fund:", error);
-    const response = NextResponse.json(
-      { error: "Error creating fund", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
-    setCORSHeaders(response);
-    return response;
+    return handleApiError(error, req.headers.get('origin'), 'POST /api/financial/funds');
   }
 }
 
@@ -164,18 +152,14 @@ async function handlePut(req: NextRequest) {
     const fundId = searchParams.get("id");
 
     if (!fundId) {
-      const response = NextResponse.json({ error: "Fund ID is required" }, { status: 400 });
-      setCORSHeaders(response);
-      return response;
+      throw new ValidationError("Fund ID is required");
     }
 
     const body: FundUpdateInput = await req.json();
 
     if (!body.name && !body.description && body.type === undefined &&
         body.current_balance === undefined && body.is_active === undefined) {
-      const response = NextResponse.json({ error: "No fields to update" }, { status: 400 });
-      setCORSHeaders(response);
-      return response;
+      throw new ValidationError("No fields to update");
     }
 
     // Build update object for Supabase
@@ -212,13 +196,7 @@ async function handlePut(req: NextRequest) {
     setCORSHeaders(response);
     return response;
   } catch (error) {
-    console.error("Error updating fund:", error);
-    const response = NextResponse.json(
-      { error: "Error updating fund", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
-    setCORSHeaders(response);
-    return response;
+    return handleApiError(error, req.headers.get('origin'), 'PUT /api/financial/funds');
   }
 }
 
@@ -242,9 +220,7 @@ async function handleDelete(req: NextRequest) {
     const fundId = searchParams.get("id");
 
     if (!fundId) {
-      const response = NextResponse.json({ error: "Fund ID is required" }, { status: 400 });
-      setCORSHeaders(response);
-      return response;
+      throw new ValidationError("Fund ID is required");
     }
 
     const supabase = await createClient();
@@ -290,13 +266,7 @@ async function handleDelete(req: NextRequest) {
       return response;
     }
   } catch (error) {
-    console.error("Error deleting fund:", error);
-    const response = NextResponse.json(
-      { error: "Error deleting fund", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
-    setCORSHeaders(response);
-    return response;
+    return handleApiError(error, req.headers.get('origin'), 'DELETE /api/financial/funds');
   }
 }
 

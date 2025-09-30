@@ -1,94 +1,96 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
 
-type Provider = {
+import { requireAuth } from '@/lib/auth-supabase';
+import { executeWithContext } from '@/lib/db';
+import { handleApiError, ValidationError } from '@/lib/api-errors';
+
+type ProviderRow = {
   id: number;
   ruc: string;
   nombre: string;
   tipo_identificacion: string;
-  razon_social?: string;
-  direccion?: string;
-  telefono?: string;
-  email?: string;
-  categoria?: string;
-  notas?: string;
+  razon_social: string | null;
+  direccion: string | null;
+  telefono: string | null;
+  email: string | null;
+  categoria: string | null;
+  notas: string | null;
   es_activo: boolean;
   es_especial: boolean;
   created_at: string;
   updated_at: string;
-  created_by?: string;
+  created_by: string | null;
+};
+
+const parseInteger = (value: string | null, fallback: number): number => {
+  if (!value) return fallback;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? fallback : parsed;
+};
+
+const buildProviderFilters = (searchParams: URLSearchParams) => {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  const categoria = searchParams.get('categoria');
+  const esActivo = searchParams.get('es_activo');
+
+  if (categoria) {
+    params.push(categoria);
+    conditions.push(`categoria = $${params.length}`);
+  }
+
+  if (esActivo !== null) {
+    params.push(esActivo === 'true');
+    conditions.push(`es_activo = $${params.length}`);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  return { whereClause, params };
 };
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
+    const auth = await requireAuth(request);
+    const { searchParams } = new URL(request.url);
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
+    const limit = parseInteger(searchParams.get('limit'), 100);
+    const offset = parseInteger(searchParams.get('offset'), 0);
+    const { whereClause, params } = buildProviderFilters(searchParams);
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
+    const dataParams = [...params, limit, offset];
+    const providersResult = await executeWithContext<ProviderRow>(
+      auth,
+      `
+        SELECT id, ruc, nombre, tipo_identificacion, razon_social, direccion, telefono, email,
+               categoria, notas, es_activo, es_especial, created_at, updated_at, created_by
+        FROM providers
+        ${whereClause}
+        ORDER BY es_especial DESC, nombre ASC
+        LIMIT $${dataParams.length - 1}
+        OFFSET $${dataParams.length}
+      `,
+      dataParams
+    );
 
-    const searchParams = request.nextUrl.searchParams;
-    const categoria = searchParams.get('categoria');
-    const es_activo = searchParams.get('es_activo');
-    const limit = parseInt(searchParams.get('limit') || '100');
-    const offset = parseInt(searchParams.get('offset') || '0');
-
-    let query = supabase
-      .from('providers')
-      .select('*', { count: 'exact' })
-      .order('es_especial', { ascending: false })
-      .order('nombre', { ascending: true })
-      .range(offset, offset + limit - 1);
-
-    if (categoria) {
-      query = query.eq('categoria', categoria);
-    }
-
-    if (es_activo !== null) {
-      query = query.eq('es_activo', es_activo === 'true');
-    }
-
-    const { data, error, count } = await query;
-
-    if (error) {
-      console.error('Error fetching providers:', error);
-      return NextResponse.json(
-        { error: 'Error al cargar proveedores' },
-        { status: 500 }
-      );
-    }
+    const countResult = await executeWithContext<{ count: string }>(
+      auth,
+      `SELECT COUNT(*) AS count FROM providers ${whereClause}`,
+      params
+    );
 
     return NextResponse.json({
-      data: data as Provider[],
-      count: count || 0,
+      data: providersResult.rows,
+      count: Number.parseInt(countResult.rows[0]?.count ?? '0', 10)
     });
   } catch (error) {
-    console.error('Error in GET /api/providers:', error);
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    );
+    return handleApiError(error, request.headers.get('origin'), 'GET /api/providers');
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
-
+    const auth = await requireAuth(request);
     const body = await request.json();
     const {
       ruc,
@@ -99,80 +101,51 @@ export async function POST(request: NextRequest) {
       telefono,
       email,
       categoria,
-      notas,
-    } = body;
+      notas
+    } = body ?? {};
 
     if (!ruc || !nombre || !tipo_identificacion) {
-      return NextResponse.json(
-        { error: 'RUC, nombre y tipo de identificación son requeridos' },
-        { status: 400 }
-      );
+      throw new ValidationError('RUC, nombre y tipo de identificación son requeridos');
     }
 
-    const existingProvider = await supabase
-      .from('providers')
-      .select('*')
-      .eq('ruc', ruc)
-      .single();
-
-    if (existingProvider.data) {
-      return NextResponse.json(
-        {
-          error: 'Ya existe un proveedor con este RUC',
-          existingProvider: existingProvider.data,
-        },
-        { status: 409 }
-      );
+    const existing = await executeWithContext(auth, `SELECT id FROM providers WHERE ruc = $1`, [ruc]);
+    if (existing.rowCount && existing.rowCount > 0) {
+      return NextResponse.json({ error: 'Ya existe un proveedor con este RUC' }, { status: 409 });
     }
 
-    const { data, error } = await supabase
-      .from('providers')
-      .insert({
+    const result = await executeWithContext<ProviderRow>(
+      auth,
+      `
+        INSERT INTO providers (
+          ruc, nombre, tipo_identificacion, razon_social, direccion, telefono, email,
+          categoria, notas, es_activo, created_by
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, $10)
+        RETURNING *
+      `,
+      [
         ruc,
         nombre,
         tipo_identificacion,
-        razon_social,
-        direccion,
-        telefono,
-        email,
-        categoria,
-        notas,
-        created_by: user.id,
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error creating provider:', error);
-      return NextResponse.json(
-        { error: 'Error al crear proveedor' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ data: data as Provider }, { status: 201 });
-  } catch (error) {
-    console.error('Error in POST /api/providers:', error);
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
+        razon_social ?? null,
+        direccion ?? null,
+        telefono ?? null,
+        email ?? null,
+        categoria ?? null,
+        notas ?? null,
+        auth.email ?? auth.userId ?? null
+      ]
     );
+
+    return NextResponse.json({ data: result.rows[0] }, { status: 201 });
+  } catch (error) {
+    return handleApiError(error, request.headers.get('origin'), 'POST /api/providers');
   }
 }
 
 export async function PUT(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
-
+    const auth = await requireAuth(request);
     const body = await request.json();
     const {
       id,
@@ -183,92 +156,87 @@ export async function PUT(request: NextRequest) {
       email,
       categoria,
       notas,
-      es_activo,
-    } = body;
+      es_activo
+    } = body ?? {};
 
     if (!id) {
-      return NextResponse.json(
-        { error: 'ID de proveedor es requerido' },
-        { status: 400 }
-      );
+      throw new ValidationError('ID de proveedor es requerido');
     }
 
-    const { data, error } = await supabase
-      .from('providers')
-      .update({
-        nombre,
-        razon_social,
-        direccion,
-        telefono,
-        email,
-        categoria,
-        notas,
-        es_activo,
-      })
-      .eq('id', id)
-      .select()
-      .single();
+    const updates: string[] = [];
+    const values: unknown[] = [];
 
-    if (error) {
-      console.error('Error updating provider:', error);
-      return NextResponse.json(
-        { error: 'Error al actualizar proveedor' },
-        { status: 500 }
-      );
+    const pushUpdate = (column: string, value: unknown) => {
+      updates.push(`${column} = $${values.length + 1}`);
+      values.push(value);
+    };
+
+    if (nombre !== undefined) pushUpdate('nombre', nombre);
+    if (razon_social !== undefined) pushUpdate('razon_social', razon_social ?? null);
+    if (direccion !== undefined) pushUpdate('direccion', direccion ?? null);
+    if (telefono !== undefined) pushUpdate('telefono', telefono ?? null);
+    if (email !== undefined) pushUpdate('email', email ?? null);
+    if (categoria !== undefined) pushUpdate('categoria', categoria ?? null);
+    if (notas !== undefined) pushUpdate('notas', notas ?? null);
+    if (es_activo !== undefined) pushUpdate('es_activo', Boolean(es_activo));
+
+    if (updates.length === 0) {
+      throw new ValidationError('No hay campos para actualizar');
     }
 
-    return NextResponse.json({ data: data as Provider });
-  } catch (error) {
-    console.error('Error in PUT /api/providers:', error);
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
+    pushUpdate('updated_at', new Date());
+
+    values.push(id);
+
+    const result = await executeWithContext<ProviderRow>(
+      auth,
+      `
+        UPDATE providers
+        SET ${updates.join(', ')}
+        WHERE id = $${values.length}
+        RETURNING *
+      `,
+      values
     );
+
+    if (result.rowCount === 0) {
+      return NextResponse.json({ error: 'Proveedor no encontrado' }, { status: 404 });
+    }
+
+    return NextResponse.json({ data: result.rows[0] });
+  } catch (error) {
+    return handleApiError(error, request.headers.get('origin'), 'PUT /api/providers');
   }
 }
 
 export async function DELETE(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
-
+    const auth = await requireAuth(request);
     const searchParams = request.nextUrl.searchParams;
-    const id = searchParams.get('id');
+    const idParam = searchParams.get('id');
+    const id = idParam ? Number.parseInt(idParam, 10) : NaN;
 
-    if (!id) {
-      return NextResponse.json(
-        { error: 'ID de proveedor es requerido' },
-        { status: 400 }
-      );
+    if (!Number.isInteger(id)) {
+      throw new ValidationError('ID de proveedor es requerido');
     }
 
-    const { error } = await supabase
-      .from('providers')
-      .update({ es_activo: false })
-      .eq('id', parseInt(id));
+    const result = await executeWithContext<ProviderRow>(
+      auth,
+      `
+        UPDATE providers
+        SET es_activo = false, updated_at = NOW()
+        WHERE id = $1
+        RETURNING *
+      `,
+      [id]
+    );
 
-    if (error) {
-      console.error('Error deleting provider:', error);
-      return NextResponse.json(
-        { error: 'Error al eliminar proveedor' },
-        { status: 500 }
-      );
+    if (result.rowCount === 0) {
+      return NextResponse.json({ error: 'Proveedor no encontrado' }, { status: 404 });
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error in DELETE /api/providers:', error);
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
-    );
+    return handleApiError(error, request.headers.get('origin'), 'DELETE /api/providers');
   }
 }

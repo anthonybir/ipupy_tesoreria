@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { fetchJson } from '@/lib/api-client';
 import type {
   EventFilters,
   CreateEventInput,
@@ -6,6 +7,8 @@ import type {
   FundEventCollection,
   FundEventDetail,
   EventBudgetItem,
+  RawFundEventDetail,
+  RawEventBudgetItem,
 } from '@/types/financial';
 import {
   normalizeFundEventsResponse,
@@ -27,14 +30,8 @@ export function useFundEvents(filters?: EventFilters) {
 
       const queryString = params.toString();
       const url = `/api/fund-events${queryString ? `?${queryString}` : ''}`;
-      const response = await fetch(url);
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to fetch fund events');
-      }
-
-      const data: FundEventsApiResponse = await response.json();
+      const data = await fetchJson<FundEventsApiResponse>(url);
       return normalizeFundEventsResponse(data);
     },
   });
@@ -46,14 +43,7 @@ export function useFundEvent(eventId: string | null) {
     queryFn: async () => {
       if (!eventId) return null;
 
-      const response = await fetch(`/api/fund-events/${eventId}`);
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to fetch event');
-      }
-
-      const result = await response.json();
+      const result = await fetchJson<{ data: RawFundEventDetail }>(`/api/fund-events/${eventId}`);
       return normalizeFundEventDetail(result.data);
     },
     enabled: !!eventId,
@@ -66,13 +56,7 @@ export function useFundEventBudgetItems(eventId: string | null) {
     queryFn: async () => {
       if (!eventId) return [];
 
-      const response = await fetch(`/api/fund-events/${eventId}/budget`);
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to fetch budget items');
-      }
-
-      const result = await response.json();
+      const result = await fetchJson<{ data: RawEventBudgetItem[] }>(`/api/fund-events/${eventId}/budget`);
       return (result.data || []).map(normalizeEventBudgetItem);
     },
     enabled: !!eventId,
@@ -85,14 +69,7 @@ export function useFundEventActuals(eventId: string | null) {
     queryFn: async () => {
       if (!eventId) return [];
 
-      const response = await fetch(`/api/fund-events/${eventId}/actuals`);
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to fetch actuals');
-      }
-
-      const result = await response.json();
+      const result = await fetchJson<{ data: unknown[] }>(`/api/fund-events/${eventId}/actuals`);
       return result.data || [];
     },
     enabled: !!eventId,
@@ -104,18 +81,10 @@ export function useEventMutations() {
 
   const createEvent = useMutation({
     mutationFn: async (data: CreateEventInput) => {
-      const response = await fetch('/api/fund-events', {
+      return fetchJson('/api/fund-events', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create event');
-      }
-
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fund-events'] });
@@ -130,18 +99,10 @@ export function useEventMutations() {
       eventId: string;
       data: Partial<CreateEventInput>;
     }) => {
-      const response = await fetch(`/api/fund-events/${eventId}`, {
+      return fetchJson(`/api/fund-events/${eventId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to update event');
-      }
-
-      return response.json();
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['fund-events'] });
@@ -151,16 +112,9 @@ export function useEventMutations() {
 
   const deleteEvent = useMutation({
     mutationFn: async (eventId: string) => {
-      const response = await fetch(`/api/fund-events/${eventId}`, {
+      return fetchJson(`/api/fund-events/${eventId}`, {
         method: 'DELETE',
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to delete event');
-      }
-
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fund-events'] });
@@ -169,18 +123,10 @@ export function useEventMutations() {
 
   const submitEvent = useMutation({
     mutationFn: async (eventId: string) => {
-      const response = await fetch(`/api/fund-events/${eventId}`, {
+      return fetchJson(`/api/fund-events/${eventId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'submit' }),
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to submit event');
-      }
-
-      return response.json();
     },
     onSuccess: (_data, eventId) => {
       queryClient.invalidateQueries({ queryKey: ['fund-events'] });
@@ -196,18 +142,10 @@ export function useEventMutations() {
       eventId: string;
       comment?: string;
     }) => {
-      const response = await fetch(`/api/fund-events/${eventId}`, {
+      return fetchJson(`/api/fund-events/${eventId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'approve', comment }),
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to approve event');
-      }
-
-      return response.json();
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['fund-events'] });
@@ -225,18 +163,10 @@ export function useEventMutations() {
       eventId: string;
       reason: string;
     }) => {
-      const response = await fetch(`/api/fund-events/${eventId}`, {
+      return fetchJson(`/api/fund-events/${eventId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'reject', rejection_reason: reason }),
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to reject event');
-      }
-
-      return response.json();
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['fund-events'] });
@@ -258,18 +188,10 @@ export function useEventMutations() {
         notes?: string;
       };
     }) => {
-      const response = await fetch(`/api/fund-events/${eventId}/actuals`, {
+      return fetchJson(`/api/fund-events/${eventId}/actuals`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to add actual');
-      }
-
-      return response.json();
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
@@ -296,18 +218,10 @@ export function useEventMutations() {
         notes?: string;
       }>;
     }) => {
-      const response = await fetch(`/api/fund-events/${eventId}/actuals/${actualId}`, {
+      return fetchJson(`/api/fund-events/${eventId}/actuals/${actualId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to update actual');
-      }
-
-      return response.json();
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['fund-event-actuals', variables.eventId] });
@@ -318,16 +232,9 @@ export function useEventMutations() {
 
   const deleteActual = useMutation({
     mutationFn: async ({ eventId, actualId }: { eventId: string; actualId: string }) => {
-      const response = await fetch(`/api/fund-events/${eventId}/actuals/${actualId}`, {
+      return fetchJson(`/api/fund-events/${eventId}/actuals/${actualId}`, {
         method: 'DELETE',
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to delete actual');
-      }
-
-      return response.json();
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['fund-event-actuals', variables.eventId] });
@@ -349,18 +256,10 @@ export function useEventMutations() {
         notes?: string;
       };
     }) => {
-      const response = await fetch(`/api/fund-events/${eventId}/budget`, {
+      return fetchJson(`/api/fund-events/${eventId}/budget`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to add budget item');
-      }
-
-      return response.json();
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['fund-event-budget', variables.eventId] });
@@ -384,18 +283,10 @@ export function useEventMutations() {
         notes?: string;
       };
     }) => {
-      const response = await fetch(`/api/fund-events/${eventId}/budget/${budgetItemId}`, {
+      return fetchJson(`/api/fund-events/${eventId}/budget/${budgetItemId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to update budget item');
-      }
-
-      return response.json();
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['fund-event-budget', variables.eventId] });
@@ -406,16 +297,9 @@ export function useEventMutations() {
 
   const deleteBudgetItem = useMutation({
     mutationFn: async ({ eventId, budgetItemId }: { eventId: string; budgetItemId: string }) => {
-      const response = await fetch(`/api/fund-events/${eventId}/budget/${budgetItemId}`, {
+      return fetchJson(`/api/fund-events/${eventId}/budget/${budgetItemId}`, {
         method: 'DELETE',
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to delete budget item');
-      }
-
-      return response.json();
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['fund-event-budget', variables.eventId] });

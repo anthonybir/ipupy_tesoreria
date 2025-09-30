@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { fetchJson } from '@/lib/api-client';
 
 const numberOrZero = (value: unknown): number => {
   const parsed = Number(value ?? 0);
@@ -22,12 +23,7 @@ export const useAdminFunds = () => {
   return useQuery({
     queryKey: ['admin-funds'],
     queryFn: async () => {
-      const response = await fetch('/api/admin/funds', { cache: 'no-store' });
-      if (!response.ok) {
-        throw new Error('No se pudo cargar la información de fondos');
-      }
-
-      const json = await response.json();
+      const json = await fetchJson<{ data: Array<Record<string, unknown>> }>('/api/admin/funds');
       const funds = (json.data || []) as Array<Record<string, unknown>>;
 
       return funds.map<AdminFund>((fund) => ({
@@ -106,15 +102,9 @@ export const useAdminReports = (filters: AdminReportFilters = {}) => {
         }
       });
 
-      const response = await fetch(`/api/admin/reports?${params.toString()}`, {
-        cache: 'no-store'
-      });
-
-      if (!response.ok) {
-        throw new Error('No se pudo cargar la lista de informes');
-      }
-
-      const json = await response.json();
+      const json = await fetchJson<{ data: Array<Record<string, unknown>>; summary: Record<string, unknown> }>(
+        `/api/admin/reports?${params.toString()}`
+      );
       const reports = (json.data || []).map((item: Record<string, unknown>) => {
         const incomesSource = (item.incomes as Record<string, unknown>) ?? {};
         const expensesSource = (item.expenses as Record<string, unknown>) ?? {};
@@ -167,18 +157,11 @@ export const useApproveReport = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: { reportId: number }) => {
-      const response = await fetch('/api/admin/reports/approve', {
+      return fetchJson('/api/admin/reports/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error?.error || 'No se pudo aprobar el informe');
-      }
-
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-reports'] });
@@ -193,18 +176,11 @@ export const useUpdateReport = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: Record<string, unknown>) => {
-      const response = await fetch('/api/admin/reports', {
+      return fetchJson('/api/admin/reports', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error?.error || 'No se pudo actualizar el informe');
-      }
-
-      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-reports'] });
@@ -243,15 +219,7 @@ export const useAdminTransactions = (filters: AdminTransactionsFilters = {}) => 
         }
       });
 
-      const response = await fetch(`/api/admin/transactions?${params.toString()}`, {
-        cache: 'no-store'
-      });
-
-      if (!response.ok) {
-        throw new Error('No se pudo cargar el libro diario');
-      }
-
-      return response.json() as Promise<AdminTransactionsResponse>;
+      return fetchJson<AdminTransactionsResponse>(`/api/admin/transactions?${params.toString()}`);
     },
     placeholderData: keepPreviousData,
     staleTime: 15 * 1000
@@ -263,15 +231,7 @@ export const useAdminReconciliation = (fundId?: number) => {
     queryKey: ['admin-reconciliation', fundId ?? 'all'],
     queryFn: async () => {
       const query = fundId ? `?fund_id=${fundId}` : '';
-      const response = await fetch(`/api/admin/reconciliation${query}`, {
-        cache: 'no-store'
-      });
-
-      if (!response.ok) {
-        throw new Error('No se pudo generar la conciliación');
-      }
-
-      return response.json();
+      return fetchJson(`/api/admin/reconciliation${query}`);
     },
     staleTime: 60 * 1000
   });

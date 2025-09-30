@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { executeWithContext } from '@/lib/db';
 import { buildCorsHeaders, handleCorsPreflight } from '@/lib/cors';
 import { requireAuth, getAuthContext } from '@/lib/auth-context';
+import { handleApiError, ValidationError } from '@/lib/api-errors';
 
 const jsonResponse = (data: unknown, origin: string | null, status = 200) =>
   NextResponse.json(data, { status, headers: buildCorsHeaders(origin) });
@@ -33,10 +34,19 @@ export async function GET(request: NextRequest) {
     return preflight;
   }
 
-  // Make GET endpoint public - authentication optional
-  // This allows the churches page to load without login
-  // Write operations (POST, PUT, DELETE) still require auth
-  // But we still get auth context for RLS if user is logged in
+  /**
+   * SECURITY NOTE: This endpoint allows unauthenticated access
+   *
+   * Rationale: Church directory is considered public information
+   * - Only returns basic church info (name, city, pastor)
+   * - RLS policies still restrict access to inactive churches
+   * - Write operations (POST, PUT, DELETE) require authentication
+   *
+   * IMPORTANT: If RLS context is null, the query may fail with "permission denied"
+   * This is intentional - it means RLS policies are working correctly.
+   *
+   * TODO: Consider implementing rate limiting for public endpoints
+   */
   const auth = await getAuthContext(request);
 
   const result = await executeWithContext<{
@@ -56,32 +66,28 @@ export async function POST(request: NextRequest) {
     return preflight;
   }
 
-  const auth = await requireAuth(request);
-
-  const { name, city, pastor, phone, ruc, cedula, grado, posicion } = await request.json();
-
-  if (!name || !city || !pastor) {
-    return jsonResponse({ error: 'Nombre, ciudad y pastor son requeridos' }, origin, 400);
-  }
-
   try {
+    const auth = await requireAuth(request);
+
+    const { name, city, pastor, phone, email, ruc, cedula, grado, posicion } = await request.json();
+
+    if (!name || !city || !pastor) {
+      throw new ValidationError('Nombre, ciudad y pastor son requeridos');
+    }
+
     const result = await executeWithContext(
       auth,
       `
-        INSERT INTO churches (name, city, pastor, phone, pastor_ruc, pastor_cedula, pastor_grado, pastor_posicion)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO churches (name, city, pastor, phone, email, pastor_ruc, pastor_cedula, pastor_grado, pastor_posicion)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *
       `,
-      [name, city, pastor, phone || '', ruc || '', cedula || '', grado || '', posicion || '']
+      [name, city, pastor, phone || '', email || '', ruc || '', cedula || '', grado || '', posicion || '']
     );
 
     return jsonResponse(result.rows[0], origin, 201);
   } catch (error) {
-    if ((error as { code?: string }).code === '23505') {
-      return jsonResponse({ error: 'La iglesia ya existe' }, origin, 400);
-    }
-    console.error('Error creando iglesia:', error);
-    return jsonResponse({ error: 'No se pudo crear la iglesia' }, origin, 500);
+    return handleApiError(error, origin, 'POST /api/churches');
   }
 }
 
@@ -92,35 +98,34 @@ export async function PUT(request: NextRequest) {
     return preflight;
   }
 
-  const auth = await requireAuth(request);
-
-  const searchParams = request.nextUrl.searchParams;
-  let churchId: number;
   try {
-    churchId = parsePositiveInt(searchParams.get('id'), 'ID de iglesia');
+    const auth = await requireAuth(request);
+
+    const searchParams = request.nextUrl.searchParams;
+    const churchId = parsePositiveInt(searchParams.get('id'), 'ID de iglesia');
+
+    const { name, city, pastor, phone, email, ruc, cedula, grado, posicion, active } = await request.json();
+
+    const result = await executeWithContext(
+      auth,
+      `
+        UPDATE churches
+        SET name = $1, city = $2, pastor = $3, phone = $4, email = $5, pastor_ruc = $6,
+            pastor_cedula = $7, pastor_grado = $8, pastor_posicion = $9, active = $10, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $11
+        RETURNING *
+      `,
+      [name, city, pastor, phone, email, ruc, cedula, grado, posicion, active, churchId]
+    );
+
+    if (result.rows.length === 0) {
+      return jsonResponse({ error: 'Iglesia no encontrada' }, origin, 404);
+    }
+
+    return jsonResponse(result.rows[0], origin);
   } catch (error) {
-    return jsonResponse({ error: (error as Error).message }, origin, 400);
+    return handleApiError(error, origin, 'PUT /api/churches');
   }
-
-  const { name, city, pastor, phone, ruc, cedula, grado, posicion, active } = await request.json();
-
-  const result = await executeWithContext(
-    auth,
-    `
-      UPDATE churches
-      SET name = $1, city = $2, pastor = $3, phone = $4, pastor_ruc = $5,
-          pastor_cedula = $6, pastor_grado = $7, pastor_posicion = $8, active = $9, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $10
-      RETURNING *
-    `,
-    [name, city, pastor, phone, ruc, cedula, grado, posicion, active, churchId]
-  );
-
-  if (result.rows.length === 0) {
-    return jsonResponse({ error: 'Iglesia no encontrada' }, origin, 404);
-  }
-
-  return jsonResponse(result.rows[0], origin);
 }
 
 export async function DELETE(request: NextRequest) {
@@ -130,30 +135,29 @@ export async function DELETE(request: NextRequest) {
     return preflight;
   }
 
-  const auth = await requireAuth(request);
-
-  const searchParams = request.nextUrl.searchParams;
-  let churchId: number;
   try {
-    churchId = parsePositiveInt(searchParams.get('id'), 'ID de iglesia');
+    const auth = await requireAuth(request);
+
+    const searchParams = request.nextUrl.searchParams;
+    const churchId = parsePositiveInt(searchParams.get('id'), 'ID de iglesia');
+
+    const result = await executeWithContext(
+      auth,
+      `
+        UPDATE churches
+        SET active = false, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        RETURNING *
+      `,
+      [churchId]
+    );
+
+    if (result.rows.length === 0) {
+      return jsonResponse({ error: 'Iglesia no encontrada' }, origin, 404);
+    }
+
+    return jsonResponse({ message: 'Iglesia desactivada exitosamente' }, origin);
   } catch (error) {
-    return jsonResponse({ error: (error as Error).message }, origin, 400);
+    return handleApiError(error, origin, 'DELETE /api/churches');
   }
-
-  const result = await executeWithContext(
-    auth,
-    `
-      UPDATE churches
-      SET active = false, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1
-      RETURNING *
-    `,
-    [churchId]
-  );
-
-  if (result.rows.length === 0) {
-    return jsonResponse({ error: 'Iglesia no encontrada' }, origin, 404);
-  }
-
-  return jsonResponse({ message: 'Iglesia desactivada exitosamente' }, origin);
 }

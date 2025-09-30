@@ -3,6 +3,7 @@ import { getAuthContext } from "@/lib/auth-context";
 import { executeWithContext, executeTransaction } from "@/lib/db";
 import { setCORSHeaders } from "@/lib/cors";
 import { createTransaction as createLedgerTransaction } from "@/app/api/reports/route-helpers";
+import { handleApiError } from "@/lib/api-errors";
 
 type GenericRecord = Record<string, unknown>;
 
@@ -41,7 +42,9 @@ interface TransactionInput {
 // GET /api/financial/transactions - Get transactions with filters
 async function handleGet(req: NextRequest) {
   try {
-    const auth = await getAuthContext(req);
+    // Require auth context for RLS - financial data should not be public
+    const { requireAuth } = await import('@/lib/auth-context');
+    const auth = await requireAuth(req);
     const { searchParams } = new URL(req.url);
 
     const fund_id = searchParams.get("fund_id");
@@ -138,13 +141,7 @@ async function handleGet(req: NextRequest) {
     setCORSHeaders(response);
     return response;
   } catch (error) {
-    console.error("Error fetching transactions:", error);
-    const response = NextResponse.json(
-      { error: "Error fetching transactions", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
-    setCORSHeaders(response);
-    return response;
+    return handleApiError(error, req.headers.get('origin'), 'GET /api/financial/transactions');
   }
 }
 
@@ -233,13 +230,7 @@ async function handlePost(req: NextRequest) {
     setCORSHeaders(response);
     return response;
   } catch (error) {
-    console.error("Error creating transactions:", error);
-    const response = NextResponse.json(
-      { error: "Error creating transactions", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
-    setCORSHeaders(response);
-    return response;
+    return handleApiError(error, req.headers.get('origin'), 'POST /api/financial/transactions');
   }
 }
 
@@ -366,13 +357,7 @@ async function handlePut(req: NextRequest) {
     setCORSHeaders(response);
     return response;
   } catch (error) {
-    console.error("Error updating transaction:", error);
-    const response = NextResponse.json(
-      { error: "Error updating transaction", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
-    setCORSHeaders(response);
-    return response;
+    return handleApiError(error, req.headers.get('origin'), 'PUT /api/financial/transactions');
   }
 }
 
@@ -441,19 +426,7 @@ async function handleDelete(req: NextRequest) {
     setCORSHeaders(response);
     return response;
   } catch (error) {
-    const isNotFound = error instanceof Error && error.message === 'Transaction not found';
-    if (!isNotFound) {
-      console.error("Error deleting transaction:", error);
-    }
-    const response = NextResponse.json(
-      {
-        error: isNotFound ? "Transaction not found" : "Error deleting transaction",
-        details: error instanceof Error ? error.message : "Unknown error"
-      },
-      { status: isNotFound ? 404 : 500 }
-    );
-    setCORSHeaders(response);
-    return response;
+    return handleApiError(error, req.headers.get('origin'), 'DELETE /api/financial/transactions');
   }
 }
 

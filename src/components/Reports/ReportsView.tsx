@@ -12,6 +12,7 @@ import { formatCurrencyDisplay } from '@/lib/utils/currency';
 import type { ReportFilters, ReportRecord } from '@/types/api';
 import {
   DataTable,
+  ErrorState,
   FilterBar,
   FormField,
   PageHeader,
@@ -358,14 +359,23 @@ export default function ReportsView() {
                 : `${reports.length} informe${reports.length === 1 ? '' : 's'} visibles`
             }
           >
-            <DataTable
-              data={reports}
-              columns={historyColumns}
-              loading={historyQuery.isLoading || historyQuery.isFetching}
-              skeletonRows={6}
-              onRowClick={setSelectedReport}
-              emptyContent="No se encontraron reportes con los filtros seleccionados."
-            />
+            {historyQuery.isError ? (
+              <ErrorState
+                title="Error al cargar informes"
+                description={(historyQuery.error as Error)?.message || 'No se pudieron cargar los informes históricos'}
+                onRetry={() => historyQuery.refetch()}
+                retryLabel="Reintentar"
+              />
+            ) : (
+              <DataTable
+                data={reports}
+                columns={historyColumns}
+                loading={historyQuery.isLoading || historyQuery.isFetching}
+                skeletonRows={6}
+                onRowClick={setSelectedReport}
+                emptyContent="No se encontraron reportes con los filtros seleccionados."
+              />
+            )}
           </SectionCard>
         </div>
       )}

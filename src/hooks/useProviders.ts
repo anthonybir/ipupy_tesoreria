@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { fetchJson } from '@/lib/api-client';
 
 export type Provider = {
   id: number;
@@ -61,33 +62,16 @@ export function useProviders(options: UseProvidersOptions = {}) {
       if (options.limit) params.append('limit', String(options.limit));
       if (options.offset) params.append('offset', String(options.offset));
 
-      const response = await fetch(`/api/providers?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error('Error al cargar proveedores');
-      }
-      return response.json() as Promise<{ data: Provider[]; count: number }>;
+      return fetchJson<{ data: Provider[]; count: number }>(`/api/providers?${params.toString()}`);
     },
   });
 
   const createProvider = useMutation({
     mutationFn: async (input: CreateProviderInput) => {
-      const response = await fetch('/api/providers', {
+      return fetchJson<{ data: Provider }>('/api/providers', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
       });
-
-      const data = await response.json();
-
-      if (response.status === 409) {
-        throw new Error('Ya existe un proveedor con este RUC');
-      }
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Error al crear proveedor');
-      }
-
-      return data as { data: Provider };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['providers'] });
@@ -96,18 +80,10 @@ export function useProviders(options: UseProvidersOptions = {}) {
 
   const updateProvider = useMutation({
     mutationFn: async (input: UpdateProviderInput) => {
-      const response = await fetch('/api/providers', {
+      return fetchJson<{ data: Provider }>('/api/providers', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(input),
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Error al actualizar proveedor');
-      }
-
-      return response.json() as Promise<{ data: Provider }>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['providers'] });
@@ -116,16 +92,21 @@ export function useProviders(options: UseProvidersOptions = {}) {
 
   const deleteProvider = useMutation({
     mutationFn: async (id: number) => {
-      const response = await fetch(`/api/providers?id=${id}`, {
+      return fetchJson<{ success: boolean }>(`/api/providers?id=${id}`, {
         method: 'DELETE',
       });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['providers'] });
+    },
+  });
 
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Error al eliminar proveedor');
-      }
-
-      return response.json() as Promise<{ success: boolean }>;
+  const reactivateProvider = useMutation({
+    mutationFn: async (id: number) => {
+      return fetchJson<{ data: Provider }>('/api/providers', {
+        method: 'PUT',
+        body: JSON.stringify({ id, es_activo: true }),
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['providers'] });
@@ -137,6 +118,7 @@ export function useProviders(options: UseProvidersOptions = {}) {
     createProvider,
     updateProvider,
     deleteProvider,
+    reactivateProvider,
   };
 }
 
@@ -147,11 +129,7 @@ export function useProviderSearch(searchQuery: string, categoria?: string) {
       const params = new URLSearchParams({ q: searchQuery });
       if (categoria) params.append('categoria', categoria);
 
-      const response = await fetch(`/api/providers/search?${params.toString()}`);
-      if (!response.ok) {
-        throw new Error('Error al buscar proveedores');
-      }
-      return response.json() as Promise<{ data: Provider[] }>;
+      return fetchJson<{ data: Provider[] }>(`/api/providers/search?${params.toString()}`);
     },
     enabled: searchQuery.length >= 2,
   });
@@ -161,11 +139,9 @@ export function useCheckRuc(ruc: string) {
   return useQuery({
     queryKey: ['providers', 'check-ruc', ruc],
     queryFn: async () => {
-      const response = await fetch(`/api/providers/check-ruc?ruc=${encodeURIComponent(ruc)}`);
-      if (!response.ok) {
-        throw new Error('Error al verificar RUC');
-      }
-      return response.json() as Promise<{ exists: boolean; provider: Provider | null }>;
+      return fetchJson<{ exists: boolean; provider: Provider | null }>(
+        `/api/providers/check-ruc?ruc=${encodeURIComponent(ruc)}`
+      );
     },
     enabled: ruc.length >= 3,
   });

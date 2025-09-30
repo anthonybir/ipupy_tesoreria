@@ -5,11 +5,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { executeWithContext } from '@/lib/db';
 import { buildCorsHeaders, handleCorsPreflight } from '@/lib/cors';
 import { requireAuth, AuthContext } from '@/lib/auth-context';
+import { handleApiError, ValidationError } from '@/lib/api-errors';
 import { createReportTransactions } from './route-helpers';
 
 type GenericRecord = Record<string, unknown>;
 
-class BadRequestError extends Error {
+// Keep BadRequestError for backward compatibility, but map to ValidationError
+class BadRequestError extends ValidationError {
   constructor(message: string) {
     super(message);
     this.name = 'BadRequestError';
@@ -958,24 +960,7 @@ export async function OPTIONS(request: NextRequest) {
   return jsonResponse({ error: 'Method not allowed' }, request.headers.get('origin'), 405);
 }
 
-const handleError = (error: unknown, origin: string | null) => {
-  if (error instanceof BadRequestError) {
-    return jsonResponse({ error: error.message }, origin, 400);
-  }
-  if (error instanceof Error && error.message.includes('Autenticación requerida')) {
-    return jsonResponse({ error: 'Token inválido o expirado' }, origin, 401);
-  }
-  console.error('Error en API reports:', error);
-  const message = error instanceof Error ? error.message : 'Error interno del servidor';
-  return jsonResponse(
-    {
-      error: 'Error interno del servidor',
-      details: process.env.NODE_ENV === 'development' ? message : undefined
-    },
-    origin,
-    500
-  );
-};
+// Removed local handleError - now using centralized handleApiError from @/lib/api-errors
 
 export async function GET(request: NextRequest) {
   const origin = request.headers.get('origin');
@@ -1026,7 +1011,7 @@ export async function GET(request: NextRequest) {
     const rows = await handleGetReports(request, auth);
     return jsonResponse(rows, origin);
   } catch (error) {
-    return handleError(error, origin);
+    return handleApiError(error, origin, 'GET /api/reports');
   }
 }
 
@@ -1059,7 +1044,7 @@ export async function POST(request: NextRequest) {
     const report = await handleCreateReport(body, auth);
     return jsonResponse({ success: true, report }, origin, 201);
   } catch (error) {
-    return handleError(error, origin);
+    return handleApiError(error, origin, 'POST /api/reports');
   }
 }
 
@@ -1093,7 +1078,7 @@ export async function PUT(request: NextRequest) {
     const report = await handleUpdateReport(reportId, body, auth);
     return jsonResponse({ success: true, report }, origin);
   } catch (error) {
-    return handleError(error, origin);
+    return handleApiError(error, origin, 'PUT /api/reports');
   }
 }
 
@@ -1110,6 +1095,6 @@ export async function DELETE(request: NextRequest) {
     const result = await handleDeleteReport(reportId, auth);
     return jsonResponse(result, origin);
   } catch (error) {
-    return handleError(error, origin);
+    return handleApiError(error, origin, 'DELETE /api/reports');
   }
 }

@@ -24,127 +24,26 @@ import {
   UserPlus,
   Save,
   RefreshCw,
-  AlertCircle,
-  CheckCircle,
 } from 'lucide-react';
 import { BanknotesIcon } from '@heroicons/react/24/outline';
 import { PageHeader } from '@/components/Shared';
-
-type SystemConfig = {
-  systemName: string;
-  organizationName: string;
-  systemLanguage: string;
-  timezone: string;
-  currency: string;
-  currencySymbol: string;
-  fiscalYearStart: number;
-  dateFormat: string;
-  numberFormat: string;
-  maintenanceMode: boolean;
-  allowRegistrations: boolean;
-  requireEmailVerification: boolean;
-  sessionTimeout: number;
-  maxLoginAttempts: number;
-  passwordMinLength: number;
-  enforce2FA: boolean;
-  allowGoogleAuth: boolean;
-  allowMagicLink: boolean;
-};
-
-type FinancialConfig = {
-  fondoNacionalPercentage: number;
-  honorariosPastoralesDefault: number;
-  requiredApprovals: number;
-  autoGenerateReports: boolean;
-  reportDeadlineDay: number;
-  reminderDaysBefore: number;
-  allowNegativeBalances: boolean;
-  requireReceipts: boolean;
-  receiptMinAmount: number;
-  autoCalculateTotals: boolean;
-  roundingMethod: string;
-  enableBudgets: boolean;
-  budgetWarningThreshold: number;
-  allowManualEntries: boolean;
-  requireDoubleEntry: boolean;
-};
-
-type NotificationConfig = {
-  emailEnabled: boolean;
-  smsEnabled: boolean;
-  whatsappEnabled: boolean;
-  reportSubmissionNotify: boolean;
-  reportApprovalNotify: boolean;
-  lowBalanceNotify: boolean;
-  lowBalanceThreshold: number;
-  monthlyReminderEnabled: boolean;
-  weeklyDigestEnabled: boolean;
-  notifyAdminsOnErrors: boolean;
-  notifyOnNewRegistration: boolean;
-  notifyOnLargeTransaction: boolean;
-  largeTransactionThreshold: number;
-};
-
-type DefaultFund = {
-  name: string;
-  percentage: number;
-  required: boolean;
-  autoCalculate: boolean;
-  fundId?: number | string;
-  fundType?: string;
-  isActive?: boolean;
-};
-
-type FundRecord = {
-  id: number | string;
-  name: string;
-  type?: string;
-  is_active?: boolean;
-};
-
-type FundsConfig = {
-  defaultFunds: DefaultFund[];
-  allowCustomFunds: boolean;
-  maxCustomFunds: number;
-  trackFundHistory: boolean;
-  allowInterFundTransfers: boolean;
-  requireTransferApproval: boolean;
-  liveFunds?: FundRecord[];
-};
-
-type RoleDefinition = {
-  id: string;
-  name: string;
-  description: string;
-  permissions: string[];
-  editable: boolean;
-};
-
-type RolesConfig = {
-  roles: RoleDefinition[];
-  permissionMatrix?: Array<{
-    role: string;
-    permission: string;
-    scope?: string | null;
-  }>;
-};
-
-type IntegrationConfig = {
-  apiEnabled: boolean;
-  apiRateLimit: number;
-  apiRateLimitWindow: number;
-  webhooksEnabled: boolean;
-  webhookUrl: string;
-  exportEnabled: boolean;
-  exportFormats: string[];
-  backupEnabled: boolean;
-  backupFrequency: string;
-  backupRetention: number;
-  googleSheetsIntegration: boolean;
-  googleSheetsId: string;
-  supabaseProjectUrl: string;
-  supabaseAnonKey: string;
-};
+import {
+  useSystemConfig,
+  useFinancialConfig,
+  useSecurityConfig,
+  useIntegrationConfig,
+  useNotificationConfig,
+  useFundsConfig,
+  useRolesConfig,
+  useSaveConfig,
+  type SystemConfig,
+  type FinancialConfig,
+  type NotificationConfig,
+  type FundsConfig,
+  type RolesConfig,
+  type IntegrationConfig,
+} from '@/hooks/useAdminConfiguration';
+import toast from 'react-hot-toast';
 
 type AdminUser = {
   id: number | string;
@@ -189,11 +88,21 @@ type IntegrationConfigurationSectionProps = {
 // Configuration sections
 const ConfigurationPage = () => {
   const [activeTab, setActiveTab] = useState('general');
-  const [loading, setLoading] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
-  // System Configuration State
-  const [systemConfig, setSystemConfig] = useState<SystemConfig>({
+  // Load all configurations using TanStack Query hooks
+  const systemConfigQuery = useSystemConfig();
+  const financialConfigQuery = useFinancialConfig();
+  const securityConfigQuery = useSecurityConfig();
+  const integrationConfigQuery = useIntegrationConfig();
+  const notificationConfigQuery = useNotificationConfig();
+  const fundsConfigQuery = useFundsConfig();
+  const rolesConfigQuery = useRolesConfig();
+
+  // Save mutation
+  const saveConfig = useSaveConfig();
+
+  // Default values
+  const defaultSystemConfig: SystemConfig = {
     systemName: 'IPU PY Tesorería',
     organizationName: 'Iglesia Pentecostal Unida del Paraguay',
     systemLanguage: 'es',
@@ -212,10 +121,9 @@ const ConfigurationPage = () => {
     enforce2FA: false,
     allowGoogleAuth: true,
     allowMagicLink: true,
-  });
+  };
 
-  // Financial Configuration
-  const [financialConfig, setFinancialConfig] = useState<FinancialConfig>({
+  const defaultFinancialConfig: FinancialConfig = {
     fondoNacionalPercentage: 10,
     honorariosPastoralesDefault: 0,
     requiredApprovals: 2,
@@ -231,10 +139,9 @@ const ConfigurationPage = () => {
     budgetWarningThreshold: 80,
     allowManualEntries: true,
     requireDoubleEntry: true,
-  });
+  };
 
-  // Notification Settings
-  const [notificationConfig, setNotificationConfig] = useState<NotificationConfig>({
+  const defaultNotificationConfig: NotificationConfig = {
     emailEnabled: true,
     smsEnabled: false,
     whatsappEnabled: false,
@@ -248,10 +155,9 @@ const ConfigurationPage = () => {
     notifyOnNewRegistration: true,
     notifyOnLargeTransaction: true,
     largeTransactionThreshold: 10000000,
-  });
+  };
 
-  // Funds Configuration
-  const [fundsConfig, setFundsConfig] = useState<FundsConfig>({
+  const defaultFundsConfig: FundsConfig = {
     defaultFunds: [
       { name: 'Fondo Nacional', percentage: 10, required: true, autoCalculate: true },
       { name: 'Misiones', percentage: 0, required: false, autoCalculate: false },
@@ -269,10 +175,9 @@ const ConfigurationPage = () => {
     allowInterFundTransfers: true,
     requireTransferApproval: true,
     liveFunds: [],
-  });
+  };
 
-  // Roles & Permissions Configuration
-  const [rolesConfig, setRolesConfig] = useState<RolesConfig>({
+  const defaultRolesConfig: RolesConfig = {
     roles: [
       {
         id: 'admin',
@@ -324,10 +229,9 @@ const ConfigurationPage = () => {
         editable: true,
       },
     ],
-  });
+  };
 
-  // API & Integration Settings
-  const [integrationConfig, setIntegrationConfig] = useState<IntegrationConfig>({
+  const defaultIntegrationConfig: IntegrationConfig = {
     apiEnabled: true,
     apiRateLimit: 1000,
     apiRateLimitWindow: 3600,
@@ -342,98 +246,58 @@ const ConfigurationPage = () => {
     googleSheetsId: '',
     supabaseProjectUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
     supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-  });
+  };
 
-  // Load configuration on mount
+  // Merge loaded data with defaults
+  const [systemConfig, setSystemConfig] = useState<SystemConfig>(defaultSystemConfig);
+  const [financialConfig, setFinancialConfig] = useState<FinancialConfig>(defaultFinancialConfig);
+  const [notificationConfig, setNotificationConfig] = useState<NotificationConfig>(defaultNotificationConfig);
+  const [fundsConfig, setFundsConfig] = useState<FundsConfig>(defaultFundsConfig);
+  const [rolesConfig, setRolesConfig] = useState<RolesConfig>(defaultRolesConfig);
+  const [integrationConfig, setIntegrationConfig] = useState<IntegrationConfig>(defaultIntegrationConfig);
+
+  // Update state when queries complete
   useEffect(() => {
-    const loadConfiguration = async () => {
-      setLoading(true);
-      try {
-        // Load all configuration sections in parallel
-        const [generalRes, financialRes, securityRes, integrationRes, notificationRes, fundsRes, rolesRes] = await Promise.all([
-          fetch('/api/admin/configuration?section=general'),
-          fetch('/api/admin/configuration?section=financial'),
-          fetch('/api/admin/configuration?section=security'),
-          fetch('/api/admin/configuration?section=integration'),
-          fetch('/api/admin/configuration?section=notifications'),
-          fetch('/api/admin/configuration?section=funds'),
-          fetch('/api/admin/configuration?section=roles')
-        ]);
+    if (systemConfigQuery.data) {
+      setSystemConfig((prev) => ({ ...prev, ...systemConfigQuery.data }));
+    }
+  }, [systemConfigQuery.data]);
 
-        // Parse responses
-        if (generalRes.ok) {
-          const data = (await generalRes.json()) as ApiResponse<{ general?: Partial<SystemConfig> }>;
-          if (data.data?.general) {
-            setSystemConfig((prev) => ({ ...prev, ...data.data!.general }));
-          }
-        }
+  useEffect(() => {
+    if (securityConfigQuery.data) {
+      setSystemConfig((prev) => ({ ...prev, ...securityConfigQuery.data }));
+    }
+  }, [securityConfigQuery.data]);
 
-        if (financialRes.ok) {
-          const data = (await financialRes.json()) as ApiResponse<{ financial?: Partial<FinancialConfig> }>;
-          if (data.data?.financial) {
-            setFinancialConfig((prev) => ({ ...prev, ...data.data!.financial }));
-          }
-        }
+  useEffect(() => {
+    if (financialConfigQuery.data) {
+      setFinancialConfig((prev) => ({ ...prev, ...financialConfigQuery.data }));
+    }
+  }, [financialConfigQuery.data]);
 
-        if (securityRes.ok) {
-          const data = (await securityRes.json()) as ApiResponse<{ security?: Partial<SystemConfig> }>;
-          const securityConfig = data.data?.security;
-          if (securityConfig) {
-            setSystemConfig((prev) => ({
-              ...prev,
-              sessionTimeout: securityConfig.sessionTimeout ?? prev.sessionTimeout,
-              maxLoginAttempts: securityConfig.maxLoginAttempts ?? prev.maxLoginAttempts,
-              passwordMinLength: securityConfig.passwordMinLength ?? prev.passwordMinLength,
-              enforce2FA:
-                typeof securityConfig.enforce2FA === 'boolean' ? securityConfig.enforce2FA : prev.enforce2FA,
-              allowGoogleAuth:
-                typeof securityConfig.allowGoogleAuth === 'boolean'
-                  ? securityConfig.allowGoogleAuth
-                  : prev.allowGoogleAuth,
-              allowMagicLink:
-                typeof securityConfig.allowMagicLink === 'boolean'
-                  ? securityConfig.allowMagicLink
-                  : prev.allowMagicLink,
-            }));
-          }
-        }
+  useEffect(() => {
+    if (notificationConfigQuery.data) {
+      setNotificationConfig((prev) => ({ ...prev, ...notificationConfigQuery.data }));
+    }
+  }, [notificationConfigQuery.data]);
 
-        if (integrationRes.ok) {
-          const data = (await integrationRes.json()) as ApiResponse<{ integration?: Partial<IntegrationConfig> }>;
-          if (data.data?.integration) {
-            setIntegrationConfig((prev) => ({ ...prev, ...data.data!.integration }));
-          }
-        }
+  useEffect(() => {
+    if (fundsConfigQuery.data) {
+      setFundsConfig((prev) => ({ ...prev, ...fundsConfigQuery.data }));
+    }
+  }, [fundsConfigQuery.data]);
 
-        if (notificationRes.ok) {
-          const data = (await notificationRes.json()) as ApiResponse<{ notifications?: Partial<NotificationConfig> }>;
-          if (data.data?.notifications) {
-            setNotificationConfig((prev) => ({ ...prev, ...data.data!.notifications }));
-          }
-        }
+  useEffect(() => {
+    if (rolesConfigQuery.data) {
+      setRolesConfig((prev) => ({ ...prev, ...rolesConfigQuery.data }));
+    }
+  }, [rolesConfigQuery.data]);
 
-        if (fundsRes.ok) {
-          const data = (await fundsRes.json()) as ApiResponse<{ funds?: Partial<FundsConfig> }>;
-          if (data.data?.funds) {
-            setFundsConfig((prev) => ({ ...prev, ...data.data!.funds }));
-          }
-        }
-
-        if (rolesRes.ok) {
-          const data = (await rolesRes.json()) as ApiResponse<{ roles?: Partial<RolesConfig> }>;
-          if (data.data?.roles) {
-            setRolesConfig((prev) => ({ ...prev, ...data.data!.roles }));
-          }
-        }
-      } catch (error) {
-        console.error('Error loading configuration:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadConfiguration();
-  }, []);
+  useEffect(() => {
+    if (integrationConfigQuery.data) {
+      setIntegrationConfig((prev) => ({ ...prev, ...integrationConfigQuery.data }));
+    }
+  }, [integrationConfigQuery.data]);
 
   const handleSaveConfiguration = async (
     section:
@@ -445,45 +309,19 @@ const ConfigurationPage = () => {
       | 'funds'
       | 'roles',
   ) => {
-    setSaveStatus('saving');
-    setLoading(true);
-
     try {
-      const configData = {
-        section,
-        data: section === 'general' ? systemConfig :
-              section === 'financial' ? financialConfig :
-              section === 'security' ? {
-                sessionTimeout: systemConfig.sessionTimeout,
-                maxLoginAttempts: systemConfig.maxLoginAttempts,
-                passwordMinLength: systemConfig.passwordMinLength,
-                enforce2FA: systemConfig.enforce2FA,
-                allowGoogleAuth: systemConfig.allowGoogleAuth,
-                allowMagicLink: systemConfig.allowMagicLink
-              } :
-              section === 'notifications' ? notificationConfig :
-              section === 'funds' ? fundsConfig :
-              section === 'roles' ? rolesConfig :
-              section === 'integration' ? integrationConfig : {}
-      };
+      const data = section === 'general' ? systemConfig :
+            section === 'financial' ? financialConfig :
+            section === 'security' ? systemConfig :
+            section === 'notifications' ? notificationConfig :
+            section === 'funds' ? fundsConfig :
+            section === 'roles' ? rolesConfig :
+            integrationConfig;
 
-      const response = await fetch('/api/admin/configuration', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(configData)
-      });
-
-      if (response.ok) {
-        setSaveStatus('saved');
-        setTimeout(() => setSaveStatus('idle'), 3000);
-      } else {
-        setSaveStatus('error');
-      }
+      await saveConfig.mutateAsync({ section, data });
+      toast.success('Configuración guardada correctamente');
     } catch (error) {
-      console.error('Error saving configuration:', error);
-      setSaveStatus('error');
-    } finally {
-      setLoading(false);
+      toast.error(error instanceof Error ? error.message : 'Error al guardar configuración');
     }
   };
 
@@ -639,12 +477,8 @@ const ConfigurationPage = () => {
               </div>
 
               <div className="flex justify-end">
-                <Button onClick={() => handleSaveConfiguration('general')} disabled={loading}>
-                  {loading ? (
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4 mr-2" />
-                  )}
+                <Button onClick={() => handleSaveConfiguration('general')} disabled={saveConfig.isPending} loading={saveConfig.isPending}>
+                  <Save className="h-4 w-4 mr-2" />
                   Guardar Configuración General
                 </Button>
               </div>
@@ -755,7 +589,7 @@ const ConfigurationPage = () => {
               </div>
 
               <div className="flex justify-end">
-                <Button onClick={() => handleSaveConfiguration('financial')} disabled={loading}>
+                <Button onClick={() => handleSaveConfiguration('financial')} disabled={saveConfig.isPending} loading={saveConfig.isPending}>
                   <Save className="h-4 w-4 mr-2" />
                   Guardar Configuración Financiera
                 </Button>
@@ -780,7 +614,7 @@ const ConfigurationPage = () => {
             config={systemConfig}
             setConfig={setSystemConfig}
             onSave={() => handleSaveConfiguration('security')}
-            loading={loading}
+            loading={saveConfig.isPending}
           />
         </TabsContent>
 
@@ -839,7 +673,7 @@ const ConfigurationPage = () => {
                 </div>
               </div>
               <div className="flex justify-end">
-                <Button onClick={() => handleSaveConfiguration('notifications')} disabled={loading}>
+                <Button onClick={() => handleSaveConfiguration('notifications')} disabled={saveConfig.isPending} loading={saveConfig.isPending}>
                   <Save className="h-4 w-4 mr-2" />
                   Guardar Notificaciones
                 </Button>
@@ -907,7 +741,7 @@ const ConfigurationPage = () => {
                 ))}
               </div>
               <div className="flex justify-end">
-                <Button onClick={() => handleSaveConfiguration('funds')} disabled={loading}>
+                <Button onClick={() => handleSaveConfiguration('funds')} disabled={saveConfig.isPending} loading={saveConfig.isPending}>
                   <Save className="h-4 w-4 mr-2" />
                   Guardar Fondos
                 </Button>
@@ -951,7 +785,7 @@ const ConfigurationPage = () => {
                 ))}
               </div>
               <div className="flex justify-end mt-6">
-                <Button onClick={() => handleSaveConfiguration('roles')} disabled={loading}>
+                <Button onClick={() => handleSaveConfiguration('roles')} disabled={saveConfig.isPending} loading={saveConfig.isPending}>
                   <Save className="h-4 w-4 mr-2" />
                   Guardar Roles
                 </Button>
@@ -966,33 +800,10 @@ const ConfigurationPage = () => {
             config={integrationConfig}
             setConfig={setIntegrationConfig}
             onSave={() => handleSaveConfiguration('integration')}
-            loading={loading}
+            loading={saveConfig.isPending}
           />
         </TabsContent>
       </Tabs>
-
-      {/* Status Notifications */}
-      {saveStatus === 'saved' && (
-        <div className="fixed bottom-4 right-4">
-          <Alert className="w-auto bg-green-50 border-green-200">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">
-              Configuración guardada exitosamente
-            </AlertDescription>
-          </Alert>
-        </div>
-      )}
-
-      {saveStatus === 'error' && (
-        <div className="fixed bottom-4 right-4">
-          <Alert className="w-auto bg-red-50 border-red-200">
-            <AlertCircle className="h-4 w-4 text-red-600" />
-            <AlertDescription className="text-red-800">
-              Error al guardar la configuración
-            </AlertDescription>
-          </Alert>
-        </div>
-      )}
     </div>
   );
 };

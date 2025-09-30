@@ -2,9 +2,12 @@
 
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
+import toast from 'react-hot-toast';
 
 import { useChurches } from '@/hooks/useChurches';
+import { useDeactivateChurch } from '@/hooks/useChurchMutations';
 import { ChurchForm } from '@/components/Churches/ChurchForm';
+import { ChurchEditDialog } from '@/components/Churches/ChurchEditDialog';
 import { Button } from '@/components/ui/button';
 import { DataTable, FilterBar, FormField, PageHeader, SectionCard, StatusPill } from '@/components/Shared';
 import type { DataTableColumn } from '@/components/Shared/DataTable';
@@ -12,7 +15,9 @@ import type { ChurchRecord } from '@/types/api';
 
 export default function ChurchesView() {
   const [search, setSearch] = useState('');
+  const [editingChurch, setEditingChurch] = useState<ChurchRecord | null>(null);
   const { data: churches = [], isLoading, isError, error, refetch, isFetching } = useChurches();
+  const deactivateChurch = useDeactivateChurch();
 
   const filteredChurches = useMemo(() => {
     if (!search.trim()) {
@@ -26,6 +31,17 @@ export default function ChurchesView() {
         .some((value) => value.toLowerCase().includes(term))
     );
   }, [churches, search]);
+
+  const handleDeactivate = async (church: ChurchRecord) => {
+    if (!confirm(`¿Está seguro de desactivar "${church.name}"?`)) return;
+
+    try {
+      await deactivateChurch.mutateAsync({ churchId: church.id });
+      toast.success('Iglesia desactivada correctamente');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Error al desactivar');
+    }
+  };
 
   const columns: Array<DataTableColumn<ChurchRecord>> = [
     {
@@ -78,12 +94,29 @@ export default function ChurchesView() {
       id: 'actions',
       header: 'Acciones',
       render: (church) => (
-        <Link
-          href={`/reports?tab=history&churchId=${church.id}`}
-          className="inline-flex items-center rounded-lg border border-[var(--absd-border)] px-3 py-1.5 text-xs font-semibold text-[var(--absd-authority)] transition hover:border-[var(--absd-authority)] hover:text-[var(--absd-authority)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--absd-authority)]"
-        >
-          Ver reportes
-        </Link>
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setEditingChurch(church)}
+          >
+            Editar
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => handleDeactivate(church)}
+            disabled={!church.active}
+          >
+            {church.active ? 'Desactivar' : 'Inactiva'}
+          </Button>
+          <Link
+            href={`/reports?tab=history&churchId=${church.id}`}
+            className="inline-flex items-center rounded-lg border border-[var(--absd-border)] px-3 py-1.5 text-xs font-semibold text-[var(--absd-authority)] transition hover:border-[var(--absd-authority)] hover:text-[var(--absd-authority)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--absd-authority)]"
+          >
+            Ver reportes
+          </Link>
+        </div>
       ),
     },
   ];
@@ -148,6 +181,12 @@ export default function ChurchesView() {
           />
         )}
       </SectionCard>
+
+      <ChurchEditDialog
+        church={editingChurch}
+        open={!!editingChurch}
+        onClose={() => setEditingChurch(null)}
+      />
     </div>
   );
 }

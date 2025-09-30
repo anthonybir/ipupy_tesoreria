@@ -45,7 +45,7 @@ export function ReconciliationView() {
   );
 
   const funds = fundsQuery.data ?? [];
-  const rawReconciliation = reconciliationQuery.data?.data as Array<Record<string, unknown>> | undefined;
+  const rawReconciliation = (reconciliationQuery.data as { data?: Array<Record<string, unknown>> })?.data;
   const reconciliation = useMemo<ReconciliationRow[]>(() => {
     if (!rawReconciliation) {
       return [];
@@ -61,7 +61,7 @@ export function ReconciliationView() {
       status: row.status ? String(row.status) : undefined,
     }));
   }, [rawReconciliation]);
-  const summary = reconciliationQuery.data?.summary ?? {};
+  const summary = (reconciliationQuery.data as { summary?: Record<string, unknown> })?.summary ?? {};
 
   const discrepancyTotal = useMemo(() => {
     return reconciliation.reduce((sum, row) => sum + row.difference, 0);

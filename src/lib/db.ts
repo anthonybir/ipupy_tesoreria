@@ -237,10 +237,10 @@ export const query = execute;
  * @param authContext - Authentication context from auth-supabase
  * @param callback - Async function that receives the client and performs queries
  */
-export const executeTransaction = async (
+export const executeTransaction = async <T = void>(
   authContext: { userId?: string; role?: string; churchId?: number | null } | null,
-  callback: (client: PoolClient) => Promise<void>
-): Promise<void> => {
+  callback: (client: PoolClient) => Promise<T>
+): Promise<T> => {
   const poolRef = createConnection();
   const client = await Promise.race([
     poolRef.connect(),
@@ -269,23 +269,33 @@ export const executeTransaction = async (
     await client.query('BEGIN');
 
     // Execute the callback with the same client
-    await callback(client);
+    const result = await callback(client);
 
     // Commit transaction
     await client.query('COMMIT');
+
+    return result;
   } catch (error) {
     // Rollback on error
-    await client.query('ROLLBACK');
+    try {
+      await client.query('ROLLBACK');
+    } catch (rollbackError) {
+      console.error('Error rolling back transaction:', rollbackError);
+    }
     throw error;
   } finally {
     // Clear context before releasing connection (batched for performance)
     if (authContext) {
-      await client.query(
-        `SELECT
-          set_config('app.current_user_id', '00000000-0000-0000-0000-000000000000', true),
-          set_config('app.current_user_role', '', true),
-          set_config('app.current_user_church_id', '0', true)`
-      );
+      try {
+        await client.query(
+          `SELECT
+            set_config('app.current_user_id', '00000000-0000-0000-0000-000000000000', true),
+            set_config('app.current_user_role', '', true),
+            set_config('app.current_user_church_id', '0', true)`
+        );
+      } catch (clearError) {
+        console.error('Error clearing RLS context:', clearError);
+      }
     }
     client.release();
   }

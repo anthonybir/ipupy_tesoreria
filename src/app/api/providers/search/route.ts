@@ -1,48 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+
+import { requireAuth } from '@/lib/auth-supabase';
+import { executeWithContext } from '@/lib/db';
+import { handleApiError, ValidationError } from '@/lib/api-errors';
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
-
+    const auth = await requireAuth(request);
     const searchParams = request.nextUrl.searchParams;
-    const query = searchParams.get('q') || '';
+    const query = (searchParams.get('q') || '').trim();
     const categoria = searchParams.get('categoria');
-    const limit = parseInt(searchParams.get('limit') || '20');
+    const limit = Number.parseInt(searchParams.get('limit') ?? '20', 10);
 
-    if (!query || query.length < 2) {
-      return NextResponse.json({ data: [] });
+    if (query.length < 2) {
+      throw new ValidationError('La búsqueda debe contener al menos 2 caracteres');
     }
 
-    const { data, error } = await supabase.rpc('search_providers', {
-      p_query: query,
-      p_categoria: categoria,
-      p_limit: limit,
-    });
+    const params: unknown[] = [`%${query}%`];
+    const conditions = [`(LOWER(nombre) LIKE LOWER($1) OR ruc ILIKE $1)`];
 
-    if (error) {
-      console.error('Error searching providers:', error);
-      return NextResponse.json(
-        { error: 'Error al buscar proveedores' },
-        { status: 500 }
-      );
+    if (categoria) {
+      params.push(categoria);
+      conditions.push(`categoria = $${params.length}`);
     }
 
-    return NextResponse.json({ data: data || [] });
-  } catch (error) {
-    console.error('Error in GET /api/providers/search:', error);
-    return NextResponse.json(
-      { error: 'Error interno del servidor' },
-      { status: 500 }
+    params.push(limit);
+
+    const result = await executeWithContext(
+      auth,
+      `
+        SELECT id, ruc, nombre, categoria, email, telefono, es_activo
+        FROM providers
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY es_especial DESC, nombre ASC
+        LIMIT $${params.length}
+      `,
+      params
     );
+
+    return NextResponse.json({ data: result.rows });
+  } catch (error) {
+    return handleApiError(error, request.headers.get('origin'), 'GET /api/providers/search');
   }
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, hasFundAccess } from '@/lib/auth-supabase';
-import { executeWithContext } from '@/lib/db';
+import { executeWithContext, executeTransaction } from '@/lib/db';
 import { setCORSHeaders } from '@/lib/cors';
 
 export const runtime = 'nodejs';
@@ -161,16 +161,19 @@ export async function PATCH(
         return response;
       }
 
-      await executeWithContext(auth, `
-        UPDATE fund_events
-        SET status = 'submitted', submitted_at = now(), updated_at = now()
-        WHERE id = $1
-      `, [eventId]);
+      // Use executeTransaction for atomic status update + audit
+      await executeTransaction(auth, async (client) => {
+        await client.query(`
+          UPDATE fund_events
+          SET status = 'submitted', submitted_at = now(), updated_at = now()
+          WHERE id = $1
+        `, [eventId]);
 
-      await executeWithContext(auth, `
-        INSERT INTO fund_event_audit (event_id, previous_status, new_status, changed_by, comment)
-        VALUES ($1, $2, 'submitted', $3, 'Enviado para aprobación')
-      `, [eventId, event.status, auth.userId]);
+        await client.query(`
+          INSERT INTO fund_event_audit (event_id, previous_status, new_status, changed_by, comment)
+          VALUES ($1, $2, 'submitted', $3, 'Enviado para aprobación')
+        `, [eventId, event.status, auth.userId]);
+      });
 
       const response = NextResponse.json({
         success: true,
@@ -200,34 +203,30 @@ export async function PATCH(
         return response;
       }
 
-      await executeWithContext(auth, 'BEGIN');
-
-      try {
-        const approvalResult = await executeWithContext(auth, `
+      // Use executeTransaction for atomic approval + audit
+      const ledgerResult = await executeTransaction(auth, async (client) => {
+        const approvalResult = await client.query(`
           SELECT process_fund_event_approval($1, $2) as result
         `, [eventId, auth.userId]);
 
-        const ledgerResult = approvalResult.rows[0].result;
+        const result = approvalResult.rows[0].result;
 
-        await executeWithContext(auth, `
+        await client.query(`
           INSERT INTO fund_event_audit (event_id, previous_status, new_status, changed_by, comment)
           VALUES ($1, 'submitted', 'approved', $2, $3)
         `, [eventId, auth.userId, data.comment || 'Evento aprobado y transacciones creadas']);
 
-        await executeWithContext(auth, 'COMMIT');
+        return result;
+      });
 
-        const response = NextResponse.json({
-          success: true,
-          message: 'Event approved and transactions created',
-          ledger_result: ledgerResult
-        });
+      const response = NextResponse.json({
+        success: true,
+        message: 'Event approved and transactions created',
+        ledger_result: ledgerResult
+      });
 
-        setCORSHeaders(response);
-        return response;
-      } catch (error) {
-        await executeWithContext(auth, 'ROLLBACK');
-        throw error;
-      }
+      setCORSHeaders(response);
+      return response;
     }
 
     if (action === 'reject') {
@@ -258,16 +257,19 @@ export async function PATCH(
         return response;
       }
 
-      await executeWithContext(auth, `
-        UPDATE fund_events
-        SET status = 'pending_revision', rejection_reason = $2, updated_at = now()
-        WHERE id = $1
-      `, [eventId, data.rejection_reason]);
+      // Use executeTransaction for atomic rejection + audit
+      await executeTransaction(auth, async (client) => {
+        await client.query(`
+          UPDATE fund_events
+          SET status = 'pending_revision', rejection_reason = $2, updated_at = now()
+          WHERE id = $1
+        `, [eventId, data.rejection_reason]);
 
-      await executeWithContext(auth, `
-        INSERT INTO fund_event_audit (event_id, previous_status, new_status, changed_by, comment)
-        VALUES ($1, 'submitted', 'pending_revision', $2, $3)
-      `, [eventId, auth.userId, data.rejection_reason]);
+        await client.query(`
+          INSERT INTO fund_event_audit (event_id, previous_status, new_status, changed_by, comment)
+          VALUES ($1, 'submitted', 'pending_revision', $2, $3)
+        `, [eventId, auth.userId, data.rejection_reason]);
+      });
 
       const response = NextResponse.json({
         success: true,
@@ -343,10 +345,9 @@ export async function PUT(
       }
     }
 
-    await executeWithContext(auth, 'BEGIN');
-
-    try {
-      await executeWithContext(auth, `
+    // Use executeTransaction for atomic update
+    await executeTransaction(auth, async (client) => {
+      await client.query(`
         UPDATE fund_events
         SET
           name = COALESCE($2, name),
@@ -362,20 +363,15 @@ export async function PUT(
         body.event_date,
         body.church_id
       ]);
+    });
 
-      await executeWithContext(auth, 'COMMIT');
+    const response = NextResponse.json({
+      success: true,
+      message: 'Event updated successfully'
+    });
 
-      const response = NextResponse.json({
-        success: true,
-        message: 'Event updated successfully'
-      });
-
-      setCORSHeaders(response);
-      return response;
-    } catch (error) {
-      await executeWithContext(auth, 'ROLLBACK');
-      throw error;
-    }
+    setCORSHeaders(response);
+    return response;
   } catch (error) {
     console.error('Error updating event:', error);
     const response = NextResponse.json(

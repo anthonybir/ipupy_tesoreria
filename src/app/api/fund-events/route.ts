@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, hasFundAccess } from '@/lib/auth-supabase';
-import { executeWithContext } from '@/lib/db';
+import { executeWithContext, executeTransaction } from '@/lib/db';
+import { handleApiError } from '@/lib/api-errors';
 import { setCORSHeaders } from '@/lib/cors';
 import type { CreateEventInput } from '@/types/financial';
 
@@ -61,7 +62,15 @@ export async function GET(req: NextRequest) {
 
     const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
 
-    const query = `
+    // Create separate param arrays to prevent placeholder misalignment
+    const queryParams = [...params];
+    const statsParams = [...params]; // Separate copy for stats query
+
+    // Get pagination parameters
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const offset = parseInt(searchParams.get('offset') || '0');
+
+    let query = `
       SELECT
         fe.id,
         fe.fund_id,
@@ -103,10 +112,22 @@ export async function GET(req: NextRequest) {
       ORDER BY fe.created_at DESC
     `;
 
-    const result = await executeWithContext(auth, query, params);
+    // Add pagination only to main query params
+    if (limit > 0) {
+      queryParams.push(limit);
+      query += ` LIMIT $${queryParams.length}`;
+    }
+
+    if (offset > 0) {
+      queryParams.push(offset);
+      query += ` OFFSET $${queryParams.length}`;
+    }
+
+    const result = await executeWithContext(auth, query, queryParams);
 
     const statsQuery = `
       SELECT
+        COUNT(*) as total,
         COUNT(*) FILTER (WHERE status = 'draft') as draft,
         COUNT(*) FILTER (WHERE status = 'submitted') as submitted,
         COUNT(*) FILTER (WHERE status = 'approved') as approved,
@@ -116,12 +137,18 @@ export async function GET(req: NextRequest) {
       ${whereClause}
     `;
 
-    const statsResult = await executeWithContext(auth, statsQuery, params);
+    // Use statsParams (without pagination placeholders) for stats query
+    const statsResult = await executeWithContext(auth, statsQuery, statsParams);
     const stats = statsResult.rows[0];
 
     const response = NextResponse.json({
       success: true,
       data: result.rows,
+      pagination: {
+        total: parseInt(stats.total),
+        limit,
+        offset,
+      },
       stats: {
         draft: parseInt(stats.draft),
         submitted: parseInt(stats.submitted),
@@ -134,16 +161,7 @@ export async function GET(req: NextRequest) {
     setCORSHeaders(response);
     return response;
   } catch (error) {
-    console.error('Error fetching fund events:', error);
-    const response = NextResponse.json(
-      {
-        error: 'Error fetching events',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
-    setCORSHeaders(response);
-    return response;
+    return handleApiError(error, req.headers.get('origin'), 'GET /api/fund-events');
   }
 }
 
@@ -170,10 +188,10 @@ export async function POST(req: NextRequest) {
       return response;
     }
 
-    await executeWithContext(auth, 'BEGIN');
-
-    try {
-      const eventResult = await executeWithContext(auth, `
+    // Use executeTransaction for atomic multi-insert operation
+    const event = await executeTransaction(auth, async (client) => {
+      // Insert event
+      const eventResult = await client.query(`
         INSERT INTO fund_events (
           fund_id, church_id, name, description, event_date, created_by, status
         )
@@ -188,17 +206,18 @@ export async function POST(req: NextRequest) {
         auth.userId
       ]);
 
-      const event = eventResult.rows[0];
+      const newEvent = eventResult.rows[0];
 
+      // Insert budget items (if any)
       if (body.budget_items && body.budget_items.length > 0) {
         for (const item of body.budget_items) {
-          await executeWithContext(auth, `
+          await client.query(`
             INSERT INTO fund_event_budget_items (
               event_id, category, description, projected_amount, notes
             )
             VALUES ($1, $2, $3, $4, $5)
           `, [
-            event.id,
+            newEvent.id,
             item.category,
             item.description,
             item.projected_amount,
@@ -207,39 +226,28 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      await executeWithContext(auth, `
+      // Create audit entry
+      await client.query(`
         INSERT INTO fund_event_audit (event_id, new_status, changed_by, comment)
         VALUES ($1, 'draft', $2, 'Evento creado')
-      `, [event.id, auth.userId]);
+      `, [newEvent.id, auth.userId]);
 
-      await executeWithContext(auth, 'COMMIT');
+      return newEvent;
+    });
 
-      const response = NextResponse.json(
-        {
-          success: true,
-          data: event,
-          message: 'Event created successfully'
-        },
-        { status: 201 }
-      );
-
-      setCORSHeaders(response);
-      return response;
-    } catch (error) {
-      await executeWithContext(auth, 'ROLLBACK');
-      throw error;
-    }
-  } catch (error) {
-    console.error('Error creating fund event:', error);
     const response = NextResponse.json(
       {
-        error: 'Error creating event',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        success: true,
+        data: event,
+        message: 'Event created successfully'
       },
-      { status: 500 }
+      { status: 201 }
     );
+
     setCORSHeaders(response);
     return response;
+  } catch (error) {
+    return handleApiError(error, req.headers.get('origin'), 'POST /api/fund-events');
   }
 }
 

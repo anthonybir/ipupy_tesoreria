@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthContext } from '@/lib/auth-context';
-import { executeWithContext, createConnection } from '@/lib/db';
+import { requireAuth, type AuthContext } from '@/lib/auth-context';
+import { executeWithContext, executeTransaction } from '@/lib/db';
 import { setCORSHeaders } from '@/lib/cors';
 
 export const runtime = 'nodejs';
@@ -40,7 +40,7 @@ const getDecodedChurchId = (auth: any): number | null => {
   return parsed === null ? null : parsed;
 };
 
-const enforceChurchAccess = (auth: any, churchId: any): number => {
+const enforceChurchAccess = (auth: AuthContext | null, churchId: any): number => {
   const parsed = parseInteger(churchId);
   if (parsed === null || parsed <= 0) {
     throw new BadRequestError('church_id es requerido y debe ser válido');
@@ -112,7 +112,7 @@ interface WorshipPayload {
   contributions: Contribution[];
 }
 
-const normalizeWorshipPayload = (body: any, auth: any): WorshipPayload => {
+const normalizeWorshipPayload = (body: any, auth: AuthContext): WorshipPayload => {
   const churchId = enforceChurchAccess(auth, body.church_id);
   const fechaCulto = sanitizeString(body.fecha_culto || body.fechaCulto);
   const tipoCulto = sanitizeString(body.tipo_culto || body.tipoCulto);
@@ -327,9 +327,9 @@ const resolveDonorId = async (client: any, churchId: number, row: ContributionRo
   return result.rows[0].donor_id;
 };
 
-const saveWorshipRecord = async (payload: WorshipPayload): Promise<any> => {
+const saveWorshipRecord = async (payload: WorshipPayload, auth: AuthContext): Promise<any> => {
   const contributionRows = payload.contributions.flatMap((entry, index) =>
-    buildContributionRows(entry, index).map(row => ({
+    buildContributionRows(entry, index).map((row) => ({
       ...row,
       original: payload.contributions[index]
     }))
@@ -342,53 +342,56 @@ const saveWorshipRecord = async (payload: WorshipPayload): Promise<any> => {
   const totals = summarizeContributionTotals(contributionRows);
   const totalRecaudado = totals.total + payload.anonymousOffering;
 
-  const pool = createConnection();
-  const client = await pool.connect();
-
-  try {
-    await client.query('BEGIN');
-
-    const insertRecordResult = await client.query(`
-      INSERT INTO worship_records (
-        church_id, fecha_culto, tipo_culto, predicador, encargado_registro,
-        total_diezmos, total_ofrendas, total_misiones, total_otros,
-        ofrenda_general_anonima, total_recaudado,
-        miembros_activos, visitas, ninos, jovenes, total_asistencia,
-        bautismos_agua, bautismos_espiritu, observaciones
-      ) VALUES (
-        $1, $2, $3, $4, $5,
-        $6, $7, $8, $9,
-        $10, $11,
-        $12, $13, $14, $15, $16,
-        $17, $18, $19
-      ) RETURNING *
-    `, [
-      payload.churchId,
-      payload.fechaCulto,
-      payload.tipoCulto,
-      payload.predicador,
-      payload.encargadoRegistro,
-      totals.diezmo,
-      totals.ofrenda,
-      // Group all 100% national funds as "misiones"
-      totals.misiones + totals.lazos_amor + totals.mision_posible + totals.apy +
-        totals.instituto_biblico + totals.diezmo_pastoral + totals.caballeros,
-      // Group all local funds as "otros"
-      totals.damas + totals.jovenes + totals.ninos + totals.anexos + totals.otros,
-      payload.anonymousOffering,
-      totalRecaudado,
-      payload.attendance.miembros_activos,
-      payload.attendance.visitas,
-      payload.attendance.ninos,
-      payload.attendance.jovenes,
-      payload.attendance.total_asistencia,
-      payload.attendance.bautismos_agua,
-      payload.attendance.bautismos_espiritu,
-      payload.observaciones
-    ]);
+  return executeTransaction(auth, async (client) => {
+    const insertRecordResult = await client.query(
+      `
+        INSERT INTO worship_records (
+          church_id, fecha_culto, tipo_culto, predicador, encargado_registro,
+          total_diezmos, total_ofrendas, total_misiones, total_otros,
+          ofrenda_general_anonima, total_recaudado,
+          miembros_activos, visitas, ninos, jovenes, total_asistencia,
+          bautismos_agua, bautismos_espiritu, observaciones
+        ) VALUES (
+          $1, $2, $3, $4, $5,
+          $6, $7, $8, $9,
+          $10, $11,
+          $12, $13, $14, $15, $16,
+          $17, $18, $19
+        ) RETURNING *
+      `,
+      [
+        payload.churchId,
+        payload.fechaCulto,
+        payload.tipoCulto,
+        payload.predicador,
+        payload.encargadoRegistro,
+        totals.diezmo,
+        totals.ofrenda,
+        // Group all 100% national funds as "misiones"
+        totals.misiones +
+          totals.lazos_amor +
+          totals.mision_posible +
+          totals.apy +
+          totals.instituto_biblico +
+          totals.diezmo_pastoral +
+          totals.caballeros,
+        // Group all local funds as "otros"
+        totals.damas + totals.jovenes + totals.ninos + totals.anexos + totals.otros,
+        payload.anonymousOffering,
+        totalRecaudado,
+        payload.attendance.miembros_activos,
+        payload.attendance.visitas,
+        payload.attendance.ninos,
+        payload.attendance.jovenes,
+        payload.attendance.total_asistencia,
+        payload.attendance.bautismos_agua,
+        payload.attendance.bautismos_espiritu,
+        payload.observaciones
+      ]
+    );
 
     const record = insertRecordResult.rows[0];
-    const insertedContributions = [];
+    const insertedContributions = [] as unknown[];
 
     for (const row of contributionRows) {
       const donorId = await resolveDonorId(client, payload.churchId, row);
@@ -399,42 +402,43 @@ const saveWorshipRecord = async (payload: WorshipPayload): Promise<any> => {
         otros: row.fundBucket === 'otros' ? row.amount : 0
       };
 
-      const result = await client.query(`
-        INSERT INTO worship_contributions (
-          worship_record_id,
-          numero_fila,
-          nombre_aportante,
-          ci_ruc,
-          numero_recibo,
-          diezmo,
-          ofrenda,
-          misiones,
-          otros,
-          total,
-          fund_bucket,
-          donor_id
-        ) VALUES (
-          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
-        ) RETURNING *
-      `, [
-        record.id,
-        row.sourceRow,
-        row.donorName,
-        row.ciRuc,
-        row.receiptNumber,
-        amounts.diezmo,
-        amounts.ofrenda,
-        amounts.misiones,
-        amounts.otros,
-        row.amount,
-        row.fundBucket,
-        donorId
-      ]);
+      const result = await client.query(
+        `
+          INSERT INTO worship_contributions (
+            worship_record_id,
+            numero_fila,
+            nombre_aportante,
+            ci_ruc,
+            numero_recibo,
+            diezmo,
+            ofrenda,
+            misiones,
+            otros,
+            total,
+            fund_bucket,
+            donor_id
+          ) VALUES (
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
+          ) RETURNING *
+        `,
+        [
+          record.id,
+          row.sourceRow,
+          row.donorName,
+          row.ciRuc,
+          row.receiptNumber,
+          amounts.diezmo,
+          amounts.ofrenda,
+          amounts.misiones,
+          amounts.otros,
+          row.amount,
+          row.fundBucket,
+          donorId
+        ]
+      );
 
       insertedContributions.push(result.rows[0]);
     }
-
-    await client.query('COMMIT');
 
     return {
       record,
@@ -442,15 +446,10 @@ const saveWorshipRecord = async (payload: WorshipPayload): Promise<any> => {
       anonymousOffering: payload.anonymousOffering,
       contributions: insertedContributions
     };
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+  });
 };
 
-const listWorshipRecords = async (query: any, auth: any): Promise<any[]> => {
+const listWorshipRecords = async (query: any, auth: AuthContext): Promise<any[]> => {
   const churchId = enforceChurchAccess(auth, query.church_id);
   const month = parseInteger(query.month);
   const year = parseInteger(query.year);
@@ -514,10 +513,7 @@ export async function OPTIONS(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const origin = req.headers.get('origin');
   try {
-    const auth = await getAuthContext(req);
-    if (!auth) {
-      return jsonResponse(origin, { error: 'Token de autenticación requerido' }, 401);
-    }
+    const auth = await requireAuth(req);
 
     const { searchParams } = new URL(req.url);
     const query = Object.fromEntries(searchParams.entries());
@@ -526,6 +522,9 @@ export async function GET(req: NextRequest) {
 
   } catch (error) {
     console.error('Error in worship-records API:', error);
+    if ((error as Error).message === 'Autenticación requerida') {
+      return jsonResponse(origin, { error: 'Token de autenticación requerido' }, 401);
+    }
 
     if (error instanceof BadRequestError) {
       return jsonResponse(origin, { error: error.message }, 400);
@@ -533,10 +532,6 @@ export async function GET(req: NextRequest) {
 
     if (error instanceof ForbiddenError) {
       return jsonResponse(origin, { error: error.message }, 403);
-    }
-
-    if ((error as any).name === 'JsonWebTokenError') {
-      return jsonResponse(origin, { error: 'Token inválido' }, 401);
     }
 
     return jsonResponse(origin, {
@@ -549,18 +544,19 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const origin = req.headers.get('origin');
   try {
-    const auth = await getAuthContext(req);
-    if (!auth) {
-      return jsonResponse(origin, { error: 'Token de autenticación requerido' }, 401);
-    }
+    const auth = await requireAuth(req);
 
     const body = await req.json();
     const payload = normalizeWorshipPayload(body, auth);
-    const result = await saveWorshipRecord(payload);
+    const result = await saveWorshipRecord(payload, auth);
     return jsonResponse(origin, result, 201);
 
   } catch (error) {
     console.error('Error in worship-records API:', error);
+
+    if ((error as Error).message === 'Autenticación requerida') {
+      return jsonResponse(origin, { error: 'Token de autenticación requerido' }, 401);
+    }
 
     if (error instanceof BadRequestError) {
       return jsonResponse(origin, { error: error.message }, 400);
@@ -568,10 +564,6 @@ export async function POST(req: NextRequest) {
 
     if (error instanceof ForbiddenError) {
       return jsonResponse(origin, { error: error.message }, 403);
-    }
-
-    if ((error as any).name === 'JsonWebTokenError') {
-      return jsonResponse(origin, { error: 'Token inválido' }, 401);
     }
 
     return jsonResponse(origin, {
