@@ -28,8 +28,16 @@ export async function GET(
     }
 
     const event = eventCheck.rows[0];
+    if (!event) {
+      const response = NextResponse.json(
+        { error: 'Event not found' },
+        { status: 404 }
+      );
+      setCORSHeaders(response);
+      return response;
+    }
 
-    if (auth.role === 'fund_director' && !hasFundAccess(auth, event.fund_id)) {
+    if (auth.role === 'fund_director' && !hasFundAccess(auth, event['fund_id'])) {
       const response = NextResponse.json(
         { error: 'No access to this event' },
         { status: 403 }
@@ -122,9 +130,17 @@ export async function POST(
     }
 
     const event = eventCheck.rows[0];
+    if (!event) {
+      const response = NextResponse.json(
+        { error: 'Event not found' },
+        { status: 404 }
+      );
+      setCORSHeaders(response);
+      return response;
+    }
 
     if (auth.role === 'fund_director') {
-      if (!hasFundAccess(auth, event.fund_id) || event.created_by !== auth.userId) {
+      if (!hasFundAccess(auth, event['fund_id']) || event['created_by'] !== auth.userId) {
         const response = NextResponse.json(
           { error: 'Only the event creator can add actuals' },
           { status: 403 }
