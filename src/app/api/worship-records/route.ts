@@ -281,7 +281,7 @@ const summarizeContributionTotals = (rows: ContributionRow[]) => {
       acc[fundBucket] = 0;
     }
     acc[fundBucket] += amount;
-    acc.total += amount;
+    acc['total'] = (acc['total'] ?? 0) + amount;
     return acc;
   }, {
     diezmo: 0,
@@ -339,9 +339,10 @@ const saveWorshipRecord = async (payload: WorshipPayload, auth: AuthContext): Pr
   }
 
   const totals = summarizeContributionTotals(contributionRows);
-  const totalRecaudado = totals.total + payload.anonymousOffering;
+  const totalRecaudado = (totals['total'] ?? 0) + payload.anonymousOffering;
 
-  return executeTransaction(auth, async (client) => {
+  const contextSubset = auth ? { userId: auth.userId, role: auth.role, churchId: auth.churchId } : null;
+  return executeTransaction(contextSubset, async (client) => {
     const insertRecordResult = await client.query(
       `
         INSERT INTO worship_records (
@@ -364,18 +365,18 @@ const saveWorshipRecord = async (payload: WorshipPayload, auth: AuthContext): Pr
         payload.tipoCulto,
         payload.predicador,
         payload.encargadoRegistro,
-        totals.diezmo,
-        totals.ofrenda,
+        totals['diezmo'] ?? 0,
+        totals['ofrenda'] ?? 0,
         // Group all 100% national funds as "misiones"
-        totals.misiones +
-          totals.lazos_amor +
-          totals.mision_posible +
-          totals.apy +
-          totals.instituto_biblico +
-          totals.diezmo_pastoral +
-          totals.caballeros,
+        (totals['misiones'] ?? 0) +
+          (totals['lazos_amor'] ?? 0) +
+          (totals['mision_posible'] ?? 0) +
+          (totals['apy'] ?? 0) +
+          (totals['instituto_biblico'] ?? 0) +
+          (totals['diezmo_pastoral'] ?? 0) +
+          (totals['caballeros'] ?? 0),
         // Group all local funds as "otros"
-        totals.damas + totals.jovenes + totals.ninos + totals.anexos + totals.otros,
+        (totals['damas'] ?? 0) + (totals['jovenes'] ?? 0) + (totals['ninos'] ?? 0) + (totals['anexos'] ?? 0) + (totals['otros'] ?? 0),
         payload.anonymousOffering,
         totalRecaudado,
         payload.attendance.miembros_activos,

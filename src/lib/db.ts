@@ -238,7 +238,7 @@ export const query = execute;
  * @param callback - Async function that receives the client and performs queries
  */
 export const executeTransaction = async <T = void>(
-  authContext: { userId?: string; role?: string; churchId?: number | null } | null,
+  authContext: { userId?: string | undefined; role?: string | undefined; churchId?: number | null | undefined } | null,
   callback: (client: PoolClient) => Promise<T>
 ): Promise<T> => {
   const poolRef = createConnection();
