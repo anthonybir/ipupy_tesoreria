@@ -43,6 +43,9 @@ import {
   type RolesConfig,
   type IntegrationConfig,
 } from '@/hooks/useAdminConfiguration';
+import { usePastorAccess } from '@/hooks/usePastorAccess';
+import { GrantAccessDialog, ChangeRoleDialog, RevokeAccessDialog } from '@/components/Admin/PastorAccessDialogs';
+import type { ChurchRecord } from '@/types/api';
 import toast from 'react-hot-toast';
 
 type AdminUser = {
@@ -54,13 +57,7 @@ type AdminUser = {
   is_active?: boolean;
 };
 
-type AdminChurch = {
-  id: number | string;
-  name: string;
-  city?: string | null;
-  pastor?: string | null;
-  pastor_grado?: string | null;
-  active?: boolean;
+type AdminChurch = ChurchRecord & {
   last_report?: string | null;
 };
 
@@ -359,6 +356,10 @@ const ConfigurationPage = () => {
           <TabsTrigger value="roles" className="flex items-center gap-2">
             <UserPlus className="h-4 w-4" />
             Roles
+          </TabsTrigger>
+          <TabsTrigger value="pastor-access" className="flex items-center gap-2">
+            <Shield className="h-4 w-4" />
+            Acceso Pastores
           </TabsTrigger>
           <TabsTrigger value="users" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
@@ -794,6 +795,11 @@ const ConfigurationPage = () => {
           </Card>
         </TabsContent>
 
+        {/* Pastor Platform Access Tab */}
+        <TabsContent value="pastor-access">
+          <PastorAccessManagementSection />
+        </TabsContent>
+
         {/* Integration Configuration Tab */}
         <TabsContent value="integration">
           <IntegrationConfigurationSection
@@ -970,36 +976,63 @@ const ChurchManagementSection = () => {
                     <tr className="border-b bg-muted/50">
                       <th className="text-left p-3">Iglesia</th>
                       <th className="text-left p-3">Ciudad</th>
-                      <th className="text-left p-3">Pastor</th>
+                      <th className="text-left p-3">Pastor principal</th>
+                      <th className="text-left p-3">Contacto</th>
                       <th className="text-left p-3">Estado</th>
                       <th className="text-left p-3">Último Informe</th>
                       <th className="text-left p-3">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {churches.map((church) => (
-                      <tr key={church.id} className="border-b">
-                        <td className="p-3">
-                          <div className="font-medium">{church.name}</div>
-                        </td>
-                        <td className="p-3 text-sm">{church.city}</td>
-                        <td className="p-3">
-                          <div className="text-sm">
-                            <div>{church.pastor}</div>
-                            <div className="text-muted-foreground">{church.pastor_grado}</div>
-                          </div>
-                        </td>
-                        <td className="p-3">
-                          <Badge variant={church.active ? 'success' : 'secondary'}>
-                            {church.active ? 'Activa' : 'Inactiva'}
-                          </Badge>
-                        </td>
-                        <td className="p-3 text-sm">{church.last_report || 'Nunca'}</td>
-                        <td className="p-3">
-                          <Button variant="ghost" size="sm">Editar</Button>
-                        </td>
-                      </tr>
-                    ))}
+                    {churches.map((church) => {
+                      const primary = church.primaryPastor;
+                      const role = primary?.roleTitle ?? church.position ?? null;
+                      const ordination = primary?.grado ?? church.grade ?? null;
+                      const contactEmail = primary?.email ?? church.email ?? undefined;
+                      const contactPhone = primary?.phone ?? church.phone ?? undefined;
+                      const contactWhatsApp = primary?.whatsapp ?? undefined;
+
+                      return (
+                        <tr key={church.id} className="border-b">
+                          <td className="p-3">
+                            <div className="font-medium">{church.name}</div>
+                          </td>
+                          <td className="p-3 text-sm">{church.city || 'Sin registrar'}</td>
+                          <td className="p-3">
+                            <div className="text-sm space-y-1">
+                              <div className="font-medium">{primary?.fullName ?? church.pastor}</div>
+                              {role && <div className="text-muted-foreground text-xs">{role}</div>}
+                              {ordination && (
+                                <div className="text-muted-foreground text-xs">{ordination}</div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <div className="text-sm space-y-1">
+                              {contactPhone && <div>Tel: {contactPhone}</div>}
+                              {contactWhatsApp && (
+                                <div className="text-muted-foreground text-xs">WhatsApp: {contactWhatsApp}</div>
+                              )}
+                              {contactEmail && (
+                                <div className="text-muted-foreground text-xs">{contactEmail}</div>
+                              )}
+                              {!contactPhone && !contactEmail && !contactWhatsApp && (
+                                <div className="text-muted-foreground text-xs">Sin datos</div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <Badge variant={church.active ? 'success' : 'secondary'}>
+                              {church.active ? 'Activa' : 'Inactiva'}
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-sm">{church.last_report ?? 'Nunca'}</td>
+                          <td className="p-3">
+                            <Button variant="ghost" size="sm">Editar</Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1169,6 +1202,197 @@ const IntegrationConfigurationSection = ({ config, setConfig, onSave, loading }:
         </div>
       </CardContent>
     </Card>
+  );
+};
+
+// Pastor Access Management Component
+const PastorAccessManagementSection = () => {
+  const [selectedPastor, setSelectedPastor] = useState<number | null>(null);
+  const [dialogMode, setDialogMode] = useState<'grant' | 'change' | 'revoke' | null>(null);
+
+  const { data: pastorAccessData, isLoading } = usePastorAccess();
+  const pastors = pastorAccessData?.data ?? [];
+  const summary = pastorAccessData?.summary;
+
+  const handleGrantAccess = (pastorId: number) => {
+    setSelectedPastor(pastorId);
+    setDialogMode('grant');
+  };
+
+  const handleChangeRole = (pastorId: number) => {
+    setSelectedPastor(pastorId);
+    setDialogMode('change');
+  };
+
+  const handleRevokeAccess = (pastorId: number) => {
+    setSelectedPastor(pastorId);
+    setDialogMode('revoke');
+  };
+
+  const closeDialog = () => {
+    setSelectedPastor(null);
+    setDialogMode(null);
+  };
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Acceso de Pastores a la Plataforma</CardTitle>
+              <CardDescription>
+                Gestione qué pastores tienen acceso al sistema y sus roles asignados
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {summary && (
+            <div className="grid grid-cols-4 gap-4 mb-6">
+              <div className="border rounded-lg p-4">
+                <div className="text-sm text-muted-foreground">Total Pastores</div>
+                <div className="text-2xl font-bold">{summary.total}</div>
+              </div>
+              <div className="border rounded-lg p-4">
+                <div className="text-sm text-muted-foreground">Con Acceso</div>
+                <div className="text-2xl font-bold text-green-600">{summary.with_access}</div>
+              </div>
+              <div className="border rounded-lg p-4">
+                <div className="text-sm text-muted-foreground">Sin Acceso</div>
+                <div className="text-2xl font-bold text-amber-600">{summary.no_access}</div>
+              </div>
+              <div className="border rounded-lg p-4">
+                <div className="text-sm text-muted-foreground">Revocados</div>
+                <div className="text-2xl font-bold text-red-600">{summary.revoked}</div>
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            {isLoading ? (
+              <div className="text-center py-8">
+                <RefreshCw className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
+                <p className="text-muted-foreground mt-2">Cargando pastores...</p>
+              </div>
+            ) : (
+              <div className="border rounded-lg">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="text-left p-3">Pastor</th>
+                      <th className="text-left p-3">Iglesia</th>
+                      <th className="text-left p-3">Rol Pastoral</th>
+                      <th className="text-left p-3">Rol Plataforma</th>
+                      <th className="text-left p-3">Estado Acceso</th>
+                      <th className="text-left p-3">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pastors.map((pastor) => (
+                      <tr key={pastor.pastorId} className="border-b">
+                        <td className="p-3">
+                          <div className="font-medium">{pastor.pastorName}</div>
+                        </td>
+                        <td className="p-3 text-sm">{pastor.churchName}</td>
+                        <td className="p-3 text-sm">{pastor.pastoralRole || '-'}</td>
+                        <td className="p-3">
+                          {pastor.platformRole ? (
+                            <Badge variant="outline">{pastor.platformRole}</Badge>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">Sin rol</span>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          <Badge
+                            variant={
+                              pastor.accessStatus === 'active'
+                                ? 'success'
+                                : pastor.accessStatus === 'revoked'
+                                ? 'danger'
+                                : 'secondary'
+                            }
+                          >
+                            {pastor.accessStatus === 'active'
+                              ? 'Activo'
+                              : pastor.accessStatus === 'revoked'
+                              ? 'Revocado'
+                              : 'Sin Acceso'}
+                          </Badge>
+                        </td>
+                        <td className="p-3">
+                          <div className="flex gap-2">
+                            {pastor.accessStatus === 'no_access' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleGrantAccess(pastor.pastorId)}
+                              >
+                                Otorgar
+                              </Button>
+                            )}
+                            {pastor.accessStatus === 'active' && (
+                              <>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleChangeRole(pastor.pastorId)}
+                                >
+                                  Cambiar
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleRevokeAccess(pastor.pastorId)}
+                                >
+                                  Revocar
+                                </Button>
+                              </>
+                            )}
+                            {pastor.accessStatus === 'revoked' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleGrantAccess(pastor.pastorId)}
+                              >
+                                Reactivar
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Dialogs will be added here */}
+      {dialogMode === 'grant' && selectedPastor && (
+        <GrantAccessDialog
+          pastorId={selectedPastor}
+          pastor={pastors.find((p) => p.pastorId === selectedPastor)}
+          onClose={closeDialog}
+        />
+      )}
+      {dialogMode === 'change' && selectedPastor && (
+        <ChangeRoleDialog
+          pastorId={selectedPastor}
+          pastor={pastors.find((p) => p.pastorId === selectedPastor)}
+          onClose={closeDialog}
+        />
+      )}
+      {dialogMode === 'revoke' && selectedPastor && (
+        <RevokeAccessDialog
+          pastorId={selectedPastor}
+          pastor={pastors.find((p) => p.pastorId === selectedPastor)}
+          onClose={closeDialog}
+        />
+      )}
+    </div>
   );
 };
 

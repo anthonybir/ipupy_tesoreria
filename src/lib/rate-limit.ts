@@ -83,8 +83,11 @@ function cleanupExpiredEntries(): void {
 export function isRateLimited(
   request: NextRequest,
   configType: keyof typeof configs = 'api'
-): { limited: boolean; retryAfter?: number; message?: string } {
-  const config = configs[configType] || configs.api;
+): { limited: boolean; retryAfter?: number | undefined; message?: string | undefined } {
+  const config = configs[configType] ?? configs['api'];
+  if (!config) {
+    throw new Error(`Rate limit config not found for type: ${configType}`);
+  }
   const clientId = `${configType}:${getClientId(request)}`;
   const now = Date.now();
 
@@ -114,7 +117,7 @@ export function isRateLimited(
     const retryAfter = Math.ceil((entry.resetTime - now) / 1000);  // seconds
     return {
       limited: true,
-      retryAfter,
+      retryAfter: retryAfter,
       message: config.message
     };
   }
@@ -153,7 +156,7 @@ export function withRateLimit(
         headers: {
           'Content-Type': 'application/json',
           'Retry-After': String(result.retryAfter || 60),
-          'X-RateLimit-Limit': String(configs[configType].maxRequests),
+          'X-RateLimit-Limit': String(configs[configType]?.maxRequests ?? 60),
           'X-RateLimit-Remaining': '0',
           'X-RateLimit-Reset': String(Date.now() + (result.retryAfter || 60) * 1000)
         }

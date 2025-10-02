@@ -5,7 +5,7 @@ const defaultOrigins = [
 ];
 
 const getAllowedOrigins = (): string[] => {
-  const custom = process.env.ALLOWED_ORIGINS;
+  const custom = process.env['ALLOWED_ORIGINS'];
   if (!custom) {
     return defaultOrigins;
   }
@@ -28,7 +28,10 @@ export const buildCorsHeaders = (origin?: string | null): HeadersInit => {
     headers['Access-Control-Allow-Origin'] = origin;
   } else if (!origin && allowedOrigins.length > 0) {
     // For requests without origin (e.g., server-side), use first allowed origin
-    headers['Access-Control-Allow-Origin'] = allowedOrigins[0];
+    const firstOrigin = allowedOrigins[0];
+    if (firstOrigin) {
+      headers['Access-Control-Allow-Origin'] = firstOrigin;
+    }
   }
   // REMOVED: Wildcard fallback that allowed all origins
   // If origin is not allowed, no CORS header is set (request will be blocked)

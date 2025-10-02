@@ -146,40 +146,47 @@ async function handleExportRequest(auth: AuthContext | null, searchParams: URLSe
   return buildBinaryResponse(Buffer.from(buffer), filename);
 }
 async function fetchMonthlyExport(auth: AuthContext | null, year: number, month: number) {
-  const result = await executeWithContext(auth, 
+  const result = await executeWithContext(auth,
     `
     SELECT
-      c.name as "Iglesia",
-      c.city as "Ciudad",
-      c.pastor as "Pastor",
-      c.pastor_grado as "Grado",
-      c.pastor_posicion as "Posición",
-      c.pastor_cedula as "Cédula",
-      r.diezmos as "Diezmos (Gs.)",
-      r.ofrendas as "Ofrendas (Gs.)",
-      r.anexos as "Anexos (Gs.)",
-      r.caballeros as "Caballeros (Gs.)",
-      r.damas as "Damas (Gs.)",
-      r.jovenes as "Jóvenes (Gs.)",
-      r.ninos as "Niños (Gs.)",
-      r.otros as "Otros (Gs.)",
-      r.total_entradas as "Total Entradas (Gs.)",
-      r.fondo_nacional as "Fondo Nacional (Gs.)",
-      r.honorarios_pastoral as "Honorarios Pastoral (Gs.)",
-      r.servicios as "Servicios (Gs.)",
-      r.total_salidas as "Total Salidas (Gs.)",
-      r.saldo_mes as "Saldo del Mes (Gs.)",
-      r.numero_deposito as "Número Depósito",
-      r.fecha_deposito as "Fecha Depósito",
-      r.monto_depositado as "Monto Depositado (Gs.)",
-      r.asistencia_visitas as "Asistencia Visitas",
-      r.bautismos_agua as "Bautismos Agua",
-      r.bautismos_espiritu as "Bautismos Espíritu Santo",
-      r.observaciones as "Observaciones",
-      r.estado as "Estado",
-      r.created_at as "Fecha Creación"
+      c.name AS "Iglesia",
+      c.city AS "Ciudad",
+      COALESCE(cp.full_name, c.pastor) AS "Pastor",
+      COALESCE(cp.grado, c.pastor_grado) AS "Grado",
+      COALESCE(cp.role_title, c.pastor_posicion) AS "Posición",
+      COALESCE(cp.pastor_national_id, c.pastor_cedula) AS "Cédula",
+      cp.pastor_tax_id AS "RUC Pastor",
+      cp.pastor_phone AS "Teléfono Pastor",
+      cp.pastor_whatsapp AS "WhatsApp Pastor",
+      cp.pastor_email AS "Correo Pastor",
+      c.phone AS "Teléfono Iglesia",
+      c.email AS "Correo Iglesia",
+      r.diezmos AS "Diezmos (Gs.)",
+      r.ofrendas AS "Ofrendas (Gs.)",
+      r.anexos AS "Anexos (Gs.)",
+      r.caballeros AS "Caballeros (Gs.)",
+      r.damas AS "Damas (Gs.)",
+      r.jovenes AS "Jóvenes (Gs.)",
+      r.ninos AS "Niños (Gs.)",
+      r.otros AS "Otros (Gs.)",
+      r.total_entradas AS "Total Entradas (Gs.)",
+      r.fondo_nacional AS "Fondo Nacional (Gs.)",
+      r.honorarios_pastoral AS "Honorarios Pastoral (Gs.)",
+      r.servicios AS "Servicios (Gs.)",
+      r.total_salidas AS "Total Salidas (Gs.)",
+      r.saldo_mes AS "Saldo del Mes (Gs.)",
+      r.numero_deposito AS "Número Depósito",
+      r.fecha_deposito AS "Fecha Depósito",
+      r.monto_depositado AS "Monto Depositado (Gs.)",
+      r.asistencia_visitas AS "Asistencia Visitas",
+      r.bautismos_agua AS "Bautismos Agua",
+      r.bautismos_espiritu AS "Bautismos Espíritu Santo",
+      r.observaciones AS "Observaciones",
+      r.estado AS "Estado",
+      r.created_at AS "Fecha Creación"
     FROM reports r
     JOIN churches c ON r.church_id = c.id
+    LEFT JOIN church_primary_pastors cp ON cp.church_id = c.id
     WHERE r.year = $1 AND r.month = $2
     ORDER BY c.name
   `,
@@ -193,23 +200,28 @@ async function fetchMonthlyExport(auth: AuthContext | null, year: number, month:
 }
 
 async function fetchYearlyExport(auth: AuthContext | null, year: number) {
-  const result = await executeWithContext(auth, 
+  const result = await executeWithContext(auth,
     `
     SELECT
-      c.name as "Iglesia",
-      c.city as "Ciudad",
-      c.pastor as "Pastor",
-      SUM(r.total_entradas) as "Total Entradas Año (Gs.)",
-      SUM(r.fondo_nacional) as "Total Fondo Nacional (Gs.)",
-      SUM(r.diezmos) as "Total Diezmos (Gs.)",
-      SUM(r.ofrendas) as "Total Ofrendas (Gs.)",
-      COUNT(r.id) as "Meses Reportados",
-      AVG(r.total_entradas) as "Promedio Mensual (Gs.)",
-      MAX(r.created_at) as "Último Reporte"
+      c.name AS "Iglesia",
+      c.city AS "Ciudad",
+      COALESCE(MAX(cp.full_name), MAX(c.pastor)) AS "Pastor",
+      COALESCE(MAX(cp.grado), MAX(c.pastor_grado)) AS "Grado",
+      COALESCE(MAX(cp.role_title), MAX(c.pastor_posicion)) AS "Posición",
+      COALESCE(MAX(cp.pastor_whatsapp), MAX(NULLIF(c.phone, ''))) AS "WhatsApp/Tel Pastor",
+      MAX(cp.pastor_email) AS "Correo Pastor",
+      SUM(r.total_entradas) AS "Total Entradas Año (Gs.)",
+      SUM(r.fondo_nacional) AS "Total Fondo Nacional (Gs.)",
+      SUM(r.diezmos) AS "Total Diezmos (Gs.)",
+      SUM(r.ofrendas) AS "Total Ofrendas (Gs.)",
+      COUNT(r.id) AS "Meses Reportados",
+      AVG(r.total_entradas) AS "Promedio Mensual (Gs.)",
+      MAX(r.created_at) AS "Último Reporte"
     FROM churches c
     LEFT JOIN reports r ON c.id = r.church_id AND r.year = $1
+    LEFT JOIN church_primary_pastors cp ON cp.church_id = c.id
     WHERE c.active = true
-    GROUP BY c.id, c.name, c.city, c.pastor
+    GROUP BY c.id, c.name, c.city
     ORDER BY SUM(r.total_entradas) DESC NULLS LAST
   `,
     [year]
@@ -222,21 +234,26 @@ async function fetchYearlyExport(auth: AuthContext | null, year: number) {
 }
 
 async function fetchChurchesExport(auth: AuthContext | null, year: number) {
-  const result = await executeWithContext(auth, 
+  const result = await executeWithContext(auth,
     `
     SELECT
-      name as "Nombre Iglesia",
-      city as "Ciudad",
-      pastor as "Pastor",
-      pastor_grado as "Grado",
-      pastor_posicion as "Posición",
-      pastor_cedula as "Cédula",
-      phone as "Teléfono",
-      pastor_ruc as "RUC",
-      active as "Activa",
-      created_at as "Fecha Registro"
-    FROM churches
-    ORDER BY name
+      c.name AS "Nombre Iglesia",
+      c.city AS "Ciudad",
+      COALESCE(cp.full_name, c.pastor) AS "Pastor Principal",
+      COALESCE(cp.grado, c.pastor_grado) AS "Grado",
+      COALESCE(cp.role_title, c.pastor_posicion) AS "Rol/Puesto",
+      COALESCE(cp.pastor_national_id, c.pastor_cedula) AS "Cédula",
+      COALESCE(cp.pastor_tax_id, c.pastor_ruc) AS "RUC",
+      cp.pastor_email AS "Correo Pastor",
+      cp.pastor_phone AS "Teléfono Pastor",
+      cp.pastor_whatsapp AS "WhatsApp Pastor",
+      c.email AS "Correo Iglesia",
+      c.phone AS "Teléfono Iglesia",
+      c.active AS "Activa",
+      c.created_at AS "Fecha Registro"
+    FROM churches c
+    LEFT JOIN church_primary_pastors cp ON cp.church_id = c.id
+    ORDER BY c.name
   `
   );
 

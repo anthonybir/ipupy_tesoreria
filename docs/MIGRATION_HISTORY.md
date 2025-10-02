@@ -1,5 +1,21 @@
 # Historial de Migraciones y Consolidaciones - IPU PY Tesorería
 
+## 2025-10-01 · Directorio Pastoral Normalizado
+
+### Migration 031 · Pastors table & primary linkage
+- **Objetivo**: separar la información pastoral de `churches` para habilitar historial, auditoría y múltiples responsables por congregación.
+- **Tabla nueva**: `pastors` con metadatos de contacto (WhatsApp, email), identificación (cédula/RUC), nivel ministerial y notas administrativas.
+- **Llave cruzada**: `churches.primary_pastor_id` referencia al pastor activo principal (`ON DELETE SET NULL`).
+- **Índices**: búsqueda por nombre (`GIN` español), filtro por estado y unicidad parcial para evitar más de un pastor activo principal por iglesia.
+- **RLS**: políticas para admins, líderes de la propia iglesia y lectura pública de pastores activos.
+- **Backfill**: se migraron los datos actuales de `churches` → `pastors` y se asignó `primary_pastor_id` sin duplicar registros existentes.
+- **Vista auxiliar**: `church_primary_pastors` expone cada iglesia con su pastor principal para consultas ligeras.
+
+### Cambios asociados
+- **API `/api/churches`**: ahora orquesta transacciones que insertan/actualizan en `pastors`, expone `primaryPastor` en la respuesta y asegura estados sincronizados al desactivar iglesias.
+- **Tipos TypeScript**: `ChurchRecord` incluye `primaryPastor` y `PastorRecord` con los campos normalizados.
+- **UI**: el directorio de iglesias muestra el rol ministerial, grado y WhatsApp si existen, usando la nueva relación.
+
 ## 2025-09-25 · Manual Report Audit Trail & Fund Reconciliation
 
 ### Migration 021 · Manual Report Metadata

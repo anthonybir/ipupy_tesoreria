@@ -31,7 +31,7 @@ export const normalizeCurrencyRawValue = (rawValue: string, options: NormalizeOp
   }
 
   const [integerPartRaw, fractionPartRaw = ''] = sanitized.split('.', 2);
-  const integerDigits = normalizeIntegerDigits(integerPartRaw);
+  const integerDigits = normalizeIntegerDigits(integerPartRaw ?? '');
   const fractionDigits = normalizeFractionDigits(
     fractionPartRaw,
     options.decimals ?? MAX_DECIMALS
@@ -89,7 +89,7 @@ export const formatCurrencyInput = (rawValue: string): string => {
   }
 
   const [integerPart, fractionPart = ''] = normalized.split('.', 2);
-  const integerNumber = Number.parseInt(integerPart, 10);
+  const integerNumber = Number.parseInt(integerPart ?? '0', 10);
 
   if (!Number.isFinite(integerNumber)) {
     return '';

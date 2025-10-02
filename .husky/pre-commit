@@ -1,0 +1,5 @@
+#!/bin/sh
+# Pre-commit hook for IPU PY Tesorería
+# Enforces TypeScript type safety and code quality
+
+npm run lint-staged

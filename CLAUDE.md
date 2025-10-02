@@ -173,17 +173,39 @@ To run migrations: Use Supabase dashboard or `scripts/migrate.js`
 
 ## TypeScript Configuration
 
-**Strict mode enabled** - Follow global CLAUDE.md rules:
+**Maximum strict mode enabled** - Pre-commit hooks enforce type safety:
 
 ```json
 {
   "strict": true,
   "noImplicitAny": true,
-  "strictNullChecks": true
+  "strictNullChecks": true,
+  "noUncheckedIndexedAccess": true,
+  "exactOptionalPropertyTypes": true,
+  "noPropertyAccessFromIndexSignature": true,
+  "noImplicitReturns": true,
+  "noFallthroughCasesInSwitch": true
 }
 ```
 
+### Type Safety Enforcement (Pre-Commit Hooks)
+
+**CRITICAL:** All commits are blocked by pre-commit hooks if:
+- ❌ TypeScript compilation errors exist (`tsc --noEmit`)
+- ❌ ESLint warnings exist (`eslint --max-warnings 0`)
+- ❌ `any` type is used without justification
+- ❌ Missing return types on exported functions
+- ❌ `useState()` called without explicit generic
+
+**Scripts:**
+- `npm run typecheck` - Check TypeScript compilation
+- `npm run typecheck:watch` - Watch mode for development
+- `npm run lint:strict` - ESLint with zero warnings
+- `npm run validate` - Run both typecheck and lint
+
 **NEVER disable strict checks**. Fix types instead of loosening compiler.
+
+See [TYPE_SAFETY_GUIDE.md](./docs/TYPE_SAFETY_GUIDE.md) for detailed patterns and fixes.
 
 ## Component Patterns
 

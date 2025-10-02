@@ -1,0 +1,64 @@
+name: TypeScript Type Safety Check
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  typecheck:
+    name: TypeScript Compilation & Linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run TypeScript type check
+        run: npm run typecheck
+
+      - name: Run ESLint (strict mode - zero warnings)
+        run: npm run lint:strict
+
+      - name: Build Next.js application
+        run: npm run build
+        env:
+          # Mock required env vars for build
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key' }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://placeholder' }}
+
+  report:
+    name: Report Results
+    runs-on: ubuntu-latest
+    needs: typecheck
+    if: always()
+
+    steps:
+      - name: Comment PR with Results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const status = '${{ needs.typecheck.result }}';
+            const emoji = status === 'success' ? '✅' : '❌';
+            const message = status === 'success'
+              ? 'All TypeScript checks passed!'
+              : 'TypeScript checks failed. Please fix type errors before merging.';
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `${emoji} **TypeScript Safety Check:** ${message}`
+            });

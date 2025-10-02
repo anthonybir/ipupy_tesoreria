@@ -41,9 +41,13 @@ export async function GET(req: NextRequest) {
         p.created_at,
         p.permissions,
         c.name as church_name,
-        c.city as church_city
+        c.city as church_city,
+        pastor.id as linked_pastor_id,
+        pastor.full_name as linked_pastor_name,
+        pastor.role_title as linked_pastor_role
       FROM profiles p
       LEFT JOIN churches c ON p.church_id = c.id
+      LEFT JOIN pastors pastor ON pastor.profile_id = p.id
       WHERE 1=1
     `;
     const params: Array<string | boolean> = [];

@@ -2,13 +2,13 @@ import { NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
 export type AuthContext = {
-  userId?: string;  // Changed to string (UUID) from number
-  email?: string;
-  role?: string;
-  churchId?: number | null;
-  fullName?: string;
-  phone?: string;
-  permissions?: Record<string, boolean | string | number>;
+  userId?: string | undefined;  // Changed to string (UUID) from number
+  email?: string | undefined;
+  role?: string | undefined;
+  churchId?: number | null | undefined;
+  fullName?: string | undefined;
+  phone?: string | undefined;
+  permissions?: Record<string, boolean | string | number> | undefined;
 };
 
 

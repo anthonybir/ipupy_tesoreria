@@ -8,7 +8,7 @@ const MAX_CONSECUTIVE_ERRORS = 3;
 const POOL_MAX_AGE = 30 * 60 * 1000; // 30 minutes
 
 const getConnectionString = (): string => {
-  const raw = (process.env.SUPABASE_DB_URL || process.env.DATABASE_URL || '').trim();
+  const raw = (process.env['SUPABASE_DB_URL'] || process.env['DATABASE_URL'] || '').trim();
   if (!raw) {
     throw new Error('SUPABASE_DB_URL (or DATABASE_URL) environment variable is required');
   }
@@ -23,7 +23,7 @@ const getConnectionString = (): string => {
   const url = new URL(connectionString);
 
   // Force pooler mode for Vercel deployments
-  if (process.env.VERCEL) {
+  if (process.env['VERCEL']) {
     url.searchParams.set('pgbouncer', 'true');
     url.searchParams.set('connection_limit', '1');
     url.searchParams.set('pool_timeout', '0');
@@ -95,14 +95,14 @@ export const createConnection = (): Pool => {
 
   if (!pool) {
     const connectionString = getConnectionString();
-    const sslRequired = process.env.SUPABASE_SSL_DISABLED !== 'true';
+    const sslRequired = process.env['SUPABASE_SSL_DISABLED'] !== 'true';
 
     pool = new Pool({
       connectionString,
       ssl: sslRequired ? { rejectUnauthorized: false } : false,
       connectionTimeoutMillis: 15000, // Increase timeout for Vercel cold starts
       idleTimeoutMillis: 10000, // Reduce idle timeout to free connections faster
-      max: process.env.VERCEL ? 1 : 10, // Reduce connections on Vercel to avoid pool exhaustion
+      max: process.env['VERCEL'] ? 1 : 10, // Reduce connections on Vercel to avoid pool exhaustion
       allowExitOnIdle: true,
       application_name: 'ipupy-tesoreria'
     });
@@ -302,7 +302,7 @@ export const executeTransaction = async <T = void>(
 };
 
 export const executeWithContext = async <T extends QueryResultRow = QueryResultRow>(
-  authContext: { userId?: string; role?: string; churchId?: number | null } | null,
+  authContext: { userId?: string | undefined; role?: string | undefined; churchId?: number | null | undefined } | null,
   statement: Statement,
   params?: unknown,
   retries = 3
@@ -392,7 +392,7 @@ export const initDatabase = async (): Promise<void> => {
   console.log('✅ Using Supabase Postgres - migrations managed via scripts');
 };
 
-if (process.env.VERCEL) {
+if (process.env['VERCEL']) {
   setInterval(() => {
     if (pool && pool.totalCount === 0 && pool.idleCount === 0) {
       void destroyPool();

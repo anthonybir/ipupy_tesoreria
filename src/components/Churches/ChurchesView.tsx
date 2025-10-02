@@ -25,11 +25,28 @@ export default function ChurchesView() {
     }
 
     const term = search.trim().toLowerCase();
-    return churches.filter((church) =>
-      [church.name, church.city, church.pastor, church.phone, church.email]
+    return churches.filter((church) => {
+      const haystack = [
+        church.name,
+        church.city,
+        church.pastor,
+        church.phone,
+        church.email,
+        church.primaryPastor?.fullName,
+        church.primaryPastor?.preferredName,
+        church.primaryPastor?.email,
+        church.primaryPastor?.phone,
+        church.primaryPastor?.whatsapp,
+        church.primaryPastor?.roleTitle,
+        church.primaryPastor?.grado,
+        church.primaryPastor?.nationalId,
+        church.primaryPastor?.taxId
+      ];
+
+      return haystack
         .map((value) => value ?? '')
-        .some((value) => value.toLowerCase().includes(term))
-    );
+        .some((value) => value.toLowerCase().includes(term));
+    });
   }, [churches, search]);
 
   const handleDeactivate = async (church: ChurchRecord) => {
@@ -62,24 +79,49 @@ export default function ChurchesView() {
     {
       id: 'pastor',
       header: 'Pastor/a',
-      render: (church) => (
-        <div className="flex flex-col gap-1 text-[var(--absd-ink)]">
-          <span>{church.pastor}</span>
-          {church.position && (
-            <span className="text-xs text-[rgba(15,23,42,0.55)]">{church.position}</span>
-          )}
-        </div>
-      ),
+      render: (church) => {
+        const primary = church.primaryPastor;
+        const role = primary?.roleTitle ?? church.position ?? null;
+        const ordination = primary?.grado ?? church.grade ?? null;
+
+        return (
+          <div className="flex flex-col gap-1 text-[var(--absd-ink)]">
+            <span>{primary?.fullName ?? church.pastor}</span>
+            {role && (
+              <span className="text-xs text-[rgba(15,23,42,0.55)]">{role}</span>
+            )}
+            {ordination && (
+              <span className="text-xs text-[rgba(15,23,42,0.55)]">{ordination}</span>
+            )}
+          </div>
+        );
+      },
     },
     {
       id: 'contact',
       header: 'Contacto',
-      render: (church) => (
-        <div className="flex flex-col gap-1 text-[var(--absd-ink)]">
-          {church.phone ? <span>Tel: {church.phone}</span> : <span className="text-xs text-[rgba(15,23,42,0.55)]">Sin teléfono</span>}
-          {church.email && <span className="text-xs text-[rgba(15,23,42,0.55)]">{church.email}</span>}
-        </div>
-      ),
+      render: (church) => {
+        const primary = church.primaryPastor;
+        const phone = primary?.phone ?? church.phone;
+        const whatsapp = primary?.whatsapp;
+        const email = primary?.email ?? church.email;
+
+        return (
+          <div className="flex flex-col gap-1 text-[var(--absd-ink)]">
+            {phone ? (
+              <span>Tel: {phone}</span>
+            ) : (
+              <span className="text-xs text-[rgba(15,23,42,0.55)]">Sin teléfono</span>
+            )}
+            {whatsapp && (
+              <span className="text-xs text-[rgba(15,23,42,0.55)]">WhatsApp: {whatsapp}</span>
+            )}
+            {email && (
+              <span className="text-xs text-[rgba(15,23,42,0.55)]">{email}</span>
+            )}
+          </div>
+        );
+      },
     },
     {
       id: 'status',

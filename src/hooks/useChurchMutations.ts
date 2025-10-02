@@ -10,6 +10,23 @@ const invalidateChurches = (queryClient: QueryClient) => {
   queryClient.invalidateQueries({ queryKey: ['churches'], exact: false }).catch(() => {});
 };
 
+type PrimaryPastorPayload = {
+  fullName?: string;
+  preferredName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  nationalId?: string | null;
+  taxId?: string | null;
+  grado?: string | null;
+  roleTitle?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  status?: string | null;
+  notes?: string | null;
+  isPrimary?: boolean | null;
+};
+
 export type CreateChurchPayload = {
   name: string;
   city: string;
@@ -20,11 +37,11 @@ export type CreateChurchPayload = {
   cedula?: string;
   grado?: string;
   posicion?: string;
+  active?: boolean;
+  primaryPastor?: PrimaryPastorPayload;
 };
 
-export type UpdateChurchPayload = Partial<CreateChurchPayload> & {
-  active?: boolean;
-};
+export type UpdateChurchPayload = Partial<CreateChurchPayload>;
 
 export function useCreateChurch() {
   const queryClient = useQueryClient();

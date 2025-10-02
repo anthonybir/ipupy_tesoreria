@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, type AuthContext } from '@/lib/auth-context';
 import { executeWithContext, executeTransaction } from '@/lib/db';
@@ -21,17 +20,17 @@ class ForbiddenError extends Error {
   }
 }
 
-const parseInteger = (value: any): number | null => {
-  const parsed = Number.parseInt(value, 10);
+const parseInteger = (value: unknown): number | null => {
+  const parsed = Number.parseInt(String(value), 10);
   return Number.isNaN(parsed) ? null : parsed;
 };
 
-const parseNumber = (value: any): number => {
-  const parsed = Number.parseFloat(value);
+const parseNumber = (value: unknown): number => {
+  const parsed = Number.parseFloat(String(value));
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const getDecodedChurchId = (auth: any): number | null => {
+const getDecodedChurchId = (auth: AuthContext | null): number | null => {
   if (!auth) {
     return null;
   }
@@ -40,7 +39,7 @@ const getDecodedChurchId = (auth: any): number | null => {
   return parsed === null ? null : parsed;
 };
 
-const enforceChurchAccess = (auth: AuthContext | null, churchId: any): number => {
+const enforceChurchAccess = (auth: AuthContext | null, churchId: unknown): number => {
   const parsed = parseInteger(churchId);
   if (parsed === null || parsed <= 0) {
     throw new BadRequestError('church_id es requerido y debe ser válido');
@@ -60,7 +59,7 @@ const enforceChurchAccess = (auth: AuthContext | null, churchId: any): number =>
   return parsed;
 };
 
-const sanitizeString = (value: any): string | null => {
+const sanitizeString = (value: unknown): string | null => {
   if (value === undefined || value === null) {
     return null;
   }

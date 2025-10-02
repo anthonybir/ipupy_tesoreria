@@ -206,7 +206,27 @@ export const normalizeReportRecord = (raw: RawReportRecord): ReportRecord => {
   };
 };
 
-export type RawChurchRecord = {
+export type RawPrimaryPastor = {
+  primary_pastor_id?: number | null;
+  primary_pastor_record_id?: number | null;
+  primary_pastor_full_name?: string | null;
+  primary_pastor_preferred_name?: string | null;
+  primary_pastor_email?: string | null;
+  primary_pastor_phone?: string | null;
+  primary_pastor_whatsapp?: string | null;
+  primary_pastor_national_id?: string | null;
+  primary_pastor_tax_id?: string | null;
+  primary_pastor_photo_url?: string | null;
+  primary_pastor_notes?: string | null;
+  primary_pastor_role_title?: string | null;
+  primary_pastor_grado?: string | null;
+  primary_pastor_status?: string | null;
+  primary_pastor_start_date?: string | null;
+  primary_pastor_end_date?: string | null;
+  primary_pastor_is_primary?: boolean | null;
+};
+
+export type RawChurchRecord = RawPrimaryPastor & {
   id: number;
   name: string;
   city: string;
@@ -220,6 +240,26 @@ export type RawChurchRecord = {
   pastor_posicion?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+};
+
+export type PastorRecord = {
+  id: number | null;
+  churchId: number;
+  fullName: string;
+  preferredName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  whatsapp?: string | null;
+  nationalId?: string | null;
+  taxId?: string | null;
+  photoUrl?: string | null;
+  notes?: string | null;
+  roleTitle?: string | null;
+  grado?: 'ordenación' | 'general' | 'local' | null;
+  status: 'active' | 'inactive' | 'transition' | 'emeritus' | 'retired';
+  startDate?: string | null;
+  endDate?: string | null;
+  isPrimary: boolean;
 };
 
 export type ChurchRecord = {
@@ -236,13 +276,58 @@ export type ChurchRecord = {
   position?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+  primaryPastor: PastorRecord | null;
+};
+
+const normalizePrimaryPastor = (raw: RawChurchRecord): PastorRecord | null => {
+  if (!raw.primary_pastor_id && !raw.primary_pastor_record_id && !raw.primary_pastor_full_name) {
+    return null;
+  }
+
+  const rawStatus = raw.primary_pastor_status ?? undefined;
+  const allowedStatuses: ReadonlyArray<PastorRecord['status']> = [
+    'active',
+    'inactive',
+    'transition',
+    'emeritus',
+    'retired'
+  ];
+  const status = allowedStatuses.includes(rawStatus as PastorRecord['status'])
+    ? (rawStatus as PastorRecord['status'])
+    : 'active';
+
+  const rawGrado = raw.primary_pastor_grado;
+  const validGrados: ReadonlyArray<NonNullable<PastorRecord['grado']>> = ['ordenación', 'general', 'local'];
+  const grado = rawGrado && validGrados.includes(rawGrado as NonNullable<PastorRecord['grado']>)
+    ? (rawGrado as NonNullable<PastorRecord['grado']>)
+    : null;
+
+  return {
+    id: raw.primary_pastor_record_id ?? raw.primary_pastor_id ?? null,
+    churchId: raw.id,
+    fullName: raw.primary_pastor_full_name ?? raw.pastor,
+    preferredName: raw.primary_pastor_preferred_name ?? null,
+    email: raw.primary_pastor_email ?? null,
+    phone: raw.primary_pastor_phone ?? null,
+    whatsapp: raw.primary_pastor_whatsapp ?? null,
+    nationalId: raw.primary_pastor_national_id ?? null,
+    taxId: raw.primary_pastor_tax_id ?? null,
+    photoUrl: raw.primary_pastor_photo_url ?? null,
+    notes: raw.primary_pastor_notes ?? null,
+    roleTitle: raw.primary_pastor_role_title ?? null,
+    grado,
+    status,
+    startDate: raw.primary_pastor_start_date ?? null,
+    endDate: raw.primary_pastor_end_date ?? null,
+    isPrimary: raw.primary_pastor_is_primary ?? true
+  };
 };
 
 export const normalizeChurchRecord = (raw: RawChurchRecord): ChurchRecord => ({
   id: raw.id,
   name: raw.name,
   city: raw.city,
-  pastor: raw.pastor,
+  pastor: raw.pastor || raw.primary_pastor_full_name || '',
   phone: raw.phone ?? null,
   email: raw.email ?? null,
   active: raw.active !== false,
@@ -251,7 +336,8 @@ export const normalizeChurchRecord = (raw: RawChurchRecord): ChurchRecord => ({
   grade: raw.pastor_grado ?? null,
   position: raw.pastor_posicion ?? null,
   createdAt: raw.created_at ?? null,
-  updatedAt: raw.updated_at ?? null
+  updatedAt: raw.updated_at ?? null,
+  primaryPastor: normalizePrimaryPastor(raw)
 });
 
 export type ReportFilters = {
@@ -260,4 +346,47 @@ export type ReportFilters = {
   month?: number;
   limit?: number;
   page?: number;
+};
+
+// Pastor Platform Access Types
+export type PastorAccessStatus = 'active' | 'no_access' | 'revoked';
+
+export type PastorUserAccess = {
+  pastorId: number;
+  churchId: number;
+  churchName: string;
+  city: string;
+  pastorName: string;
+  preferredName?: string | null;
+  pastorEmail?: string | null;
+  pastorPhone?: string | null;
+  pastorWhatsapp?: string | null;
+  pastoralRole?: string | null;
+  ordinationLevel?: string | null;
+  pastorStatus: string;
+  profileId?: string | null;
+  platformEmail?: string | null;
+  platformRole?: string | null;
+  platformActive?: boolean | null;
+  lastSeenAt?: string | null;
+  roleAssignedBy?: string | null;
+  roleAssignedAt?: string | null;
+  accessStatus: PastorAccessStatus;
+};
+
+export type PastorAccessSummary = {
+  total: number;
+  with_access: number;
+  no_access: number;
+  revoked: number;
+};
+
+export type PastorLinkRequest = {
+  pastor_id: number;
+  profile_id?: string;
+  create_profile?: {
+    email: string;
+    password?: string;
+    role: string;
+  };
 };

@@ -46,7 +46,7 @@ export async function fetchJson<T>(input: string, init?: RequestInit): Promise<T
   if (!response.ok) {
     const errorMessage =
       typeof data === 'object' && data !== null && 'error' in data
-        ? String((data as Record<string, unknown>).error)
+        ? String((data as Record<string, unknown>)['error'])
         : response.statusText || 'Error en la solicitud';
 
     throw new ApiError(errorMessage, response.status, data);

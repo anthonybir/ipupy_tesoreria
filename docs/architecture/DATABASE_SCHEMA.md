@@ -16,10 +16,12 @@ El Sistema de Tesorería IPU PY utiliza PostgreSQL 16 como base de datos princip
 ```mermaid
 erDiagram
     CHURCHES ||--o{ REPORTS : genera
-    CHURCHES ||--o{ USERS : pertenece
+    CHURCHES ||--o{ PASTORS : tiene
     CHURCHES ||--o{ MEMBERS : tiene
     CHURCHES ||--o{ FAMILIES : contiene
     CHURCHES ||--o{ TRANSACTIONS : registra
+    PASTORS ||--o| PROFILES : links_to
+    PROFILES ||--o{ CHURCHES : manages
     REPORTS ||--o{ TRANSACTIONS : detalla
     FAMILIES ||--o{ MEMBERS : incluye
     REPORTS ||--o{ WORSHIP_RECORDS : documenta
@@ -38,6 +40,38 @@ erDiagram
         text pastor_posicion
         boolean active
         timestamptz created_at
+        bigint primary_pastor_id FK
+    }
+
+    PASTORS {
+        bigint id PK
+        bigint church_id FK
+        text full_name
+        text preferred_name
+        text email
+        text phone
+        text whatsapp
+        text national_id
+        text tax_id
+        text ordination_level
+        text role_title
+        date start_date
+        date end_date
+        text status
+        boolean is_primary
+        uuid profile_id FK
+        timestamptz created_at
+    }
+
+    PROFILES {
+        uuid id PK
+        text email UK
+        text full_name
+        text role
+        integer church_id FK
+        boolean is_active
+        timestamptz role_assigned_at
+        uuid role_assigned_by FK
     }
 
     REPORTS {
@@ -239,18 +273,19 @@ CREATE TABLE churches (
   pastor_cedula TEXT,
   pastor_grado TEXT,
   pastor_posicion TEXT,
+  primary_pastor_id BIGINT REFERENCES pastors(id) ON DELETE SET NULL,
   active BOOLEAN DEFAULT TRUE,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
 **Campos Clave:**
 - `id`: Identificador único autoincremental
+- `primary_pastor_id`: Referencia al registro activo en `pastors` (permite historial y reemplazos)
 - `name`: Nombre oficial de la iglesia (único)
-- `pastor_grado`: Grado ministerial (Pastor, Reverendo, Obispo, etc.)
-- `pastor_posicion`: Posición eclesiástica (Pastor Principal, Asociado, etc.)
-- `pastor_ruc`: RUC para facturación de honorarios
-- `pastor_cedula`: Cédula de identidad paraguaya
+- `pastor_grado` / `pastor_posicion`: Campos legacy mantenidos para retrocompatibilidad mientras la UI migra totalmente al modelo normalizado.
+- `pastor_ruc` / `pastor_cedula`: Datos fiscales/legales aún replicados para reportes rápidos (future deprecation)
 
 **Datos Pre-cargados**: 22 iglesias con información completa
 
@@ -258,8 +293,44 @@ CREATE TABLE churches (
 ```sql
 CREATE INDEX idx_churches_active ON churches(active);
 CREATE INDEX idx_churches_city ON churches(city);
+CREATE INDEX idx_churches_primary_pastor ON churches(primary_pastor_id) WHERE primary_pastor_id IS NOT NULL;
 CREATE INDEX idx_churches_pastor_ruc ON churches(pastor_ruc);
 ```
+
+### 1B. PASTORS - Liderazgo pastoral normalizado
+
+**Descripción**: Tabla que centraliza la información de pastores principales y asistentes, permitiendo histórico, auditoría, y múltiples asignaciones por iglesia.
+
+```sql
+CREATE TABLE pastors (
+  id BIGSERIAL PRIMARY KEY,
+  church_id BIGINT NOT NULL REFERENCES churches(id) ON DELETE CASCADE,
+  full_name TEXT NOT NULL,
+  preferred_name TEXT,
+  email TEXT,
+  phone TEXT,
+  whatsapp TEXT,
+  national_id TEXT,
+  tax_id TEXT,
+  ordination_level TEXT,
+  role_title TEXT,
+  start_date DATE,
+  end_date DATE,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','inactive','transition','emeritus','retired')),
+  is_primary BOOLEAN NOT NULL DEFAULT TRUE,
+  notes TEXT,
+  photo_url TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_by UUID REFERENCES profiles(id) ON DELETE SET NULL,
+  updated_by UUID REFERENCES profiles(id) ON DELETE SET NULL
+);
+```
+
+**Consideraciones:**
+- Índice parcial `idx_pastors_primary_active` asegura un solo pastor principal activo por iglesia.
+- Vista `church_primary_pastors` expone el pastor principal para listados públicos.
+- RLS concede lectura pública de pastores activos y mutaciones sólo a administradores o líderes de la propia iglesia.
 
 ### 2. REPORTS - Reportes Mensuales
 
@@ -1137,6 +1208,63 @@ $$ LANGUAGE plpgsql;
 
 ---
 
+## Pastor-Profile Linkage Model (Migration 032)
+
+### Concepto
+
+El sistema separa la **identidad pastoral** (directorio de pastores) de la **cuenta de usuario** (acceso al sistema):
+
+- **Tabla `pastors`**: Información pastoral (nombre, ordenación, contacto, iglesia)
+- **Tabla `profiles`**: Cuentas de usuario con roles y permisos del sistema
+
+### Relación
+
+```sql
+ALTER TABLE pastors ADD COLUMN profile_id UUID REFERENCES profiles(id) ON DELETE SET NULL;
+```
+
+- **Un pastor** puede tener **una cuenta de usuario** (o ninguna)
+- **Una cuenta** puede estar vinculada a **un solo pastor**
+- Al eliminar el perfil, el registro del pastor se preserva (`SET NULL`)
+
+### Vista de Acceso
+
+```sql
+CREATE VIEW pastor_user_access AS
+SELECT
+  p.id AS pastor_id,
+  p.full_name AS pastor_name,
+  c.name AS church_name,
+  p.profile_id,
+  prof.role AS platform_role,
+  CASE
+    WHEN prof.id IS NULL THEN 'no_access'
+    WHEN prof.is_active = FALSE THEN 'revoked'
+    ELSE 'active'
+  END AS access_status
+FROM pastors p
+LEFT JOIN churches c ON c.id = p.church_id
+LEFT JOIN profiles prof ON prof.id = p.profile_id
+WHERE p.is_primary = TRUE AND p.status = 'active';
+```
+
+### Auditoría
+
+Trigger automático registra cambios de vinculación en `user_activity`:
+- `pastor.access_granted` - Perfil vinculado
+- `pastor.access_revoked` - Perfil desvinculado
+- `pastor.access_changed` - Perfil cambiado
+
+### Flujo de Gestión
+
+1. **Otorgar Acceso**: Admin vincula pastor a perfil (existente o nuevo)
+2. **Cambiar Rol**: Admin actualiza `profiles.role` del perfil vinculado
+3. **Revocar Acceso**: Admin desvincula perfil (preserva registro pastoral)
+
+Ver: [`/docs/guides/PASTOR_USER_MANAGEMENT.md`](../guides/PASTOR_USER_MANAGEMENT.md)
+
+---
+
 ## Conclusión
 
 El esquema de base de datos del Sistema IPU PY Tesorería está diseñado para:
@@ -1146,12 +1274,13 @@ El esquema de base de datos del Sistema IPU PY Tesorería está diseñado para:
 3. **Escalabilidad**: Estructura preparada para crecimiento
 4. **Auditabilidad**: Timestamps y triggers para trazabilidad
 5. **Flexibilidad**: Extensible para nuevas funcionalidades
+6. **Seguridad**: Separación clara entre identidad pastoral y acceso al sistema
 
 Este diseño proporciona una base sólida para las operaciones financieras de IPU Paraguay, con capacidad para manejar el crecimiento y evolución futura del sistema.
 
 ---
 
 **Documentado por**: Equipo Técnico IPU PY
-**Última actualización**: Diciembre 2024
-**Versión de Schema**: v2.0.0
+**Última actualización**: Octubre 2025
+**Versión de Schema**: v2.1.0 (con Pastor-Profile Linkage)
 **SGBD**: PostgreSQL 16 (Supabase)

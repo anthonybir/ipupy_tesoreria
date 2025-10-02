@@ -587,7 +587,7 @@ export type FundEventCollection = {
     approved: number;
     rejected: number;
     pendingRevision: number;
-  };
+  } | undefined;
 };
 
 export const normalizeFundEventsResponse = (payload: FundEventsApiResponse): FundEventCollection => ({

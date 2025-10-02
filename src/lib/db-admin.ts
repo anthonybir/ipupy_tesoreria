@@ -61,14 +61,17 @@ export async function fetchFundBalances(auth: AuthContext | null, filters: FundB
     ORDER BY f.is_active DESC, f.name;
   `;
 
-  const result = await executeWithContext<FundBalanceRow>(auth, query, params);
+  const contextSubset = auth ? { userId: auth.userId, role: auth.role, churchId: auth.churchId } : null;
+  const result = await executeWithContext<FundBalanceRow>(contextSubset, query, params);
   return result.rows;
 }
 
 // Process report approval and create fund transactions
 export async function processReportApproval(auth: AuthContext | null, reportId: number, approvedBy: string) {
+  const contextSubset = auth ? { userId: auth.userId, role: auth.role, churchId: auth.churchId } : null;
+
   // Get report details
-  const reportResult = await executeWithContext(auth, `
+  const reportResult = await executeWithContext(contextSubset, `
     SELECT r.*, c.name as church_name
     FROM reports r
     JOIN churches c ON r.church_id = c.id
@@ -80,38 +83,41 @@ export async function processReportApproval(auth: AuthContext | null, reportId: 
   }
 
   const report = reportResult.rows[0];
+  if (!report) {
+    throw new Error('Report data is missing');
+  }
 
   const toNumber = (value: unknown) => {
     const parsed = Number(value ?? 0);
     return Number.isFinite(parsed) ? parsed : 0;
   };
 
-  // Extract financial data from report
-  const diezmos = toNumber(report.diezmos);
-  const ofrendas = toNumber(report.ofrendas);
-  const otros = toNumber(report.otros);
-  const anexos = toNumber(report.anexos);
+  // Extract financial data from report (using bracket notation for index signature access)
+  const diezmos = toNumber(report['diezmos']);
+  const ofrendas = toNumber(report['ofrendas']);
+  const otros = toNumber(report['otros']);
+  const anexos = toNumber(report['anexos']);
 
   // Calculate totals
   const congregationalBase = diezmos + ofrendas;
-  const totalDesignados = toNumber(report.ofrendas_directas_misiones) +
-                          toNumber(report.lazos_amor) +
-                          toNumber(report.mision_posible) +
-                          toNumber(report.aporte_caballeros) +
-                          toNumber(report.apy) +
-                          toNumber(report.instituto_biblico) +
-                          toNumber(report.caballeros) +
-                          toNumber(report.damas) +
-                          toNumber(report.jovenes) +
-                          toNumber(report.ninos);
+  const totalDesignados = toNumber(report['ofrendas_directas_misiones']) +
+                          toNumber(report['lazos_amor']) +
+                          toNumber(report['mision_posible']) +
+                          toNumber(report['aporte_caballeros']) +
+                          toNumber(report['apy']) +
+                          toNumber(report['instituto_biblico']) +
+                          toNumber(report['caballeros']) +
+                          toNumber(report['damas']) +
+                          toNumber(report['jovenes']) +
+                          toNumber(report['ninos']);
 
-  const gastosOperativos = toNumber(report.servicios) +
-                           toNumber(report.energia_electrica) +
-                           toNumber(report.agua) +
-                           toNumber(report.recoleccion_basura) +
-                           toNumber(report.mantenimiento) +
-                           toNumber(report.materiales) +
-                           toNumber(report.otros_gastos);
+  const gastosOperativos = toNumber(report['servicios']) +
+                           toNumber(report['energia_electrica']) +
+                           toNumber(report['agua']) +
+                           toNumber(report['recoleccion_basura']) +
+                           toNumber(report['mantenimiento']) +
+                           toNumber(report['materiales']) +
+                           toNumber(report['otros_gastos']);
 
   const totalIngresos = congregationalBase + anexos + otros + totalDesignados;
   const fondoNacional = Math.round(congregationalBase * 0.1);
@@ -119,15 +125,15 @@ export async function processReportApproval(auth: AuthContext | null, reportId: 
 
   // Prepare designated funds object
   const designated = {
-    misiones: toNumber(report.ofrendas_directas_misiones),
-    lazos_amor: toNumber(report.lazos_amor),
-    mision_posible: toNumber(report.mision_posible),
-    apy: toNumber(report.apy),
-    iba: toNumber(report.instituto_biblico),
-    caballeros: toNumber(report.aporte_caballeros || report.caballeros),
-    damas: toNumber(report.damas),
-    jovenes: toNumber(report.jovenes),
-    ninos: toNumber(report.ninos)
+    misiones: toNumber(report['ofrendas_directas_misiones']),
+    lazos_amor: toNumber(report['lazos_amor']),
+    mision_posible: toNumber(report['mision_posible']),
+    apy: toNumber(report['apy']),
+    iba: toNumber(report['instituto_biblico']),
+    caballeros: toNumber(report['aporte_caballeros'] || report['caballeros']),
+    damas: toNumber(report['damas']),
+    jovenes: toNumber(report['jovenes']),
+    ninos: toNumber(report['ninos'])
   };
 
   // Use the createReportTransactions helper for consistent transaction creation
@@ -138,14 +144,14 @@ export async function processReportApproval(auth: AuthContext | null, reportId: 
       fondoNacional,
       honorariosPastoral,
       gastosOperativos,
-      fechaDeposito: report.fecha_deposito
+      fechaDeposito: report['fecha_deposito']
     },
     designated,
     auth
   );
 
   // Update report status metadata
-  await executeWithContext(auth, `
+  await executeWithContext(contextSubset, `
     UPDATE reports
     SET estado = 'procesado',
         processed_by = $1,
@@ -188,10 +194,11 @@ export async function addExternalTransaction(auth: AuthContext | null, data: {
 
 // Generate reconciliation report
 export async function generateReconciliation(auth: AuthContext | null, fundId?: number) {
+  const contextSubset = auth ? { userId: auth.userId, role: auth.role, churchId: auth.churchId } : null;
   const fundFilter = fundId ? 'WHERE f.id = $1' : '';
   const params = fundId ? [fundId] : [];
 
-  const result = await executeWithContext(auth, `
+  const result = await executeWithContext(contextSubset, `
     WITH fund_summary AS (
       SELECT
         f.id,

@@ -4,8 +4,8 @@
  */
 export function getSiteURL(): string {
   // Check for explicit site URL configuration (production)
-  if (process.env.NEXT_PUBLIC_SITE_URL) {
-    const url = process.env.NEXT_PUBLIC_SITE_URL;
+  if (process.env['NEXT_PUBLIC_SITE_URL']) {
+    const url = process.env['NEXT_PUBLIC_SITE_URL'];
     // Ensure it has a protocol
     const hasProtocol = url.startsWith('http://') || url.startsWith('https://');
     const finalUrl = hasProtocol ? url : `https://${url}`;
@@ -14,16 +14,16 @@ export function getSiteURL(): string {
   }
 
   // In production, use Vercel URL if available
-  if (process.env.NEXT_PUBLIC_VERCEL_URL) {
-    const vercelUrl = `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`;
+  if (process.env['NEXT_PUBLIC_VERCEL_URL']) {
+    const vercelUrl = `https://${process.env['NEXT_PUBLIC_VERCEL_URL']}`;
     console.log('[getSiteURL] Using NEXT_PUBLIC_VERCEL_URL:', vercelUrl);
     return vercelUrl;
   }
 
   // Check if we're in production mode
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env['NODE_ENV'] === 'production') {
     // Try to get the Vercel deployment URL from system environment
-    const vercelUrl = process.env.VERCEL_URL;
+    const vercelUrl = process.env['VERCEL_URL'];
     if (vercelUrl) {
       const url = `https://${vercelUrl}`;
       console.log('[getSiteURL] Using VERCEL_URL (production):', url);
