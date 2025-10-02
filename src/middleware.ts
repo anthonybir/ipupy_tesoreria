@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
 // Build ID for cache busting (Vercel sets VERCEL_GIT_COMMIT_SHA)
-const BUILD_ID = process.env.VERCEL_GIT_COMMIT_SHA ||
-                 process.env.NEXT_PUBLIC_BUILD_ID ||
+const BUILD_ID = process.env['VERCEL_GIT_COMMIT_SHA'] ||
+                 process.env['NEXT_PUBLIC_BUILD_ID'] ||
                  'dev';
 
 // Define public routes that don't require authentication

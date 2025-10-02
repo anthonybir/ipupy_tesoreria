@@ -242,12 +242,12 @@ const loadDashboardInit = async (auth: AuthContext) => {
       name: auth.fullName ?? auth.email,
       churchId: auth.churchId ?? null
     },
-    metrics: metrics.rows[0] || {},
-    recentReports: recentReports.rows,
-    churches: churches.rows,
-    currentPeriod: period.rows[0] || {},
-    funds: funds.rows[0] || {},
-    trends: trends.rows
+    metrics: metrics?.rows[0] || {},
+    recentReports: recentReports?.rows || [],
+    churches: churches?.rows || [],
+    currentPeriod: period?.rows[0] || {},
+    funds: funds?.rows[0] || {},
+    trends: trends?.rows || []
   };
 };
 const jsonResponse = (data: unknown, origin: string | null) => {
