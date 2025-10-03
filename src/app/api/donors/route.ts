@@ -287,7 +287,7 @@ async function handlePost(req: NextRequest) {
     }
 
     const body = rawBody as Record<string, unknown>;
-    const action = (typeof body.type === "string" ? body.type : "donor") as DonorAction;
+    const action = (typeof body['type'] === "string" ? body['type'] : "donor") as DonorAction;
 
     if (action === "contribution") {
       return await createContribution(user, body as ContributionCreatePayload, user.email || "");

@@ -7,8 +7,8 @@ import { createClient } from '@supabase/supabase-js';
 export const runtime = 'nodejs';
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY! // Service key for admin operations
+  process.env['NEXT_PUBLIC_SUPABASE_URL']!,
+  process.env['SUPABASE_SERVICE_KEY']! // Service key for admin operations
 );
 
 // GET /api/admin/users - Get all users

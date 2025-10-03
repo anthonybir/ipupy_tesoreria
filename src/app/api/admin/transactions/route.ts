@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
       success: true,
       data: result.rows,
       pagination: {
-        total: parseInt(countResult.rows[0].total),
+        total: parseInt(countResult.rows[0]?.['total'] ?? '0'),
         limit: parseInt(limit),
         offset: parseInt(offset)
       }

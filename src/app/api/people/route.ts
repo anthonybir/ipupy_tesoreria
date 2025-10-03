@@ -156,7 +156,7 @@ const fetchMembers = async (auth: AuthContext | null, query: MembersQuery) => {
   return {
     data: records.rows,
     pagination: {
-      total: Number(count.rows[0]?.total ?? 0),
+      total: Number(count.rows[0]?.['total'] ?? 0),
       limit: query.limit,
       offset: query.offset
     }
