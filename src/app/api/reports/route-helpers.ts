@@ -41,14 +41,14 @@ type CreateTransactionInput = GenericRecord & {
   fund_id: number;
   date: string;
   concept: string;
-  amount_in?: number;
-  amount_out?: number;
-  church_id?: number | null;
-  report_id?: number | null;
-  provider?: string | null;
-  provider_id?: number | null;
-  document_number?: string | null;
-  created_by?: string | null;
+  amount_in?: number | undefined;
+  amount_out?: number | undefined;
+  church_id?: number | null | undefined;
+  report_id?: number | null | undefined;
+  provider?: string | null | undefined;
+  provider_id?: number | null | undefined;
+  document_number?: string | null | undefined;
+  created_by?: string | null | undefined;
 };
 
 export const createTransaction = async (

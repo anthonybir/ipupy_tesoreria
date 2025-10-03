@@ -122,19 +122,20 @@ async function handleGet(req: NextRequest) {
       total_out: string
     }>(auth, totalsQuery, filterValues);
 
+    const totalsRow = totals.rows[0];
     const response = NextResponse.json({
       success: true,
       data: result.rows,
       pagination: {
         limit: parseInt(limit),
         offset: parseInt(offset),
-        total: parseInt(totals.rows[0].total_count)
+        total: parseInt(totalsRow?.total_count ?? '0')
       },
       totals: {
-        count: parseInt(totals.rows[0].total_count),
-        total_in: parseFloat(totals.rows[0].total_in),
-        total_out: parseFloat(totals.rows[0].total_out),
-        balance: parseFloat(totals.rows[0].total_in) - parseFloat(totals.rows[0].total_out)
+        count: parseInt(totalsRow?.total_count ?? '0'),
+        total_in: parseFloat(totalsRow?.total_in ?? '0'),
+        total_out: parseFloat(totalsRow?.total_out ?? '0'),
+        balance: parseFloat(totalsRow?.total_in ?? '0') - parseFloat(totalsRow?.total_out ?? '0')
       }
     });
 
@@ -274,6 +275,11 @@ async function handlePut(req: NextRequest) {
     }
 
     const oldTransaction = existing.rows[0];
+    if (!oldTransaction) {
+      const response = NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+      setCORSHeaders(response);
+      return response;
+    }
 
     // Build update query
     const updates: string[] = [];
@@ -399,6 +405,10 @@ async function handleDelete(req: NextRequest) {
       }
 
       const transaction = existing.rows[0];
+      if (!transaction) {
+        throw new Error('Transaction not found');
+      }
+
       deletedFundId = transaction.fund_id;
 
       await client.query(`DELETE FROM fund_movements_enhanced WHERE transaction_id = $1`, [transactionId]);
