@@ -96,14 +96,19 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
 
       const selectionStart = inputRef.current.selectionStart ?? 0;
       const selectionEnd = inputRef.current.selectionEnd ?? 0;
+      const selectionAtOrBeyondSuffix = selectionStart >= suffixIndex && selectionEnd >= suffixIndex;
+      const selectionPastSuffix = selectionStart > suffixIndex || selectionEnd > suffixIndex;
 
-      if (selectionStart >= suffixIndex && selectionEnd >= suffixIndex) {
+      if (selectionAtOrBeyondSuffix) {
         if (event.key === 'ArrowRight' || event.key === 'End') {
           pendingCaret.current = suffixIndex;
           event.preventDefault();
         } else if (event.key === 'ArrowLeft') {
           pendingCaret.current = suffixIndex;
-        } else if (event.key === 'Backspace' || event.key === 'Delete') {
+        } else if (event.key === 'Delete') {
+          pendingCaret.current = suffixIndex;
+          event.preventDefault();
+        } else if (event.key === 'Backspace' && selectionPastSuffix) {
           pendingCaret.current = suffixIndex;
           event.preventDefault();
         }
