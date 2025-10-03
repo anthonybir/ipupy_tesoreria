@@ -73,8 +73,8 @@ export function useProviders(options: UseProvidersOptions = {}) {
         body: JSON.stringify(input),
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['providers'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['providers'] });
     },
   });
 
@@ -85,8 +85,8 @@ export function useProviders(options: UseProvidersOptions = {}) {
         body: JSON.stringify(input),
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['providers'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['providers'] });
     },
   });
 
@@ -96,8 +96,8 @@ export function useProviders(options: UseProvidersOptions = {}) {
         method: 'DELETE',
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['providers'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['providers'] });
     },
   });
 
@@ -108,8 +108,8 @@ export function useProviders(options: UseProvidersOptions = {}) {
         body: JSON.stringify({ id, es_activo: true }),
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['providers'] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['providers'] });
     },
   });
 

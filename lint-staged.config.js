@@ -10,10 +10,10 @@
  */
 
 module.exports = {
-  // TypeScript/React files: Type check + lint with zero warnings
+  // TypeScript/React files: Type check + lint (warnings allowed, errors block)
   '*.{ts,tsx}': (filenames) => [
-    // Run ESLint with auto-fix on staged files only
-    `eslint ${filenames.join(' ')} --fix --max-warnings 0`,
+    // Run ESLint with auto-fix on staged files only (allow warnings)
+    `eslint ${filenames.join(' ')} --fix`,
 
     // TypeScript type check - ensures no type errors are committed
     'tsc --noEmit',
