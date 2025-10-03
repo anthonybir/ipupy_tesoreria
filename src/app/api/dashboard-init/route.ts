@@ -103,12 +103,12 @@ export async function GET(req: NextRequest) {
         role: auth.role || 'user',
         name: auth.email
       },
-      metrics: results[0].rows[0] || {},
-      recentReports: results[1].rows || [],
-      churches: results[2].rows || [],
-      currentPeriod: results[3].rows[0] || {},
-      funds: results[4].rows[0] || {},
-      trends: results[5].rows || []
+      metrics: results[0]?.rows[0] || {},
+      recentReports: results[1]?.rows || [],
+      churches: results[2]?.rows || [],
+      currentPeriod: results[3]?.rows[0] || {},
+      funds: results[4]?.rows[0] || {},
+      trends: results[5]?.rows || []
     };
 
     return jsonResponse(origin, responseBody);

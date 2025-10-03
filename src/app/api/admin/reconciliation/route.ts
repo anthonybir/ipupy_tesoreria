@@ -14,9 +14,9 @@ export async function GET(request: NextRequest) {
     const data = await generateReconciliation(auth, fundId);
     const summary = {
       totalFunds: data.length,
-      balanced: data.filter(item => item.status === 'balanced').length,
-      discrepancies: data.filter(item => item.status !== 'balanced'),
-      totalDifference: data.reduce((sum, item) => sum + Number(item.difference || 0), 0)
+      balanced: data.filter(item => item['status'] === 'balanced').length,
+      discrepancies: data.filter(item => item['status'] !== 'balanced'),
+      totalDifference: data.reduce((sum, item) => sum + Number(item['difference'] || 0), 0)
     };
 
     return NextResponse.json({ success: true, data, summary });

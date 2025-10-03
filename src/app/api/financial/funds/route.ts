@@ -164,11 +164,11 @@ async function handlePut(req: NextRequest) {
 
     // Build update object for Supabase
     const updateData: Record<string, unknown> = {};
-    if (body.name !== undefined) updateData.name = body.name;
-    if (body.description !== undefined) updateData.description = body.description;
-    if (body.type !== undefined) updateData.type = body.type;
-    if (body.current_balance !== undefined) updateData.current_balance = body.current_balance;
-    if (body.is_active !== undefined) updateData.is_active = body.is_active;
+    if (body['name'] !== undefined) updateData['name'] = body['name'];
+    if (body['description'] !== undefined) updateData['description'] = body['description'];
+    if (body['type'] !== undefined) updateData['type'] = body['type'];
+    if (body['current_balance'] !== undefined) updateData['current_balance'] = body['current_balance'];
+    if (body['is_active'] !== undefined) updateData['is_active'] = body['is_active'];
 
     const supabase = await createClient();
     const { data: updatedFund, error: updateError } = await supabase
