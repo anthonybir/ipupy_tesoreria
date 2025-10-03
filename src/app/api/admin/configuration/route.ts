@@ -130,7 +130,10 @@ export async function GET(req: NextRequest) {
           if (!permissionsMap.has(key)) {
             permissionsMap.set(key, []);
           }
-          permissionsMap.get(key)!.push(row.permission);
+          const permissions = permissionsMap.get(key);
+          if (permissions) {
+            permissions.push(row.permission);
+          }
         });
 
         const titleCase = (value: string) =>

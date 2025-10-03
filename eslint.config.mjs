@@ -52,7 +52,8 @@ const eslintConfig = [
       }],
 
       // Enforce proper null/undefined checking
-      "@typescript-eslint/no-non-null-assertion": "warn",
+      // no-non-null-assertion: Error (all instances fixed - zero tolerance for new violations)
+      "@typescript-eslint/no-non-null-assertion": "error",
       "@typescript-eslint/no-unnecessary-condition": "warn",
 
       // Prevent floating promises (async/await discipline)

@@ -3,13 +3,15 @@ import { getAuthContext } from '@/lib/auth-context';
 import { executeWithContext } from '@/lib/db';
 import { setCORSHeaders } from '@/lib/cors';
 import { createClient } from '@supabase/supabase-js';
+import { getSupabaseConfig } from '@/lib/env-validation';
 
 export const runtime = 'nodejs';
 
-const supabase = createClient(
-  process.env['NEXT_PUBLIC_SUPABASE_URL']!,
-  process.env['SUPABASE_SERVICE_KEY']! // Service key for admin operations
-);
+const { url, serviceRoleKey } = getSupabaseConfig();
+if (!serviceRoleKey) {
+  throw new Error('SUPABASE_SERVICE_KEY is required for admin operations');
+}
+const supabase = createClient(url, serviceRoleKey);
 
 // GET /api/admin/users - Get all users
 export async function GET(req: NextRequest) {

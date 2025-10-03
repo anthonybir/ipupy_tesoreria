@@ -37,8 +37,12 @@ export function expectOne<T extends QueryResultRow>(rows: T[]): T {
   if (rows.length > 1) {
     throw new DatabaseResultError(`Expected exactly 1 row, but got ${rows.length} rows`);
   }
-  // Safe to assert: We've checked length === 1
-  return rows[0]!;
+  // Safe: We've verified length === 1, so first element exists
+  const firstRow = rows[0];
+  if (firstRow === undefined) {
+    throw new DatabaseResultError('Unexpected undefined row after length check');
+  }
+  return firstRow;
 }
 
 /**

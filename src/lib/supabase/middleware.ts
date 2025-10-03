@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr';
 import type { User } from '@supabase/supabase-js';
 import { NextResponse, type NextRequest } from 'next/server';
+import { getSupabaseConfig } from '@/lib/env-validation';
 
 type UpdateSessionResult = {
   response: NextResponse;
@@ -14,9 +15,10 @@ export async function updateSession(request: NextRequest): Promise<UpdateSession
     },
   });
 
+  const { url, anonKey } = getSupabaseConfig();
   const supabase = createServerClient(
-    process.env['NEXT_PUBLIC_SUPABASE_URL']!,
-    process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY']!,
+    url,
+    anonKey,
     {
       cookies: {
         getAll() {

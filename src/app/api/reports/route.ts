@@ -778,8 +778,8 @@ const handleUpdateReport = async (
   const aportantesUpdateRaw = getRecordValue<unknown>(data, 'aportantes');
   const donorRowsInput = Array.isArray(aportantesUpdateRaw) ? (aportantesUpdateRaw as GenericRecord[]) : null;
   const donorPayloadProvided = donorRowsInput !== null;
-  const donorRows = donorPayloadProvided
-    ? donorRowsInput!
+  const donorRows = donorRowsInput !== null
+    ? donorRowsInput
         .map((donor) => ({
           first_name: getRecordString(donor, 'first_name').trim(),
           last_name: getRecordString(donor, 'last_name').trim(),
