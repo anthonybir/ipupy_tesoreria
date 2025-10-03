@@ -258,7 +258,11 @@ export function EventForm({ onSuccess, onCancel }: EventFormProps) {
                 {budgetItems.length > 1 && (
                   <button
                     type="button"
-                    onClick={() => handleRemoveBudgetItem(index)}
+                    onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      handleRemoveBudgetItem(index);
+                    }}
                     className="px-3 py-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md transition"
                     title="Eliminar línea"
                   >

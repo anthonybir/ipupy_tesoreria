@@ -720,7 +720,11 @@ export function ReportForm() {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => removeDonor(donor.id)}
+                        onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          removeDonor(donor.id);
+                        }}
                         disabled={createReport.isPending}
                       >
                         Quitar

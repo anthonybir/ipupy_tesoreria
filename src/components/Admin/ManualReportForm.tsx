@@ -526,7 +526,11 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
                           variant="ghost"
                           size="sm"
                           density="compact"
-                          onClick={() => removeDonor(donor.id)}
+                          onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            removeDonor(donor.id);
+                          }}
                         >
                           Eliminar
                         </Button>
