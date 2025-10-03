@@ -18,6 +18,11 @@ data/databases/*.db
 mydatabase.db
 uploads/
 
+# Supabase CLI temporary files
+supabase/.temp/
+supabase/functions/
+supabase/.branches/
+
 # Python
 __pycache__/
 *.pyc
