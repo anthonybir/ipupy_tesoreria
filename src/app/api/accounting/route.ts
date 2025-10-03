@@ -433,7 +433,7 @@ async function getAccountingSummary(
       expenses: expenses.rows[0] || {},
       movements: movements.rows[0] || {},
       ledger: ledger.rows[0] || { status: "not_created" },
-      netResult: Number(income.rows[0]?.total_income || 0) - Number(expenses.rows[0]?.total_expenses || 0)
+      netResult: Number(income.rows[0]?.['total_income'] || 0) - Number(expenses.rows[0]?.['total_expenses'] || 0)
     }
   });
 
@@ -459,7 +459,7 @@ async function handlePost(req: NextRequest) {
     }
 
     const body = rawBody as Record<string, unknown>;
-    const action = (typeof body.type === "string" ? body.type : "expense") as AccountingAction;
+    const action = (typeof body['type'] === "string" ? body['type'] : "expense") as AccountingAction;
 
     switch (action) {
       case "expense":
@@ -537,7 +537,7 @@ async function createExpense(auth: AuthContext | null, data: ExpenseCreatePayloa
       data.category,
       data.amount,
       0,
-      `EXP-${result.rows[0].id}`,
+      `EXP-${result.rows[0]?.id || 'unknown'}`,
       data.concept,
       userEmail
     ]
@@ -620,7 +620,10 @@ async function createAccountingEntry(auth: AuthContext | null, data: AccountingE
         userEmail
       ]
     );
-    results.push(result.rows[0]);
+    const row = result.rows[0];
+    if (row) {
+      results.push(row);
+    }
   }
 
   const response = NextResponse.json({
@@ -650,8 +653,9 @@ async function openMonthlyLedger(auth: AuthContext | null, data: LedgerOpenPaylo
   );
 
   if (existing.rows.length > 0) {
+    const existingRow = existing.rows[0];
     const response = NextResponse.json({
-      error: `Ledger already exists with status: ${existing.rows[0].status}`
+      error: `Ledger already exists with status: ${existingRow?.['status'] || 'unknown'}`
     }, { status: 409 });
     setCORSHeaders(response);
     return response;
@@ -661,13 +665,13 @@ async function openMonthlyLedger(auth: AuthContext | null, data: LedgerOpenPaylo
   const prevMonth = month === 1 ? 12 : month - 1;
   const prevYear = month === 1 ? year - 1 : year;
 
-  const previous = await executeWithContext(auth, 
+  const previous = await executeWithContext(auth,
     `SELECT closing_balance FROM monthly_ledger
      WHERE church_id = $1 AND month = $2 AND year = $3`,
     [church_id, prevMonth, prevYear]
   );
 
-  const openingBalance = previous.rows[0]?.closing_balance || 0;
+  const openingBalance = previous.rows[0]?.['closing_balance'] || 0;
 
   // Create new ledger
   const result = await executeWithContext<MonthlyLedger>(auth,
@@ -712,20 +716,27 @@ async function closeMonthlyLedger(auth: AuthContext | null, data: LedgerClosePay
     return response;
   }
 
-  if (ledger.rows[0].status === "closed") {
+  const ledgerRow = ledger.rows[0];
+  if (!ledgerRow) {
+    const response = NextResponse.json({ error: "Ledger not found" }, { status: 404 });
+    setCORSHeaders(response);
+    return response;
+  }
+
+  if (ledgerRow['status'] === "closed") {
     const response = NextResponse.json({ error: "Ledger is already closed" }, { status: 409 });
     setCORSHeaders(response);
     return response;
   }
 
   // Calculate totals
-  const income = await executeWithContext(auth, 
+  const income = await executeWithContext(auth,
     `SELECT SUM(total_entradas) as total FROM reports
      WHERE church_id = $1 AND month = $2 AND year = $3`,
     [church_id, month, year]
   );
 
-  const expenses = await executeWithContext(auth, 
+  const expenses = await executeWithContext(auth,
     `SELECT SUM(amount) as total FROM expense_records
      WHERE church_id = $1
      AND EXTRACT(MONTH FROM date) = $2
@@ -733,9 +744,9 @@ async function closeMonthlyLedger(auth: AuthContext | null, data: LedgerClosePay
     [church_id, month, year]
   );
 
-  const totalIncome = Number(income.rows[0]?.total || 0);
-  const totalExpenses = Number(expenses.rows[0]?.total || 0);
-  const closingBalance = parseFloat(String(ledger.rows[0].opening_balance)) + totalIncome - totalExpenses;
+  const totalIncome = Number(income.rows[0]?.['total'] || 0);
+  const totalExpenses = Number(expenses.rows[0]?.['total'] || 0);
+  const closingBalance = parseFloat(String(ledgerRow['opening_balance'])) + totalIncome - totalExpenses;
 
   // Update ledger
   const result = await executeWithContext<MonthlyLedger>(auth,
