@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
+import { logger } from "@/lib/logger";
 
 // Build ID for cache busting (Vercel sets VERCEL_GIT_COMMIT_SHA)
 const BUILD_ID = process.env['VERCEL_GIT_COMMIT_SHA'] ||
@@ -33,17 +34,17 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   }
 
   const userEmail = user?.email ?? "none";
-  console.log("[Middleware] Path:", pathname, "User:", userEmail);
+  logger.debug("[Middleware] Request", { pathname, userEmail });
 
   // Allow public routes without auth check
   if (publicRoutes.some((route) => pathname.startsWith(route))) {
-    console.log("[Middleware] Public route - allowing access");
+    logger.debug("[Middleware] Public route - allowing access", { pathname });
     return response;
   }
 
   // Check if user is authenticated
   if (!user) {
-    console.log("[Middleware] No user - redirecting to login");
+    logger.info("[Middleware] No user - redirecting to login", { pathname });
 
     if (pathname.startsWith("/api/")) {
       // For API routes, return 401
@@ -59,7 +60,7 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(loginUrl);
   }
 
-  console.log("[Middleware] User authenticated - allowing access");
+  logger.debug("[Middleware] User authenticated - allowing access", { pathname, userEmail });
   return response;
 }
 

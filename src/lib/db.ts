@@ -1,4 +1,5 @@
 import { Pool, type PoolClient, type QueryConfig, type QueryResult, type QueryResultRow } from 'pg';
+import { logger, startTimer } from '@/lib/logger';
 
 let pool: Pool | undefined;
 let poolCreatedAt: number | undefined;
@@ -6,6 +7,11 @@ let consecutiveErrors = 0;
 
 const MAX_CONSECUTIVE_ERRORS = 3;
 const POOL_MAX_AGE = 30 * 60 * 1000; // 30 minutes
+
+// Connection monitoring
+let totalConnections = 0;
+let totalErrors = 0;
+let totalQueries = 0;
 
 const getConnectionString = (): string => {
   const raw = (process.env['SUPABASE_DB_URL'] || process.env['DATABASE_URL'] || '').trim();
@@ -39,14 +45,26 @@ const shouldRecreatePool = (): boolean => {
   }
 
   if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+    logger.warn('Pool recreation triggered: max consecutive errors reached', {
+      consecutiveErrors,
+      maxErrors: MAX_CONSECUTIVE_ERRORS,
+    });
     return true;
   }
 
   if (poolCreatedAt && Date.now() - poolCreatedAt > POOL_MAX_AGE) {
+    logger.info('Pool recreation triggered: max age reached', {
+      ageMs: Date.now() - poolCreatedAt,
+      maxAgeMs: POOL_MAX_AGE,
+    });
     return true;
   }
 
   if (pool.totalCount === 0 && pool.idleCount === 0) {
+    logger.warn('Pool recreation triggered: no active connections', {
+      totalCount: pool.totalCount,
+      idleCount: pool.idleCount,
+    });
     return true;
   }
 
@@ -59,13 +77,20 @@ const destroyPool = async (): Promise<void> => {
     return;
   }
 
+  const stats = {
+    totalCount: poolRef.totalCount,
+    idleCount: poolRef.idleCount,
+    waitingCount: poolRef.waitingCount,
+  };
+
   pool = undefined;
   poolCreatedAt = undefined;
 
   try {
+    logger.info('Destroying connection pool', stats);
     await poolRef.end();
   } catch (error) {
-    console.error('Error ending pool', error);
+    logger.error('Error ending pool', error instanceof Error ? error : undefined, stats);
   }
 };
 const isConnectionError = (error: unknown): boolean => {
@@ -108,28 +133,51 @@ export const createConnection = (): Pool => {
     });
 
     pool.on('error', (err, client) => {
-      console.error('Unexpected pool error:', err);
+      totalErrors += 1;
       consecutiveErrors += 1;
+      logger.error('Unexpected pool error', err, {
+        totalErrors,
+        consecutiveErrors,
+      });
+
       if (client && !(client as PoolClient & { _released?: boolean })._released) {
         try {
           client.release();
         } catch (releaseError) {
-          console.warn('Client release error:', releaseError);
+          logger.warn('Client release error', {
+            error: releaseError instanceof Error ? releaseError.message : String(releaseError),
+          });
         }
       }
     });
+
     pool.on('connect', () => {
+      totalConnections += 1;
       if (consecutiveErrors > 0) {
         consecutiveErrors = Math.max(0, consecutiveErrors - 1);
+        logger.info('Connection established, resetting error counter', {
+          totalConnections,
+          consecutiveErrors,
+        });
       }
     });
 
     pool.on('remove', () => {
-      // no-op logging hook kept for parity
+      logger.debug('Client removed from pool', {
+        totalCount: pool?.totalCount,
+        idleCount: pool?.idleCount,
+      });
     });
 
     poolCreatedAt = Date.now();
     consecutiveErrors = 0;
+
+    logger.info('Database connection pool created', {
+      maxConnections: pool.options.max,
+      connectionTimeout: pool.options.connectionTimeoutMillis,
+      idleTimeout: pool.options.idleTimeoutMillis,
+      isVercel: Boolean(process.env['VERCEL']),
+    });
   }
 
   return pool;
@@ -307,6 +355,9 @@ export const executeWithContext = async <T extends QueryResultRow = QueryResultR
   params?: unknown,
   retries = 3
 ): Promise<QueryResult<T>> => {
+  const timer = startTimer('db_query_with_context');
+  totalQueries += 1;
+
   for (let attempt = 1; attempt <= retries; attempt += 1) {
     try {
       if (shouldRecreatePool()) {
@@ -339,12 +390,29 @@ export const executeWithContext = async <T extends QueryResultRow = QueryResultR
           );
         }
 
-        return await Promise.race([
+        const result = await Promise.race([
           client.query<T>(text, boundParams),
           new Promise<QueryResult<T>>((_, reject) => {
             setTimeout(() => reject(new Error('Query timeout')), 30000);
           })
         ]);
+
+        const duration = timer.end({
+          ...(authContext?.userId && { userId: authContext.userId }),
+          ...(authContext?.role && { role: authContext.role }),
+          rowCount: result.rowCount ?? 0,
+        });
+
+        // Log slow queries
+        if (duration > 1000) {
+          logger.warn('Slow query detected', {
+            duration,
+            rowCount: result.rowCount ?? 0,
+            query: text.substring(0, 100),
+          });
+        }
+
+        return result;
       } finally {
         // Clear context before releasing connection (batched for performance)
         if (authContext) {
@@ -359,6 +427,18 @@ export const executeWithContext = async <T extends QueryResultRow = QueryResultR
       }
     } catch (error) {
       consecutiveErrors += 1;
+      totalErrors += 1;
+
+      logger.error(
+        `Query failed (attempt ${attempt}/${retries})`,
+        error instanceof Error ? error : undefined,
+        {
+          ...(authContext?.userId && { userId: authContext.userId }),
+          ...(authContext?.role && { role: authContext.role }),
+          consecutiveErrors,
+          totalErrors,
+        }
+      );
 
       if (attempt === retries) {
         await destroyPool();
@@ -389,7 +469,7 @@ export const batch = async (statements: Statement[]): Promise<QueryResult[]> => 
 };
 
 export const initDatabase = async (): Promise<void> => {
-  console.log('✅ Using Supabase Postgres - migrations managed via scripts');
+  logger.info('✅ Using Supabase Postgres - migrations managed via scripts');
 };
 
 if (process.env['VERCEL']) {
@@ -412,7 +492,25 @@ export const getPoolStats = () => ({
   total: pool?.totalCount ?? 0,
   idle: pool?.idleCount ?? 0,
   waiting: pool?.waitingCount ?? 0,
-  age: poolCreatedAt ? Date.now() - poolCreatedAt : 0,
+  age_ms: poolCreatedAt ? Date.now() - poolCreatedAt : 0,
   errors: consecutiveErrors,
-  exists: Boolean(pool)
+  exists: Boolean(pool),
+  totalConnections,
+  totalErrors,
+  totalQueries,
 });
+
+/**
+ * Log current pool health status
+ */
+export const logPoolHealth = (): void => {
+  const stats = getPoolStats();
+  const utilizationPercent = stats.total > 0 ? (stats.total - stats.idle) / stats.total * 100 : 0;
+
+  const level = utilizationPercent > 80 ? 'warn' : 'debug';
+
+  logger[level]('Connection pool health check', {
+    ...stats,
+    utilizationPercent: utilizationPercent.toFixed(1),
+  });
+};

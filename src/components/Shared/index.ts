@@ -3,6 +3,7 @@ export * from "./DataTable";
 export * from "./Drawer";
 export * from "./EmptyState";
 export * from "./ErrorState";
+export { ErrorFallback, InlineErrorMessage } from "./ErrorFallback"; // Explicitly export only non-conflicting items
 export * from "./FilterBar";
 export * from "./FormField";
 export * from "./FormSection";

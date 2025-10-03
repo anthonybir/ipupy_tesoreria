@@ -3,6 +3,7 @@ import Link from "next/link";
 import { executeWithContext } from "@/lib/db";
 import { getUserProfile } from "@/lib/supabase/server";
 import { formatCurrencyDisplay } from "@/lib/utils/currency";
+import { logger } from "@/lib/logger";
 import {
   PageHeader,
   SectionCard,
@@ -172,18 +173,50 @@ const loadRecentReports = async (auth: { userId?: string; role?: string; churchI
   }));
 };
 
+const withDashboardFallback = async <TReturn,>(
+  label: string,
+  loader: () => Promise<TReturn>,
+  fallback: TReturn
+): Promise<TReturn> => {
+  try {
+    return await loader();
+  } catch (error) {
+    logger.error(`[Dashboard] Failed to load ${label}`, error instanceof Error ? error : undefined);
+    return fallback;
+  }
+};
+
 export default async function DashboardLanding() {
-  const user = await getUserProfile();
+  const user = await getUserProfile().catch((error) => {
+    logger.error('[Dashboard] Failed to resolve user profile', error instanceof Error ? error : undefined);
+    return null;
+  });
+
   const auth = user ? {
     userId: user.id,
     role: user.role || 'viewer',
     churchId: user.churchId || null
   } : null;
+
   const [summary, recentReports, pipeline, financial] = await Promise.all([
-    loadDashboardSummary(auth),
-    loadRecentReports(auth),
-    loadPipelineHealth(auth),
-    loadFinancialSnapshot(auth),
+    withDashboardFallback('summary', () => loadDashboardSummary(auth), {
+      totalReports: 0,
+      totalChurches: 0,
+      processedThisMonth: 0,
+    }),
+    withDashboardFallback('recent reports', () => loadRecentReports(auth), [] as RecentReport[]),
+    withDashboardFallback('pipeline health', () => loadPipelineHealth(auth), {
+      pendingAdmin: 0,
+      awaitingDeposits: 0,
+      awaitingTransactions: 0,
+      rejected: 0,
+    }),
+    withDashboardFallback('financial snapshot', () => loadFinancialSnapshot(auth), {
+      currentTotal: 0,
+      previousTotal: 0,
+      reportingChurches: 0,
+      pendingChurches: 0,
+    })
   ]);
 
   const averageTicket =
