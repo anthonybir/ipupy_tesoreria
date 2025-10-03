@@ -40,8 +40,14 @@ export async function PUT(
     }
 
     const event = eventResult.rows[0];
+    if (!event) {
+      return NextResponse.json(
+        { error: 'Event not found' },
+        { status: 404 }
+      );
+    }
 
-    if (!['draft', 'pending_revision'].includes(event.status)) {
+    if (!['draft', 'pending_revision'].includes(event['status'])) {
       return NextResponse.json(
         { error: 'Can only edit budget items for draft or pending_revision events' },
         { status: 400 }
@@ -53,7 +59,7 @@ export async function PUT(
     const isTreasurer = auth.role === 'treasurer';
 
     if (isFundDirector) {
-      if (event.created_by !== auth.userId) {
+      if (event['created_by'] !== auth.userId) {
         return NextResponse.json(
           { error: 'Fund directors can only edit their own events' },
           { status: 403 }
@@ -120,8 +126,14 @@ export async function DELETE(
     }
 
     const event = eventResult.rows[0];
+    if (!event) {
+      return NextResponse.json(
+        { error: 'Event not found' },
+        { status: 404 }
+      );
+    }
 
-    if (!['draft', 'pending_revision'].includes(event.status)) {
+    if (!['draft', 'pending_revision'].includes(event['status'])) {
       return NextResponse.json(
         { error: 'Can only delete budget items from draft or pending_revision events' },
         { status: 400 }
@@ -133,7 +145,7 @@ export async function DELETE(
     const isTreasurer = auth.role === 'treasurer';
 
     if (isFundDirector) {
-      if (event.created_by !== auth.userId) {
+      if (event['created_by'] !== auth.userId) {
         return NextResponse.json(
           { error: 'Fund directors can only delete items from their own events' },
           { status: 403 }
