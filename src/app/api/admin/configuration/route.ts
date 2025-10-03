@@ -37,10 +37,13 @@ export async function GET(req: NextRequest) {
     // Transform to key-value pairs grouped by section
     const configuration: Record<string, Record<string, unknown>> = {};
     result.rows.forEach((row) => {
-      if (!configuration[row.section]) {
-        configuration[row.section] = {};
+      const rowSection = row.section;
+      if (rowSection && !configuration[rowSection]) {
+        configuration[rowSection] = {};
       }
-      configuration[row.section][row.key] = row.value;
+      if (rowSection) {
+        configuration[rowSection][row.key] = row.value;
+      }
     });
 
     const shouldIncludeSection = (target: string) => !section || section === target;
@@ -54,14 +57,14 @@ export async function GET(req: NextRequest) {
           is_active: boolean;
         }>(auth, `SELECT id, name, type, is_active FROM funds ORDER BY name`);
 
-        const fundsConfig = (configuration.funds ?? {}) as Record<string, unknown>;
-        const metaArray = Array.isArray(fundsConfig.defaultFunds)
-          ? (fundsConfig.defaultFunds as Array<Record<string, unknown>>)
+        const fundsConfig = (configuration['funds'] ?? {}) as Record<string, unknown>;
+        const metaArray = Array.isArray(fundsConfig['defaultFunds'])
+          ? (fundsConfig['defaultFunds'] as Array<Record<string, unknown>>)
           : [];
 
         const metaMap = new Map<string, Record<string, unknown>>();
         metaArray.forEach((item) => {
-          const metaName = typeof item?.name === 'string' ? item.name.toLowerCase() : undefined;
+          const metaName = typeof item?.['name'] === 'string' ? item['name'].toLowerCase() : undefined;
           if (metaName) {
             metaMap.set(metaName, item);
           }
@@ -77,17 +80,17 @@ export async function GET(req: NextRequest) {
           const isNational = fund.name.toLowerCase() === 'fondo nacional';
 
           return {
-            name: typeof meta?.name === 'string' ? (meta.name as string) : fund.name,
-            percentage: toNumber(meta?.percentage, isNational ? 10 : 0),
-            required: toBool(meta?.required, isNational),
-            autoCalculate: toBool(meta?.autoCalculate, isNational),
+            name: typeof meta?.['name'] === 'string' ? (meta['name'] as string) : fund.name,
+            percentage: toNumber(meta?.['percentage'], isNational ? 10 : 0),
+            required: toBool(meta?.['required'], isNational),
+            autoCalculate: toBool(meta?.['autoCalculate'], isNational),
             fundId: fund.id,
             fundType: fund.type ?? undefined,
             isActive: fund.is_active,
           };
         });
 
-        configuration.funds = {
+        configuration['funds'] = {
           ...fundsConfig,
           defaultFunds: derivedDefaults,
           liveFunds: fundsResult.rows,
@@ -99,16 +102,16 @@ export async function GET(req: NextRequest) {
 
     if (shouldIncludeSection('roles')) {
       try {
-        const rolesConfig = (configuration.roles ?? {}) as Record<string, unknown>;
-        const definitionArray = Array.isArray(rolesConfig.definitions)
-          ? (rolesConfig.definitions as Array<Record<string, unknown>>)
-          : Array.isArray(rolesConfig.roles)
-            ? (rolesConfig.roles as Array<Record<string, unknown>>)
+        const rolesConfig = (configuration['roles'] ?? {}) as Record<string, unknown>;
+        const definitionArray = Array.isArray(rolesConfig['definitions'])
+          ? (rolesConfig['definitions'] as Array<Record<string, unknown>>)
+          : Array.isArray(rolesConfig['roles'])
+            ? (rolesConfig['roles'] as Array<Record<string, unknown>>)
             : [];
 
         const definitionMap = new Map<string, Record<string, unknown>>();
         definitionArray.forEach((definition) => {
-          const id = typeof definition?.id === 'string' ? definition.id : undefined;
+          const id = typeof definition?.['id'] === 'string' ? definition['id'] : undefined;
           if (id) {
             definitionMap.set(id, definition);
           }
@@ -138,20 +141,20 @@ export async function GET(req: NextRequest) {
         const rolesList = Array.from(definitionMap.entries()).map(([roleId, definition]) => ({
           id: roleId,
           name:
-            typeof definition.name === 'string'
-              ? (definition.name as string)
+            typeof definition['name'] === 'string'
+              ? (definition['name'] as string)
               : titleCase(roleId),
           description:
-            typeof definition.description === 'string'
-              ? (definition.description as string)
+            typeof definition['description'] === 'string'
+              ? (definition['description'] as string)
               : '',
           editable:
-            typeof definition.editable === 'boolean'
-              ? (definition.editable as boolean)
+            typeof definition['editable'] === 'boolean'
+              ? (definition['editable'] as boolean)
               : roleId !== 'admin',
           permissions: permissionsMap.get(roleId) ??
-            (Array.isArray(definition.permissions)
-              ? (definition.permissions as string[])
+            (Array.isArray(definition['permissions'])
+              ? (definition['permissions'] as string[])
               : []),
         }));
 
@@ -167,7 +170,7 @@ export async function GET(req: NextRequest) {
           }
         });
 
-        configuration.roles = {
+        configuration['roles'] = {
           roles: rolesList,
           permissionMatrix: rolePermissions.rows,
         };
