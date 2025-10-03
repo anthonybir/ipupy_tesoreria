@@ -7,8 +7,8 @@ import { createClient } from '@supabase/supabase-js';
 export const runtime = 'nodejs';
 
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY! // Service key for admin operations
+  process.env['NEXT_PUBLIC_SUPABASE_URL']!,
+  process.env['SUPABASE_SERVICE_KEY']! // Service key for admin operations
 );
 
 /**
@@ -70,9 +70,17 @@ export async function POST(req: NextRequest) {
     }
 
     const pastor = pastorResult.rows[0];
+    if (!pastor) {
+      const response = NextResponse.json(
+        { error: 'Pastor not found' },
+        { status: 404 }
+      );
+      setCORSHeaders(response);
+      return response;
+    }
 
     // Check if pastor already has a profile linked
-    if (pastor.profile_id) {
+    if (pastor['profile_id']) {
       const response = NextResponse.json(
         { error: 'Pastor already has a profile linked. Unlink first to change.' },
         { status: 400 }
@@ -109,8 +117,9 @@ export async function POST(req: NextRequest) {
       `, [profile_id, pastor_id]);
 
       if (existingLink.rows.length > 0) {
+        const existingRow = existingLink.rows[0];
         const response = NextResponse.json(
-          { error: `Profile already linked to pastor: ${existingLink.rows[0].full_name}` },
+          { error: `Profile already linked to pastor: ${existingRow?.['full_name'] || 'Unknown'}` },
           { status: 400 }
         );
         setCORSHeaders(response);
@@ -149,9 +158,9 @@ export async function POST(req: NextRequest) {
         password: password || Math.random().toString(36).slice(-12), // Generate random password if not provided
         email_confirm: true,
         user_metadata: {
-          full_name: pastor.full_name,
+          full_name: pastor['full_name'],
           role,
-          church_id: pastor.church_id
+          church_id: pastor['church_id']
         }
       });
 
@@ -179,9 +188,9 @@ export async function POST(req: NextRequest) {
       `, [
         authData.user.id,
         email,
-        pastor.full_name,
+        pastor['full_name'],
         role,
-        pastor.church_id,
+        pastor['church_id'],
         true,
         auth.userId
       ]);
@@ -290,8 +299,16 @@ export async function DELETE(req: NextRequest) {
     }
 
     const pastor = pastorResult.rows[0];
+    if (!pastor) {
+      const response = NextResponse.json(
+        { error: 'Pastor not found' },
+        { status: 404 }
+      );
+      setCORSHeaders(response);
+      return response;
+    }
 
-    if (!pastor.profile_id) {
+    if (!pastor['profile_id']) {
       const response = NextResponse.json(
         { error: 'Pastor has no profile linked' },
         { status: 400 }
@@ -310,10 +327,10 @@ export async function DELETE(req: NextRequest) {
     // Optionally delete the profile
     if (deleteProfile) {
       // Delete from Supabase auth
-      await supabase.auth.admin.deleteUser(pastor.profile_id);
+      await supabase.auth.admin.deleteUser(pastor['profile_id']);
 
       // Profile will be deleted via cascade
-      await executeWithContext(auth, 'DELETE FROM profiles WHERE id = $1', [pastor.profile_id]);
+      await executeWithContext(auth, 'DELETE FROM profiles WHERE id = $1', [pastor['profile_id']]);
     }
 
     const response = NextResponse.json({
