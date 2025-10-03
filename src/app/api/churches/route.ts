@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 import { executeWithContext, executeTransaction } from '@/lib/db';
+import { expectOne, firstOrNull } from '@/lib/db-helpers';
 import { buildCorsHeaders, handleCorsPreflight } from '@/lib/cors';
 import { requireAuth, getAuthContext } from '@/lib/auth-context';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
@@ -199,7 +200,7 @@ export async function POST(request: NextRequest) {
         ]
       );
 
-      const church = churchInsert.rows[0];
+      const church = expectOne(churchInsert.rows);
 
       const pastorInsert = await client.query(
         `
@@ -254,7 +255,7 @@ export async function POST(request: NextRequest) {
         ]
       );
 
-      const pastorRow = pastorInsert.rows[0];
+      const pastorRow = expectOne(pastorInsert.rows);
 
       await client.query(
         'UPDATE churches SET primary_pastor_id = $1 WHERE id = $2',
@@ -263,7 +264,7 @@ export async function POST(request: NextRequest) {
 
       const directory = await client.query(DIRECTORY_BY_ID_QUERY + ' LIMIT 1', [church.id]);
 
-      return directory.rows[0];
+      return expectOne(directory.rows);
     });
 
     return jsonResponse(record, origin, 201);
@@ -337,7 +338,7 @@ export async function PUT(request: NextRequest) {
         return null;
       }
 
-      const church = updateResult.rows[0];
+      const church = expectOne(updateResult.rows);
 
       const normalizedPastor = normalizePastorPayload(primaryPastor, {
         fullName: (primaryPastor?.fullName || pastor || church.pastor) ?? church.pastor,
@@ -450,14 +451,14 @@ export async function PUT(request: NextRequest) {
           ]
         );
 
-        const newPastorId = insertPastor.rows[0]?.id;
-        if (newPastorId) {
-          await client.query('UPDATE churches SET primary_pastor_id = $1 WHERE id = $2', [newPastorId, church.id]);
+        const newPastor = firstOrNull(insertPastor.rows);
+        if (newPastor) {
+          await client.query('UPDATE churches SET primary_pastor_id = $1 WHERE id = $2', [newPastor.id, church.id]);
         }
       }
 
       const directory = await client.query(DIRECTORY_BY_ID_QUERY + ' LIMIT 1', [church.id]);
-      return directory.rows[0];
+      return firstOrNull(directory.rows);
     });
 
     if (!record) {
@@ -501,7 +502,8 @@ export async function DELETE(request: NextRequest) {
         return false;
       }
 
-      const primaryPastorId = updateResult.rows[0].primary_pastor_id;
+      const church = expectOne(updateResult.rows);
+      const primaryPastorId = church.primary_pastor_id;
 
       if (primaryPastorId) {
         await client.query(

@@ -96,6 +96,9 @@ export function DataTable<T>({
     }
     const observer = new ResizeObserver((entries) => {
       const entry = entries[0];
+      if (!entry) {
+        return;
+      }
       setContainerHeight(entry.contentRect.height || maxHeight);
     });
     observer.observe(element);

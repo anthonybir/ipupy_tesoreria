@@ -121,17 +121,23 @@ export function useKeyboardShortcuts() {
         case 't':
           event.preventDefault();
           // Toggle theme
-          const currentTheme = document.documentElement.dataset.theme;
-          document.documentElement.dataset.theme = currentTheme === 'dark' ? 'light' : 'dark';
-          window.localStorage.setItem('absd::theme', currentTheme === 'dark' ? 'light' : 'dark');
+          {
+            const currentTheme = document.documentElement.dataset['theme'];
+            const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.dataset['theme'] = nextTheme;
+            window.localStorage.setItem('absd::theme', nextTheme);
+          }
           break;
 
         case 'd':
           event.preventDefault();
           // Toggle density
-          const currentDensity = document.documentElement.dataset.density;
-          document.documentElement.dataset.density = currentDensity === 'compact' ? 'comfortable' : 'compact';
-          window.localStorage.setItem('absd::density', currentDensity === 'compact' ? 'comfortable' : 'compact');
+          {
+            const currentDensity = document.documentElement.dataset['density'];
+            const nextDensity = currentDensity === 'compact' ? 'comfortable' : 'compact';
+            document.documentElement.dataset['density'] = nextDensity;
+            window.localStorage.setItem('absd::density', nextDensity);
+          }
           break;
       }
     };

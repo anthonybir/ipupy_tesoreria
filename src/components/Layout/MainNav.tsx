@@ -76,8 +76,8 @@ export default function MainNav() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const authRole =
-    (user?.app_metadata?.role as string | undefined) ??
-    (user?.user_metadata?.role as string | undefined) ??
+    (user?.app_metadata?.['role'] as string | undefined) ??
+    (user?.user_metadata?.['role'] as string | undefined) ??
     (user ? (user as { role?: string }).role : undefined);
 
   const items = useMemo(() => {

@@ -4,9 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 
 import { fetchJson } from '@/lib/api-client';
 import {
-  RawReportRecord,
-  ReportFilters,
-  ReportRecord,
+  type RawReportRecord,
+  type ReportFilters,
+  type ReportRecord,
   normalizeReportRecord
 } from '@/types/api';
 
@@ -39,7 +39,13 @@ const fetchReports = async (filters: ReportFilters): Promise<ReportRecord[]> => 
   return data.map(normalizeReportRecord);
 };
 
-const determineQueryTuning = (filters: ReportFilters) => {
+type QueryTuning = {
+  staleTime: number;
+  gcTime: number;
+  refetchInterval?: number;
+};
+
+const determineQueryTuning = (filters: ReportFilters): QueryTuning => {
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
@@ -53,7 +59,7 @@ const determineQueryTuning = (filters: ReportFilters) => {
       staleTime: 5 * 60 * 1000,
       gcTime: 30 * 60 * 1000,
       refetchInterval: 120 * 1000
-    } as const;
+    };
   }
 
   if (isCurrentPeriod) {
@@ -61,20 +67,20 @@ const determineQueryTuning = (filters: ReportFilters) => {
       staleTime: 30 * 1000,
       gcTime: 15 * 60 * 1000,
       refetchInterval: 45 * 1000
-    } as const;
+    };
   }
 
   if (isScopedHistory) {
     return {
       staleTime: 2 * 60 * 1000,
       gcTime: 15 * 60 * 1000
-    } as const;
+    };
   }
 
   return {
     staleTime: 60 * 1000,
     gcTime: 10 * 60 * 1000
-  } as const;
+  };
 };
 
 export const reportQueryKey = (
@@ -91,14 +97,23 @@ export const reportQueryKey = (
 export function useReports(filters: ReportFilters) {
   const tuning = determineQueryTuning(filters);
 
+  const pollInterval = tuning.refetchInterval;
+
   return useQuery<ReportRecord[], Error>({
     queryKey: reportQueryKey(filters),
     queryFn: () => fetchReports(filters),
     placeholderData: (previousData) => previousData ?? [],
     staleTime: tuning.staleTime,
     gcTime: tuning.gcTime,
-    refetchInterval: tuning.refetchInterval,
-    refetchIntervalInBackground: Boolean(tuning.refetchInterval),
+    ...(typeof pollInterval === 'number'
+      ? {
+          refetchInterval: pollInterval,
+          refetchIntervalInBackground: true,
+        }
+      : {
+          refetchInterval: false,
+          refetchIntervalInBackground: false,
+        }),
     refetchOnReconnect: true
   });
 }

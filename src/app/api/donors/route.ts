@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { getAuthContext, type AuthContext } from "@/lib/auth-context";
 import { executeWithContext } from "@/lib/db";
+import { firstOrNull, expectOne } from "@/lib/db-helpers";
 import { setCORSHeaders } from "@/lib/cors";
 
 interface Donor {
@@ -194,7 +195,7 @@ async function getDonorSummary(auth: AuthContext | null, donor_id: string) {
     return response;
   }
 
-  const donor = donorResult.rows[0];
+  const donor = firstOrNull(donorResult.rows);
 
   // Get contribution summary by year
   const yearlyContributions = await executeWithContext(auth, 
@@ -351,7 +352,7 @@ async function createDonor(auth: AuthContext | null, data: DonorCreatePayload, u
 
   const response = NextResponse.json({
     success: true,
-    data: result.rows[0],
+    data: expectOne(result.rows),
     message: "Donor created successfully"
   }, { status: 201 });
 
@@ -400,7 +401,7 @@ async function createContribution(auth: AuthContext | null, data: ContributionCr
 
   const response = NextResponse.json({
     success: true,
-    data: result.rows[0],
+    data: expectOne(result.rows),
     message: "Contribution recorded successfully",
     receiptNumber
   }, { status: 201 });
@@ -493,7 +494,7 @@ async function updateDonor(auth: AuthContext | null, donor_id: string, data: Don
 
   const response = NextResponse.json({
     success: true,
-    data: result.rows[0],
+    data: expectOne(result.rows),
     message: "Donor updated successfully"
   });
 
@@ -545,7 +546,7 @@ async function updateContribution(auth: AuthContext | null, contribution_id: str
 
   const response = NextResponse.json({
     success: true,
-    data: result.rows[0],
+    data: expectOne(result.rows),
     message: "Contribution updated successfully"
   });
 

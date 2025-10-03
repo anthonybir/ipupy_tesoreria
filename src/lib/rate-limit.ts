@@ -3,7 +3,7 @@
  * Protects against brute force attacks and API abuse
  */
 
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 
 // Store for rate limit tracking
 // In production, use Redis or similar persistent store

@@ -61,12 +61,19 @@ const defaultFilterState: FilterState = {
 const FILTER_STORAGE_KEY = 'reports::filters';
 const TAB_STORAGE_KEY = 'reports::tab';
 
-const buildFilters = (state: FilterState): ReportFilters => ({
-  churchId: state.churchId !== 'all' ? Number(state.churchId) : undefined,
-  year: state.year !== 'all' ? Number(state.year) : undefined,
-  month: state.month !== 'all' ? Number(state.month) : undefined,
-  limit: 50,
-});
+const buildFilters = (state: FilterState): ReportFilters => {
+  const result: ReportFilters = { limit: 50 };
+  if (state.churchId !== 'all') {
+    result.churchId = Number(state.churchId);
+  }
+  if (state.year !== 'all') {
+    result.year = Number(state.year);
+  }
+  if (state.month !== 'all') {
+    result.month = Number(state.month);
+  }
+  return result;
+};
 
 export default function ReportsView() {
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');

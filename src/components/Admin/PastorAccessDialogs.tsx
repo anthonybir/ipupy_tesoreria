@@ -18,14 +18,14 @@ import { useLinkPastorProfile, useUnlinkPastorProfile } from '@/hooks/usePastorA
 import type { PastorUserAccess } from '@/types/api';
 import { ShieldCheck, UserX, AlertTriangle } from 'lucide-react';
 
-type DialogProps = {
+export type PastorAccessDialogProps = {
   pastorId: number;
-  pastor?: PastorUserAccess;
+  pastor?: PastorUserAccess | undefined;
   onClose: () => void;
 };
 
 // Grant Access Dialog
-export const GrantAccessDialog = ({ pastorId, pastor, onClose }: DialogProps) => {
+export const GrantAccessDialog = ({ pastorId, pastor, onClose }: PastorAccessDialogProps) => {
   const [mode, setMode] = useState<'existing' | 'new'>('existing');
   const [profileId, setProfileId] = useState('');
   const [email, setEmail] = useState(pastor?.pastorName ? `${pastor.pastorName.toLowerCase().replace(/\s+/g, '.')}@ipupy.org.py` : '');
@@ -170,7 +170,7 @@ export const GrantAccessDialog = ({ pastorId, pastor, onClose }: DialogProps) =>
 };
 
 // Change Role Dialog
-export const ChangeRoleDialog = ({ pastorId, pastor, onClose }: DialogProps) => {
+export const ChangeRoleDialog = ({ pastorId, pastor, onClose }: PastorAccessDialogProps) => {
   const [newRole, setNewRole] = useState(pastor?.platformRole || 'pastor');
 
   const linkMutation = useLinkPastorProfile();
@@ -251,7 +251,7 @@ export const ChangeRoleDialog = ({ pastorId, pastor, onClose }: DialogProps) => 
 };
 
 // Revoke Access Dialog
-export const RevokeAccessDialog = ({ pastorId, pastor, onClose }: DialogProps) => {
+export const RevokeAccessDialog = ({ pastorId, pastor, onClose }: PastorAccessDialogProps) => {
   const unlinkMutation = useUnlinkPastorProfile();
 
   const handleRevoke = async () => {

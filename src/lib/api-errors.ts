@@ -26,7 +26,7 @@ export function handleDatabaseError(
   context?: string
 ): NextResponse {
   const pgError = error as PostgresError;
-  const isDev = process.env.NODE_ENV === 'development';
+  const isDev = process.env['NODE_ENV'] === 'development';
 
   // Log full error in development or for debugging
   if (isDev && context) {

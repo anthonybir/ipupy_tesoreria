@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 import { requireAuth } from '@/lib/auth-supabase';
 import { executeWithContext } from '@/lib/db';

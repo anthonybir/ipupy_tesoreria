@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Dialog } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
-import { useProviders, useCheckRuc, Provider } from '@/hooks/useProviders';
+import { useProviders, useCheckRuc, type Provider } from '@/hooks/useProviders';
 
 interface AddProviderDialogProps {
   isOpen: boolean;

@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { getAuthContext, type AuthContext } from "@/lib/auth-context";
 import { executeWithContext } from "@/lib/db";
+import { firstOrDefault, firstOrNull, expectOne } from "@/lib/db-helpers";
 import { setCORSHeaders } from "@/lib/cors";
 
 interface MonthlyLedger {
@@ -426,14 +427,19 @@ async function getAccountingSummary(
     ledgerValues
   );
 
+  const incomeRow = firstOrDefault(income.rows, {});
+  const expensesRow = firstOrDefault(expenses.rows, {});
+  const movementsRow = firstOrDefault(movements.rows, {});
+  const ledgerRow = firstOrDefault(ledger.rows, { status: "not_created" });
+
   const response = NextResponse.json({
     success: true,
     summary: {
-      income: income.rows[0] || {},
-      expenses: expenses.rows[0] || {},
-      movements: movements.rows[0] || {},
-      ledger: ledger.rows[0] || { status: "not_created" },
-      netResult: Number(income.rows[0]?.['total_income'] || 0) - Number(expenses.rows[0]?.['total_expenses'] || 0)
+      income: incomeRow,
+      expenses: expensesRow,
+      movements: movementsRow,
+      ledger: ledgerRow,
+      netResult: Number(incomeRow['total_income'] || 0) - Number(expensesRow['total_expenses'] || 0)
     }
   });
 
@@ -537,7 +543,7 @@ async function createExpense(auth: AuthContext | null, data: ExpenseCreatePayloa
       data.category,
       data.amount,
       0,
-      `EXP-${result.rows[0]?.id || 'unknown'}`,
+      `EXP-${expectOne(result.rows).id}`,
       data.concept,
       userEmail
     ]
@@ -545,7 +551,7 @@ async function createExpense(auth: AuthContext | null, data: ExpenseCreatePayloa
 
   const response = NextResponse.json({
     success: true,
-    data: result.rows[0],
+    data: expectOne(result.rows),
     message: "Expense record created successfully"
   }, { status: 201 });
 
@@ -620,7 +626,7 @@ async function createAccountingEntry(auth: AuthContext | null, data: AccountingE
         userEmail
       ]
     );
-    const row = result.rows[0];
+    const row = expectOne(result.rows);
     if (row) {
       results.push(row);
     }
@@ -652,10 +658,10 @@ async function openMonthlyLedger(auth: AuthContext | null, data: LedgerOpenPaylo
     [church_id, month, year]
   );
 
-  if (existing.rows.length > 0) {
-    const existingRow = existing.rows[0];
+  const existingRow = firstOrNull(existing.rows);
+  if (existingRow) {
     const response = NextResponse.json({
-      error: `Ledger already exists with status: ${existingRow?.['status'] || 'unknown'}`
+      error: `Ledger already exists with status: ${existingRow['status'] || 'unknown'}`
     }, { status: 409 });
     setCORSHeaders(response);
     return response;
@@ -671,7 +677,8 @@ async function openMonthlyLedger(auth: AuthContext | null, data: LedgerOpenPaylo
     [church_id, prevMonth, prevYear]
   );
 
-  const openingBalance = previous.rows[0]?.['closing_balance'] || 0;
+  const previousRow = firstOrNull(previous.rows);
+  const openingBalance = previousRow?.['closing_balance'] || 0;
 
   // Create new ledger
   const result = await executeWithContext<MonthlyLedger>(auth,
@@ -686,7 +693,7 @@ async function openMonthlyLedger(auth: AuthContext | null, data: LedgerOpenPaylo
 
   const response = NextResponse.json({
     success: true,
-    data: result.rows[0],
+    data: expectOne(result.rows),
     message: "Monthly ledger opened successfully"
   }, { status: 201 });
 
@@ -710,13 +717,7 @@ async function closeMonthlyLedger(auth: AuthContext | null, data: LedgerClosePay
     [church_id, month, year]
   );
 
-  if (ledger.rows.length === 0) {
-    const response = NextResponse.json({ error: "Ledger not found" }, { status: 404 });
-    setCORSHeaders(response);
-    return response;
-  }
-
-  const ledgerRow = ledger.rows[0];
+  const ledgerRow = firstOrNull(ledger.rows);
   if (!ledgerRow) {
     const response = NextResponse.json({ error: "Ledger not found" }, { status: 404 });
     setCORSHeaders(response);
@@ -744,8 +745,10 @@ async function closeMonthlyLedger(auth: AuthContext | null, data: LedgerClosePay
     [church_id, month, year]
   );
 
-  const totalIncome = Number(income.rows[0]?.['total'] || 0);
-  const totalExpenses = Number(expenses.rows[0]?.['total'] || 0);
+  const incomeRow = firstOrNull(income.rows);
+  const expensesRow = firstOrNull(expenses.rows);
+  const totalIncome = Number(incomeRow?.['total'] || 0);
+  const totalExpenses = Number(expensesRow?.['total'] || 0);
   const closingBalance = parseFloat(String(ledgerRow['opening_balance'])) + totalIncome - totalExpenses;
 
   // Update ledger
@@ -774,7 +777,7 @@ async function closeMonthlyLedger(auth: AuthContext | null, data: LedgerClosePay
 
   const response = NextResponse.json({
     success: true,
-    data: result.rows[0],
+    data: expectOne(result.rows),
     message: "Monthly ledger closed successfully"
   });
 

@@ -111,16 +111,23 @@ export function ChurchEditDialog({ church, open, onClose }: Props) {
     }
 
     try {
+      const phone = asOptional(form.phone);
+      const email = asOptional(form.email);
+      const ruc = asOptional(form.ruc);
+      const cedula = asOptional(form.cedula);
+      const grado = asOptional(form.grado);
+      const posicion = asOptional(form.posicion);
+
       const payload = {
         name: form.name.trim(),
         city: form.city.trim(),
         pastor: form.pastor.trim(),
-        phone: asOptional(form.phone),
-        email: asOptional(form.email),
-        ruc: asOptional(form.ruc),
-        cedula: asOptional(form.cedula),
-        grado: asOptional(form.grado),
-        posicion: asOptional(form.posicion),
+        ...(phone ? { phone } : {}),
+        ...(email ? { email } : {}),
+        ...(ruc ? { ruc } : {}),
+        ...(cedula ? { cedula } : {}),
+        ...(grado ? { grado } : {}),
+        ...(posicion ? { posicion } : {}),
         active: form.active,
         primaryPastor: {
           fullName: form.pastor.trim(),

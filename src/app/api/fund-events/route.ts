@@ -1,9 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { requireAuth, hasFundAccess } from '@/lib/auth-supabase';
 import { executeWithContext, executeTransaction } from '@/lib/db';
+import { expectOne, firstOrDefault } from '@/lib/db-helpers';
 import { handleApiError } from '@/lib/api-errors';
 import { setCORSHeaders } from '@/lib/cors';
 import type { CreateEventInput } from '@/types/financial';
+import { createFundEventSchema, formatValidationError } from '@/lib/validations/api-schemas';
+import { ZodError } from 'zod';
 
 export const runtime = 'nodejs';
 
@@ -139,7 +142,14 @@ export async function GET(req: NextRequest) {
 
     // Use statsParams (without pagination placeholders) for stats query
     const statsResult = await executeWithContext(auth, statsQuery, statsParams);
-    const stats = statsResult.rows[0];
+    const stats = firstOrDefault(statsResult.rows, {
+      total: 0,
+      draft: 0,
+      submitted: 0,
+      approved: 0,
+      rejected: 0,
+      pending_revision: 0
+    });
 
     const response = NextResponse.json({
       success: true,
@@ -168,15 +178,25 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const auth = await requireAuth(req);
-    const body: CreateEventInput = await req.json();
+    const rawBody = await req.json();
 
-    if (!body.fund_id || !body.name || !body.event_date) {
-      const response = NextResponse.json(
-        { error: 'fund_id, name, and event_date are required' },
-        { status: 400 }
-      );
-      setCORSHeaders(response);
-      return response;
+    // Validate with Zod schema
+    let body;
+    try {
+      body = createFundEventSchema.parse({
+        fund_id: rawBody.fund_id,
+        event_name: rawBody.name,
+        event_date: rawBody.event_date,
+        description: rawBody.description,
+        budget_items: rawBody.budget_items || []
+      });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const response = NextResponse.json(formatValidationError(error), { status: 400 });
+        setCORSHeaders(response);
+        return response;
+      }
+      throw error;
     }
 
     if (auth.role === 'fund_director' && !hasFundAccess(auth, body.fund_id)) {
@@ -199,18 +219,17 @@ export async function POST(req: NextRequest) {
         RETURNING *
       `, [
         body.fund_id,
-        body.church_id ?? null,
-        body.name,
+        rawBody.church_id ?? null,
+        body.event_name,
         body.description ?? null,
         body.event_date,
         auth.userId
       ]);
 
-      const newEvent = eventResult.rows[0];
+      const newEvent = expectOne(eventResult.rows);
 
-      // Insert budget items (if any)
-      if (body.budget_items && body.budget_items.length > 0) {
-        for (const item of body.budget_items) {
+      // Insert budget items (validated by Zod)
+      for (const item of body.budget_items) {
           await client.query(`
             INSERT INTO fund_event_budget_items (
               event_id, category, description, projected_amount, notes
@@ -218,12 +237,11 @@ export async function POST(req: NextRequest) {
             VALUES ($1, $2, $3, $4, $5)
           `, [
             newEvent.id,
-            item.category,
+            null, // category - not in Zod schema
             item.description,
             item.projected_amount,
-            item.notes ?? null
+            null // notes - not in Zod schema
           ]);
-        }
       }
 
       // Create audit entry

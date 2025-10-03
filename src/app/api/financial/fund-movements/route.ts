@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { getAuthContext, type AuthContext } from "@/lib/auth-context";
 import { executeWithContext } from "@/lib/db";
+import { firstOrNull, firstOrDefault, expectOne } from "@/lib/db-helpers";
 import { setCORSHeaders } from "@/lib/cors";
 import { createTransaction as createLedgerTransaction } from "@/app/api/reports/route-helpers";
 
@@ -121,18 +122,24 @@ async function handleGet(req: NextRequest) {
     `;
 
     const totals = await executeWithContext<{ total_count: string; total_amount: string }>(auth, totalsQuery, filterValues);
+    const totalsRow = firstOrDefault(totals.rows, { total_count: '0', total_amount: '0' });
+
+    const limitValue = Number.parseInt(limit, 10);
+    const offsetValue = Number.parseInt(offset, 10);
+    const totalCount = Number.parseInt(totalsRow.total_count ?? '0', 10);
+    const totalAmount = Number.parseFloat(totalsRow.total_amount ?? '0');
 
     const response = NextResponse.json({
       success: true,
       data: result.rows,
       pagination: {
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        total: parseInt(totals.rows[0].total_count)
+        limit: limitValue,
+        offset: offsetValue,
+        total: totalCount
       },
       totals: {
-        count: parseInt(totals.rows[0].total_count),
-        total_amount: parseFloat(totals.rows[0].total_amount)
+        count: totalCount,
+        total_amount: totalAmount
       }
     });
 
@@ -229,6 +236,12 @@ async function handlePost(req: NextRequest) {
           ]
         );
 
+        const insertedMovement = expectOne(movementResult.rows);
+        if (!insertedMovement) {
+          errors.push({ movement, error: 'Failed to create movement record' });
+          continue;
+        }
+
         await createLedgerTransaction({
           date: new Date().toISOString().slice(0, 10),
           fund_id: movement.fund_category_id,
@@ -240,7 +253,7 @@ async function handlePost(req: NextRequest) {
           created_by: user.email ?? 'system'
         }, user);
 
-        results.push(movementResult.rows[0]);
+        results.push(insertedMovement);
       } catch (error) {
         errors.push({
           movement: movement || movementRaw,
@@ -291,13 +304,12 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
       [reportId]
     );
 
-    if (reportResult.rows.length === 0) {
+    const report = firstOrNull(reportResult.rows);
+    if (!report) {
       const response = NextResponse.json({ error: "Report not found" }, { status: 404 });
       setCORSHeaders(response);
       return response;
     }
-
-    const report = reportResult.rows[0];
     const movementDate = report.fecha_deposito
       ? new Date(report.fecha_deposito).toISOString().slice(0, 10)
       : new Date().toISOString().slice(0, 10);
@@ -308,7 +320,10 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
       [reportId]
     );
 
-    if (parseInt(existing.rows[0].count) > 0) {
+    const existingRow = firstOrNull(existing.rows);
+    const processedCount = existingRow ? Number.parseInt(existingRow.count, 10) : 0;
+
+    if (processedCount > 0) {
       const response = NextResponse.json({
         error: "Fund movements already processed for this report"
       }, { status: 409 });
@@ -336,7 +351,11 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
          RETURNING id`,
         [userEmail]
       );
-      fundMap["Fondo Nacional"] = result.rows[0].id;
+      const inserted = expectOne(result.rows);
+      if (!inserted) {
+        throw new Error('Failed to ensure Fondo Nacional fund');
+      }
+      fundMap["Fondo Nacional"] = inserted.id;
     }
 
     if (!fundMap["Diezmos"]) {
@@ -346,7 +365,11 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
          RETURNING id`,
         [userEmail]
       );
-      fundMap["Diezmos"] = result.rows[0].id;
+      const inserted = expectOne(result.rows);
+      if (!inserted) {
+        throw new Error('Failed to ensure Diezmos fund');
+      }
+      fundMap["Diezmos"] = inserted.id;
     }
 
     if (!fundMap["Ofrendas"]) {
@@ -356,12 +379,25 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
          RETURNING id`,
         [userEmail]
       );
-      fundMap["Ofrendas"] = result.rows[0].id;
+      const inserted = expectOne(result.rows);
+      if (!inserted) {
+        throw new Error('Failed to ensure Ofrendas fund');
+      }
+      fundMap["Ofrendas"] = inserted.id;
     }
+
+    const ensureFundId = (name: 'Fondo Nacional' | 'Diezmos' | 'Ofrendas') => {
+      const id = fundMap[name];
+      if (typeof id !== 'number') {
+        throw new Error(`Fund ${name} is unavailable`);
+      }
+      return id;
+    };
 
     // Process diezmos
     if (report.diezmos && parseFloat(report.diezmos) > 0) {
       const amount = parseFloat(report.diezmos);
+      const diezmosFundId = ensureFundId('Diezmos');
       const diezmoMovement = await executeWithContext(auth,
         `INSERT INTO fund_movements (
           report_id, church_id, fund_category_id, monto, tipo_movimiento, concepto, fecha_movimiento
@@ -370,7 +406,7 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
         [
           reportId,
           report.church_id,
-          fundMap["Diezmos"],
+          diezmosFundId,
           amount,
           `Diezmos - ${report.church_name} (${report.month}/${report.year})`
         ]
@@ -378,7 +414,7 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
 
       await createLedgerTransaction({
         date: movementDate,
-        fund_id: fundMap["Diezmos"],
+        fund_id: diezmosFundId,
         church_id: report.church_id,
         report_id: reportId,
         concept: `Diezmos - ${report.church_name}`,
@@ -387,12 +423,16 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
         created_by: userEmail ?? 'system'
       }, auth);
 
-      movements.push(diezmoMovement.rows[0]);
+      const created = expectOne(diezmoMovement.rows);
+      if (created) {
+        movements.push(created);
+      }
     }
 
     // Process ofrendas
     if (report.ofrendas && parseFloat(report.ofrendas) > 0) {
       const amount = parseFloat(report.ofrendas);
+      const ofrendasFundId = ensureFundId('Ofrendas');
       const ofrendaMovement = await executeWithContext(auth,
         `INSERT INTO fund_movements (
           report_id, church_id, fund_category_id, monto, tipo_movimiento, concepto, fecha_movimiento
@@ -401,7 +441,7 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
         [
           reportId,
           report.church_id,
-          fundMap["Ofrendas"],
+          ofrendasFundId,
           amount,
           `Ofrendas - ${report.church_name} (${report.month}/${report.year})`
         ]
@@ -409,7 +449,7 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
 
       await createLedgerTransaction({
         date: movementDate,
-        fund_id: fundMap["Ofrendas"],
+        fund_id: ofrendasFundId,
         church_id: report.church_id,
         report_id: reportId,
         concept: `Ofrendas - ${report.church_name}`,
@@ -418,12 +458,16 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
         created_by: userEmail ?? 'system'
       }, auth);
 
-      movements.push(ofrendaMovement.rows[0]);
+      const created = expectOne(ofrendaMovement.rows);
+      if (created) {
+        movements.push(created);
+      }
     }
 
     // Process fondo nacional (10% of total)
     if (report.fondo_nacional && parseFloat(report.fondo_nacional) > 0) {
       const amount = parseFloat(report.fondo_nacional);
+      const fondoNacionalFundId = ensureFundId('Fondo Nacional');
       const fondoMovement = await executeWithContext(auth,
         `INSERT INTO fund_movements (
           report_id, church_id, fund_category_id, monto, tipo_movimiento, concepto, fecha_movimiento
@@ -432,7 +476,7 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
         [
           reportId,
           report.church_id,
-          fundMap["Fondo Nacional"],
+          fondoNacionalFundId,
           amount,
           `Fondo Nacional 10% - ${report.church_name} (${report.month}/${report.year})`
         ]
@@ -440,7 +484,7 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
 
       await createLedgerTransaction({
         date: movementDate,
-        fund_id: fundMap["Fondo Nacional"],
+        fund_id: fondoNacionalFundId,
         church_id: report.church_id,
         report_id: reportId,
         concept: `Fondo Nacional 10% - ${report.church_name}`,
@@ -449,7 +493,10 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
         created_by: userEmail ?? 'system'
       }, auth);
 
-      movements.push(fondoMovement.rows[0]);
+      const created = expectOne(fondoMovement.rows);
+      if (created) {
+        movements.push(created);
+      }
     }
 
     const response = NextResponse.json({
@@ -491,18 +538,17 @@ async function handleDelete(req: NextRequest) {
     }
 
     // Get movement details
-    const movement = await executeWithContext(user, 
+    const movement = await executeWithContext<FundMovement>(user, 
       `SELECT * FROM fund_movements WHERE id = $1`,
       [movementId]
     );
 
-    if (movement.rows.length === 0) {
+    const mov = firstOrNull(movement.rows);
+    if (!mov) {
       const response = NextResponse.json({ error: "Fund movement not found" }, { status: 404 });
       setCORSHeaders(response);
       return response;
     }
-
-    const mov = movement.rows[0];
 
     // Delete the movement
     await executeWithContext(user, `DELETE FROM fund_movements WHERE id = $1`, [movementId]);

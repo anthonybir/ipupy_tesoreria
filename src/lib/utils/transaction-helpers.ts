@@ -68,7 +68,7 @@ export async function createTransactionsBulk(
     body: JSON.stringify(transactions),
   });
 
-  const data: BulkTransactionResponse = await response.json();
+  const data = await response.json() as BulkTransactionResponse;
 
   // Handle 207 Multi-Status (partial success)
   if (response.status === 207) {

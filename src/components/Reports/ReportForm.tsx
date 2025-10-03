@@ -423,13 +423,18 @@ export function ReportForm() {
       optionalStrings.observaciones = form.observaciones;
     }
 
+    const attachmentEntries: NonNullable<CreateReportPayload['attachments']> = {};
+    if (attachments.summary?.dataUrl) {
+      attachmentEntries.summary = attachments.summary.dataUrl;
+    }
+    if (attachments.deposit?.dataUrl) {
+      attachmentEntries.deposit = attachments.deposit.dataUrl;
+    }
+
     const attachmentsPayload =
-      attachments.summary?.dataUrl || attachments.deposit?.dataUrl
+      Object.keys(attachmentEntries).length > 0
         ? {
-            attachments: {
-              summary: attachments.summary?.dataUrl,
-              deposit: attachments.deposit?.dataUrl,
-            },
+            attachments: attachmentEntries,
           }
         : {};
 
@@ -507,7 +512,7 @@ export function ReportForm() {
           key={field}
           htmlFor={fieldId}
           label={fieldLabels[field] ?? field.replace('_', ' ')}
-          hint={helperText}
+          {...(helperText ? { hint: helperText } : {})}
         >
           <input
             id={fieldId}
@@ -526,7 +531,7 @@ export function ReportForm() {
         key={field}
         htmlFor={fieldId}
         label={fieldLabels[field] ?? field.replace('_', ' ')}
-        hint={helperText}
+        {...(helperText ? { hint: helperText } : {})}
       >
         <CurrencyInput
           id={fieldId}
@@ -804,7 +809,11 @@ export function ReportForm() {
             const attachment = attachments[key];
             return (
               <div key={key} className="space-y-2">
-                <FormField htmlFor={`attachment-${key}`} label={label} hint={description}>
+                <FormField
+                  htmlFor={`attachment-${key}`}
+                  label={label}
+                  {...(description ? { hint: description } : {})}
+                >
                   <input
                     id={`attachment-${key}`}
                     key={`${key}-${inputKeys[key]}`}

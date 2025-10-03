@@ -45,6 +45,7 @@ import {
 } from '@/hooks/useAdminConfiguration';
 import { usePastorAccess } from '@/hooks/usePastorAccess';
 import { GrantAccessDialog, ChangeRoleDialog, RevokeAccessDialog } from '@/components/Admin/PastorAccessDialogs';
+import type { DefaultFund } from '@/hooks/useAdminConfiguration';
 import type { ChurchRecord } from '@/types/api';
 import toast from 'react-hot-toast';
 
@@ -241,8 +242,8 @@ const ConfigurationPage = () => {
     backupRetention: 30,
     googleSheetsIntegration: false,
     googleSheetsId: '',
-    supabaseProjectUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-    supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
+    supabaseProjectUrl: process.env['NEXT_PUBLIC_SUPABASE_URL'] || '',
+    supabaseAnonKey: process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] || '',
   };
 
   // Merge loaded data with defaults
@@ -694,52 +695,79 @@ const ConfigurationPage = () => {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
-                {fundsConfig.defaultFunds.map((fund, index) => (
-                  <div key={fund.fundId ?? `${fund.name}-${index}`} className="grid grid-cols-4 gap-4 items-end">
-                    <div className="space-y-2">
-                      <Label>Nombre del Fondo</Label>
-                      <Input value={fund.name} readOnly disabled />
-                      <div className="flex flex-wrap gap-2 text-xs">
-                        {fund.fundType ? (
-                          <Badge variant="outline" className="uppercase">
-                            {fund.fundType.replace(/_/g, ' ').toUpperCase()}
-                          </Badge>
-                        ) : null}
-                        {typeof fund.isActive === 'boolean' ? (
-                          <Badge variant={fund.isActive ? 'success' : 'secondary'}>
-                            {fund.isActive ? 'Activo' : 'Inactivo'}
-                          </Badge>
-                        ) : null}
+                {fundsConfig.defaultFunds.map((fund: DefaultFund, index) => {
+                  const fundId = fund?.fundId ?? `${fund?.name ?? 'fondo'}-${index}`;
+                  const fundName = fund?.name ?? 'Fondo sin nombre';
+                  const fundTypeLabel = fund?.fundType ? fund.fundType.replace(/_/g, ' ').toUpperCase() : '';
+                  const isActive = typeof fund?.isActive === 'boolean' ? fund.isActive : null;
+                  const percentageValue = Number.isFinite(fund?.percentage) ? fund.percentage : 0;
+                  const autoCalculate = Boolean(fund?.autoCalculate);
+                  const isRequired = Boolean(fund?.required);
+
+                  return (
+                    <div key={fundId} className="grid grid-cols-4 gap-4 items-end">
+                      <div className="space-y-2">
+                        <Label>Nombre del Fondo</Label>
+                        <Input value={fundName} readOnly disabled />
+                        <div className="flex flex-wrap gap-2 text-xs">
+                          {fundTypeLabel ? (
+                            <Badge variant="outline" className="uppercase">
+                              {fundTypeLabel}
+                            </Badge>
+                          ) : null}
+                          {isActive !== null ? (
+                            <Badge variant={isActive ? 'success' : 'secondary'}>
+                              {isActive ? 'Activo' : 'Inactivo'}
+                            </Badge>
+                          ) : null}
+                        </div>
                       </div>
+                      <div className="space-y-2">
+                        <Label>Porcentaje (%)</Label>
+                        <Input
+                          type="number"
+                          value={percentageValue}
+                          onChange={(e) => {
+                            const nextValue = Number(e.target.value);
+                            setFundsConfig((prev) => ({
+                              ...prev,
+                              defaultFunds: prev.defaultFunds.map((item, itemIndex) =>
+                                itemIndex === index
+                                  ? {
+                                      ...item,
+                                      percentage: Number.isFinite(nextValue) ? nextValue : 0,
+                                    }
+                                  : item
+                              ) as DefaultFund[],
+                            }));
+                          }}
+                        />
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Switch
+                          checked={autoCalculate}
+                          onCheckedChange={(checked) => {
+                            setFundsConfig((prev) => ({
+                              ...prev,
+                              defaultFunds: prev.defaultFunds.map((item, itemIndex) =>
+                                itemIndex === index
+                                  ? {
+                                      ...item,
+                                      autoCalculate: checked,
+                                    }
+                                  : item
+                              ) as DefaultFund[],
+                            }));
+                          }}
+                        />
+                        <Label>Auto-calcular</Label>
+                      </div>
+                      <Badge variant={isRequired ? 'default' : 'outline'}>
+                        {isRequired ? 'Obligatorio' : 'Opcional'}
+                      </Badge>
                     </div>
-                    <div className="space-y-2">
-                      <Label>Porcentaje (%)</Label>
-                      <Input
-                        type="number"
-                        value={fund.percentage}
-                        onChange={(e) => {
-                          const newFunds = [...fundsConfig.defaultFunds];
-                          newFunds[index].percentage = Number(e.target.value);
-                          setFundsConfig({ ...fundsConfig, defaultFunds: newFunds });
-                        }}
-                      />
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        checked={fund.autoCalculate}
-                        onCheckedChange={(checked) => {
-                          const newFunds = [...fundsConfig.defaultFunds];
-                          newFunds[index].autoCalculate = checked;
-                          setFundsConfig({ ...fundsConfig, defaultFunds: newFunds });
-                        }}
-                      />
-                      <Label>Auto-calcular</Label>
-                    </div>
-                    <Badge variant={fund.required ? 'default' : 'outline'}>
-                      {fund.required ? 'Obligatorio' : 'Opcional'}
-                    </Badge>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
               <div className="flex justify-end">
                 <Button onClick={() => handleSaveConfiguration('funds')} disabled={saveConfig.isPending} loading={saveConfig.isPending}>

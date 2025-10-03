@@ -1,9 +1,12 @@
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { getAuthContext } from "@/lib/auth-context";
 import { executeWithContext, executeTransaction } from "@/lib/db";
+import { firstOrNull, firstOrDefault, expectOne } from "@/lib/db-helpers";
 import { setCORSHeaders } from "@/lib/cors";
 import { createTransaction as createLedgerTransaction } from "@/app/api/reports/route-helpers";
 import { handleApiError } from "@/lib/api-errors";
+import { bulkCreateTransactionsSchema, formatValidationError } from "@/lib/validations/api-schemas";
+import { ZodError } from "zod";
 
 type GenericRecord = Record<string, unknown>;
 
@@ -122,7 +125,7 @@ async function handleGet(req: NextRequest) {
       total_out: string
     }>(auth, totalsQuery, filterValues);
 
-    const totalsRow = totals.rows[0];
+    const totalsRow = firstOrDefault(totals.rows, { total_count: '0', total_in: '0', total_out: '0' });
     const response = NextResponse.json({
       success: true,
       data: result.rows,
@@ -163,12 +166,19 @@ async function handlePost(req: NextRequest) {
     }
 
     const body = await req.json();
-    const transactions = Array.isArray(body) ? body : [body];
+    const inputArray = Array.isArray(body) ? body : [body];
 
-    if (transactions.length === 0) {
-      const response = NextResponse.json({ error: "No transactions to create" }, { status: 400 });
-      setCORSHeaders(response);
-      return response;
+    // Validate with Zod schema
+    let transactions;
+    try {
+      transactions = bulkCreateTransactionsSchema.parse(inputArray);
+    } catch (error) {
+      if (error instanceof ZodError) {
+        const response = NextResponse.json(formatValidationError(error), { status: 400 });
+        setCORSHeaders(response);
+        return response;
+      }
+      throw error;
     }
 
     const results: GenericRecord[] = [];
@@ -176,26 +186,6 @@ async function handlePost(req: NextRequest) {
 
     for (const transaction of transactions) {
       try {
-        // Validate required fields
-        if (!transaction.date || !transaction.fund_id || !transaction.concept) {
-          errors.push({
-            transaction,
-            error: "Missing required fields: date, fund_id, concept"
-          });
-          continue;
-        }
-
-        // Validate amounts
-        const amountIn = parseFloat(transaction.amount_in || 0);
-        const amountOut = parseFloat(transaction.amount_out || 0);
-
-        if ((amountIn === 0 && amountOut === 0) || (amountIn > 0 && amountOut > 0)) {
-          errors.push({
-            transaction,
-            error: "Transaction must have either amount_in or amount_out (not both or neither)"
-          });
-          continue;
-        }
 
         // Insert transaction using shared helper for consistency
         const createdTransaction = await createLedgerTransaction({
@@ -207,8 +197,8 @@ async function handlePost(req: NextRequest) {
           provider: transaction.provider ?? null,
           provider_id: transaction.provider_id ?? null,
           document_number: transaction.document_number ?? null,
-          amount_in: amountIn,
-          amount_out: amountOut,
+          amount_in: transaction.amount_in ?? 0,
+          amount_out: transaction.amount_out ?? 0,
           created_by: user.email
         }, user);
 
@@ -274,7 +264,7 @@ async function handlePut(req: NextRequest) {
       return response;
     }
 
-    const oldTransaction = existing.rows[0];
+    const oldTransaction = firstOrNull(existing.rows);
     if (!oldTransaction) {
       const response = NextResponse.json({ error: "Transaction not found" }, { status: 404 });
       setCORSHeaders(response);
@@ -356,7 +346,7 @@ async function handlePut(req: NextRequest) {
 
     const response = NextResponse.json({
       success: true,
-      data: result.rows[0],
+      data: expectOne(result.rows),
       message: "Transaction updated successfully"
     });
 
@@ -404,7 +394,7 @@ async function handleDelete(req: NextRequest) {
         throw new Error('Transaction not found');
       }
 
-      const transaction = existing.rows[0];
+      const transaction = expectOne(existing.rows);
       if (!transaction) {
         throw new Error('Transaction not found');
       }

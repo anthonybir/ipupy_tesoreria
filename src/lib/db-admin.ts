@@ -1,5 +1,5 @@
 import { executeWithContext } from '@/lib/db';
-import { AuthContext } from '@/lib/auth-context';
+import { type AuthContext } from '@/lib/auth-context';
 import {
   createReportTransactions,
   createTransaction as createLedgerTransaction,

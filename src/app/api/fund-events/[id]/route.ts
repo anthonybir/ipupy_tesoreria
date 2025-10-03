@@ -1,9 +1,30 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { requireAuth, hasFundAccess } from '@/lib/auth-supabase';
 import { executeWithContext, executeTransaction } from '@/lib/db';
+import { firstOrNull, expectOne } from '@/lib/db-helpers';
 import { setCORSHeaders } from '@/lib/cors';
 
 export const runtime = 'nodejs';
+
+type EventRow = Record<string, unknown>;
+
+type EventMeta = {
+  status: string | null;
+  fundId: number | null;
+  createdBy: string | null;
+};
+
+const toStringOrNull = (value: unknown): string | null =>
+  typeof value === 'string' && value.trim().length > 0 ? value : null;
+
+const toNumberOrNull = (value: unknown): number | null =>
+  typeof value === 'number' && Number.isFinite(value) ? value : null;
+
+const getEventMeta = (row: EventRow | null | undefined): EventMeta => ({
+  status: toStringOrNull(row?.['status']),
+  fundId: toNumberOrNull(row?.['fund_id']),
+  createdBy: toStringOrNull(row?.['created_by'])
+});
 
 export async function GET(
   req: NextRequest,
@@ -72,17 +93,8 @@ export async function GET(
     `;
 
     const result = await executeWithContext(auth, query, [eventId]);
+    const event = firstOrNull(result.rows);
 
-    if (result.rowCount === 0) {
-      const response = NextResponse.json(
-        { error: 'Event not found' },
-        { status: 404 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
-
-    const event = result.rows[0];
     if (!event) {
       const response = NextResponse.json(
         { error: 'Event not found' },
@@ -92,7 +104,8 @@ export async function GET(
       return response;
     }
 
-    if (auth.role === 'fund_director' && !hasFundAccess(auth, event['fund_id'])) {
+    const { fundId: eventFundId } = getEventMeta(event as EventRow);
+    if (auth.role === 'fund_director' && (!eventFundId || !hasFundAccess(auth, eventFundId))) {
       const response = NextResponse.json(
         { error: 'No access to this event' },
         { status: 403 }
@@ -137,7 +150,8 @@ export async function PATCH(
       SELECT created_by, fund_id, status FROM fund_events WHERE id = $1
     `, [eventId]);
 
-    if (eventCheck.rowCount === 0) {
+    const eventRow = firstOrNull(eventCheck.rows) as EventRow | null;
+    if (!eventRow) {
       const response = NextResponse.json(
         { error: 'Event not found' },
         { status: 404 }
@@ -146,19 +160,11 @@ export async function PATCH(
       return response;
     }
 
-    const event = eventCheck.rows[0];
-    if (!event) {
-      const response = NextResponse.json(
-        { error: 'Event not found' },
-        { status: 404 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
+    const { status: eventStatus, fundId: eventFundId, createdBy: eventCreatedBy } = getEventMeta(eventRow);
 
     if (action === 'submit') {
       if (auth.role === 'fund_director') {
-        if (!hasFundAccess(auth, event['fund_id']) || event['created_by'] !== auth.userId) {
+        if (!eventFundId || !hasFundAccess(auth, eventFundId) || !eventCreatedBy || eventCreatedBy !== auth.userId) {
           const response = NextResponse.json(
             { error: 'Only the event creator can submit' },
             { status: 403 }
@@ -168,9 +174,9 @@ export async function PATCH(
         }
       }
 
-      if (event['status'] !== 'draft' && event['status'] !== 'pending_revision') {
+      if (eventStatus !== 'draft' && eventStatus !== 'pending_revision') {
         const response = NextResponse.json(
-          { error: `Cannot submit event with status: ${event.status}` },
+          { error: `Cannot submit event with status: ${eventStatus ?? 'unknown'}` },
           { status: 400 }
         );
         setCORSHeaders(response);
@@ -188,7 +194,7 @@ export async function PATCH(
         await client.query(`
           INSERT INTO fund_event_audit (event_id, previous_status, new_status, changed_by, comment)
           VALUES ($1, $2, 'submitted', $3, 'Enviado para aprobación')
-        `, [eventId, event.status, auth.userId]);
+        `, [eventId, eventStatus ?? 'unknown', auth.userId]);
       });
 
       const response = NextResponse.json({
@@ -210,9 +216,9 @@ export async function PATCH(
         return response;
       }
 
-      if (event.status !== 'submitted') {
+      if (eventStatus !== 'submitted') {
         const response = NextResponse.json(
-          { error: `Cannot approve event with status: ${event.status}` },
+          { error: `Cannot approve event with status: ${eventStatus ?? 'unknown'}` },
           { status: 400 }
         );
         setCORSHeaders(response);
@@ -225,7 +231,8 @@ export async function PATCH(
           SELECT process_fund_event_approval($1, $2) as result
         `, [eventId, auth.userId]);
 
-        const result = approvalResult.rows[0].result;
+        const approvalRow = expectOne(approvalResult.rows);
+        const result = approvalRow.result;
 
         await client.query(`
           INSERT INTO fund_event_audit (event_id, previous_status, new_status, changed_by, comment)
@@ -255,9 +262,9 @@ export async function PATCH(
         return response;
       }
 
-      if (event.status !== 'submitted') {
+      if (eventStatus !== 'submitted') {
         const response = NextResponse.json(
-          { error: `Cannot reject event with status: ${event.status}` },
+          { error: `Cannot reject event with status: ${eventStatus ?? 'unknown'}` },
           { status: 400 }
         );
         setCORSHeaders(response);
@@ -330,7 +337,8 @@ export async function PUT(
       SELECT created_by, fund_id, status FROM fund_events WHERE id = $1
     `, [eventId]);
 
-    if (eventCheck.rowCount === 0) {
+    const eventRow = firstOrNull(eventCheck.rows) as EventRow | null;
+    if (!eventRow) {
       const response = NextResponse.json(
         { error: 'Event not found' },
         { status: 404 }
@@ -339,11 +347,11 @@ export async function PUT(
       return response;
     }
 
-    const event = eventCheck.rows[0];
+    const { status: eventStatus, fundId: eventFundId, createdBy: eventCreatedBy } = getEventMeta(eventRow);
 
-    if (event.status !== 'draft' && event.status !== 'pending_revision') {
+    if (eventStatus !== 'draft' && eventStatus !== 'pending_revision') {
       const response = NextResponse.json(
-        { error: `Cannot edit event with status: ${event.status}` },
+        { error: `Cannot edit event with status: ${eventStatus ?? 'unknown'}` },
         { status: 400 }
       );
       setCORSHeaders(response);
@@ -351,7 +359,7 @@ export async function PUT(
     }
 
     if (auth.role === 'fund_director') {
-      if (!hasFundAccess(auth, event.fund_id) || event.created_by !== auth.userId) {
+      if (!eventFundId || !hasFundAccess(auth, eventFundId) || !eventCreatedBy || eventCreatedBy !== auth.userId) {
         const response = NextResponse.json(
           { error: 'No access to edit this event' },
           { status: 403 }
@@ -415,7 +423,8 @@ export async function DELETE(
       SELECT created_by, fund_id, status FROM fund_events WHERE id = $1
     `, [eventId]);
 
-    if (eventCheck.rowCount === 0) {
+    const eventRow = firstOrNull(eventCheck.rows) as EventRow | null;
+    if (!eventRow) {
       const response = NextResponse.json(
         { error: 'Event not found' },
         { status: 404 }
@@ -424,9 +433,9 @@ export async function DELETE(
       return response;
     }
 
-    const event = eventCheck.rows[0];
+    const { status: eventStatus, fundId: eventFundId, createdBy: eventCreatedBy } = getEventMeta(eventRow);
 
-    if (event.status !== 'draft') {
+    if (eventStatus !== 'draft') {
       const response = NextResponse.json(
         { error: 'Only draft events can be deleted' },
         { status: 400 }
@@ -436,7 +445,7 @@ export async function DELETE(
     }
 
     if (auth.role === 'fund_director') {
-      if (!hasFundAccess(auth, event.fund_id) || event.created_by !== auth.userId) {
+      if (!eventFundId || !hasFundAccess(auth, eventFundId) || !eventCreatedBy || eventCreatedBy !== auth.userId) {
         const response = NextResponse.json(
           { error: 'No access to delete this event' },
           { status: 403 }

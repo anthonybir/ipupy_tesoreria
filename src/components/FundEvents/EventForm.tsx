@@ -6,7 +6,8 @@ import { useChurches } from '@/hooks/useChurches';
 import { useEventMutations } from '@/hooks/useFundEvents';
 import { FormField, SectionCard } from '@/components/Shared';
 import { Button } from '@/components/ui/button';
-import type { EventCategory, CreateEventInput } from '@/types/financial';
+import type { EventCategory, CreateEventInput, FundRecord } from '@/types/financial';
+import type { ChurchRecord } from '@/types/api';
 
 type BudgetItemInput = {
   category: EventCategory;
@@ -44,12 +45,12 @@ export function EventForm({ onSuccess, onCancel }: EventFormProps) {
     { category: 'venue', description: '', projected_amount: 0, notes: '' },
   ]);
 
-  const { data: fundsData } = useFunds();
-  const { data: churchesData } = useChurches();
+  const fundsQuery = useFunds();
+  const churchesQuery = useChurches();
   const { createEvent } = useEventMutations();
 
-  const funds = fundsData?.records || [];
-  const churches = churchesData || [];
+  const funds: FundRecord[] = fundsQuery.data?.records ?? [];
+  const churches: ChurchRecord[] = churchesQuery.data ?? [];
 
   const handleAddBudgetItem = () => {
     setBudgetItems([
@@ -62,14 +63,10 @@ export function EventForm({ onSuccess, onCancel }: EventFormProps) {
     setBudgetItems(budgetItems.filter((_, i) => i !== index));
   };
 
-  const handleBudgetItemChange = (
-    index: number,
-    field: keyof BudgetItemInput,
-    value: string | number
-  ) => {
-    const newItems = [...budgetItems];
-    newItems[index] = { ...newItems[index], [field]: value };
-    setBudgetItems(newItems);
+  const updateBudgetItem = (index: number, patch: Partial<BudgetItemInput>) => {
+    setBudgetItems((items) =>
+      items.map((item, idx) => (idx === index ? { ...item, ...patch } : item))
+    );
   };
 
   const calculateTotal = () => {
@@ -195,7 +192,9 @@ export function EventForm({ onSuccess, onCancel }: EventFormProps) {
                     id={`category_${index}`}
                     value={item.category}
                     onChange={(e) =>
-                      handleBudgetItemChange(index, 'category', e.target.value)
+                      updateBudgetItem(index, {
+                        category: e.target.value as EventCategory,
+                      })
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                   >
@@ -215,7 +214,7 @@ export function EventForm({ onSuccess, onCancel }: EventFormProps) {
                     type="text"
                     value={item.description}
                     onChange={(e) =>
-                      handleBudgetItemChange(index, 'description', e.target.value)
+                      updateBudgetItem(index, { description: e.target.value })
                     }
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                     placeholder="Detalle del gasto..."
@@ -229,13 +228,12 @@ export function EventForm({ onSuccess, onCancel }: EventFormProps) {
                     id={`projected_amount_${index}`}
                     type="number"
                     value={item.projected_amount}
-                    onChange={(e) =>
-                      handleBudgetItemChange(
-                        index,
-                        'projected_amount',
-                        parseFloat(e.target.value) || 0
-                      )
-                    }
+                    onChange={(e) => {
+                      const parsed = Number.parseFloat(e.target.value);
+                      updateBudgetItem(index, {
+                        projected_amount: Number.isFinite(parsed) ? parsed : 0,
+                      });
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                     min="0"
                     step="1000"
@@ -249,7 +247,7 @@ export function EventForm({ onSuccess, onCancel }: EventFormProps) {
                     id={`notes_${index}`}
                     type="text"
                     value={item.notes}
-                    onChange={(e) => handleBudgetItemChange(index, 'notes', e.target.value)}
+                    onChange={(e) => updateBudgetItem(index, { notes: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                     placeholder="Opcional"
                   />

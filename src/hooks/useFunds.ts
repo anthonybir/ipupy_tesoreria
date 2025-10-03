@@ -47,6 +47,6 @@ export function useFunds(filters: FundsFilters = {}, options?: UseFundsOptions) 
     queryKey: fundsQueryKey(filters),
     queryFn: () => fetchFunds(filters),
     staleTime: staleTime ?? 2 * 60 * 1000,
-    enabled,
+    ...(typeof enabled === 'boolean' ? { enabled } : {}),
   });
 }

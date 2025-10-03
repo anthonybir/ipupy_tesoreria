@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getAuthContext } from '@/lib/auth-context';
 import { executeWithContext, executeTransaction } from '@/lib/db';
 import { setCORSHeaders } from '@/lib/cors';
@@ -37,13 +37,14 @@ export async function GET(req: NextRequest) {
     // Transform to key-value pairs grouped by section
     const configuration: Record<string, Record<string, unknown>> = {};
     result.rows.forEach((row) => {
-      const rowSection = row.section;
-      if (rowSection && !configuration[rowSection]) {
-        configuration[rowSection] = {};
+      const sectionKey = row.section;
+      if (!sectionKey) {
+        return;
       }
-      if (rowSection) {
-        configuration[rowSection][row.key] = row.value;
-      }
+
+      const sectionConfig = configuration[sectionKey] ?? {};
+      sectionConfig[row.key] = row.value;
+      configuration[sectionKey] = sectionConfig;
     });
 
     const shouldIncludeSection = (target: string) => !section || section === target;
@@ -209,6 +210,13 @@ export async function POST(req: NextRequest) {
       return response;
     }
 
+    const userId = auth.userId;
+    if (!userId) {
+      const response = NextResponse.json({ error: 'Invalid user context' }, { status: 400 });
+      setCORSHeaders(response);
+      return response;
+    }
+
     const body = await req.json();
     const { section, data } = body;
 
@@ -233,7 +241,7 @@ export async function POST(req: NextRequest) {
             value = $3,
             updated_by = $4,
             updated_at = NOW()
-        `, [section, key, JSON.stringify(value), auth.userId]);
+        `, [section, key, JSON.stringify(value), userId]);
       }
 
       // Log configuration change
@@ -241,7 +249,7 @@ export async function POST(req: NextRequest) {
         INSERT INTO user_activity (user_id, action, details, created_at)
         VALUES ($1, $2, $3, NOW())
       `, [
-        auth.userId,
+        userId,
         'configuration.update',
         JSON.stringify({ section, keys: Object.keys(data) })
       ]);
@@ -273,6 +281,13 @@ export async function PUT(req: NextRequest) {
     // Only admin can reset configuration
     if (!auth || auth.role !== 'admin') {
       const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      setCORSHeaders(response);
+      return response;
+    }
+
+    const userId = auth.userId;
+    if (!userId) {
+      const response = NextResponse.json({ error: 'Invalid user context' }, { status: 400 });
       setCORSHeaders(response);
       return response;
     }
@@ -322,7 +337,7 @@ export async function PUT(req: NextRequest) {
         await executeWithContext(auth, `
           INSERT INTO system_configuration (section, key, value, updated_by)
           VALUES ($1, $2, $3, $4)
-        `, [section, key, JSON.stringify(value), auth.userId]);
+        `, [section, key, JSON.stringify(value), userId]);
       }
     }
 

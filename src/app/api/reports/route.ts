@@ -1,10 +1,11 @@
 import path from 'path';
 import { promises as fs } from 'fs';
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 import { executeWithContext } from '@/lib/db';
+import { firstOrNull, expectOne } from '@/lib/db-helpers';
 import { buildCorsHeaders, handleCorsPreflight } from '@/lib/cors';
-import { requireAuth, AuthContext } from '@/lib/auth-context';
+import { requireAuth, type AuthContext } from '@/lib/auth-context';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
 import { createReportTransactions } from './route-helpers';
 
@@ -111,6 +112,24 @@ const toIntOrZero = (value: unknown): number => {
   return parsed === null ? 0 : parsed;
 };
 
+const getRecordValue = <T = unknown>(record: GenericRecord | undefined, key: string): T | undefined => {
+  if (!record) return undefined;
+  return record[key] as T | undefined;
+};
+
+const getRecordString = (record: GenericRecord | undefined, key: string, fallback = ''): string => {
+  const value = getRecordValue(record, key);
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  return fallback;
+};
+
+const getRecordNumber = (record: GenericRecord | undefined, key: string, fallback = 0): number => {
+  return toNumber(getRecordValue(record, key), fallback);
+};
+
 const DESIGNATED_FORM_KEYS = [
   'misiones',
   'lazos_amor',
@@ -170,8 +189,9 @@ const saveBase64Attachment = async (raw: unknown, prefix: string) => {
 
     const rawString = String(raw);
     const match = rawString.match(/^data:(.+);base64,(.*)$/);
-    const mimeType = match ? match[1] : 'image/png';
-    const base64Data = match ? match[2] : rawString;
+    const detectedMime = match?.[1];
+    const base64Data = match?.[2] ?? rawString;
+    const mimeType = typeof detectedMime === 'string' && detectedMime.length > 0 ? detectedMime : 'image/png';
     const extension = mimeType.split('/').pop() || 'png';
     const filename = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${extension}`;
     const filePath = path.join(uploadsDir, filename);
@@ -216,17 +236,27 @@ const queueReportNotification = async (
   notificationType = 'submission',
   auth?: AuthContext | null
 ) => {
-  const recipient = process.env.TREASURY_NOTIFICATION_EMAIL;
+  const recipient = process.env['TREASURY_NOTIFICATION_EMAIL'];
   if (!recipient || !reportRow) {
     return;
   }
 
   const actionLabel = notificationType === 'processed' ? 'Informe procesado' : 'Nuevo informe';
-  const subject = `${actionLabel} ${reportRow.month}/${reportRow.year} - Iglesia ${reportRow.church_id}`;
-  const body = `${actionLabel.toUpperCase()}\n` +
-    `Iglesia: ${reportRow.church_id}\n` +
-    `Monto total: ${reportRow.total_entradas || 0}\n` +
-    `Acción registrada por: ${actorEmail || 'usuario'}`;
+  const monthLabel = getRecordString(reportRow, 'month', '?');
+  const yearLabel = getRecordString(reportRow, 'year', '????');
+  const churchLabel = getRecordString(reportRow, 'church_id', 'desconocida');
+  const totalEntradas = getRecordNumber(reportRow, 'total_entradas', 0);
+  const reportId = getRecordNumber(reportRow, 'id', 0) || null;
+
+  if (!reportId) {
+    return;
+  }
+
+  const subject = `${actionLabel} ${monthLabel}/${yearLabel} - Iglesia ${churchLabel}`;
+  const body = `${actionLabel.toUpperCase()}\n`
+    + `Iglesia: ${churchLabel}\n`
+    + `Monto total: ${totalEntradas}\n`
+    + `Acción registrada por: ${actorEmail || 'usuario'}`;
 
   try {
     await executeWithContext(
@@ -235,7 +265,7 @@ const queueReportNotification = async (
         INSERT INTO report_notifications (report_id, notification_type, recipient_email, subject, body)
         VALUES ($1, $2, $3, $4, $5)
       `,
-      [reportRow.id, notificationType, recipient, subject, body]
+      [reportId, notificationType, recipient, subject, body]
     );
   } catch (error) {
     console.error('Failed to queue a report notification:', error);
@@ -319,16 +349,16 @@ const handleGetReports = async (request: NextRequest, auth: AuthContext) => {
 };
 
 const extractReportPayload = (data: GenericRecord) => {
-  const baseDiezmos = toNumber(data.diezmos);
-  const baseOfrendas = toNumber(data.ofrendas);
-  const otros = toNumber(data.otros);
-  const anexos = toNumber(data.anexos);
+  const baseDiezmos = getRecordNumber(data, 'diezmos');
+  const baseOfrendas = getRecordNumber(data, 'ofrendas');
+  const otros = getRecordNumber(data, 'otros');
+  const anexos = getRecordNumber(data, 'anexos');
 
   const designated: Record<DesignatedKey, number> = {} as Record<DesignatedKey, number>;
   let totalDesignados = 0;
   DESIGNATED_FORM_KEYS.forEach((key) => {
     const dbColumn = DESIGNATED_FIELD_MAP[key];
-    const value = toNumber((data as GenericRecord)[key] ?? (data as GenericRecord)[dbColumn]);
+    const value = getRecordNumber(data, key, getRecordNumber(data, dbColumn, 0));
     designated[key] = value;
     totalDesignados += value;
   });
@@ -336,7 +366,7 @@ const extractReportPayload = (data: GenericRecord) => {
   const expenses: Record<ExpenseKey, number> = {} as Record<ExpenseKey, number>;
   let gastosOperativos = 0;
   EXPENSE_KEYS.forEach((key) => {
-    const value = toNumber((data as GenericRecord)[key]);
+    const value = getRecordNumber(data, key, 0);
     expenses[key] = value;
     gastosOperativos += value;
   });
@@ -348,6 +378,9 @@ const extractReportPayload = (data: GenericRecord) => {
   const totalSalidas = totalDesignados + gastosOperativos + diezmoNacional + honorariosPastoral;
   const saldoMes = totalIngresos - totalSalidas;
 
+  const fechaDepositoValue = getRecordValue<string>(data, 'fecha_deposito');
+  const fechaDeposito = typeof fechaDepositoValue === 'string' ? fechaDepositoValue : null;
+
   return {
     totals: {
       totalEntradas: totalIngresos,
@@ -358,7 +391,7 @@ const extractReportPayload = (data: GenericRecord) => {
       saldoMes,
       totalDesignados,
       congregationalBase,
-      fechaDeposito: typeof data.fecha_deposito === 'string' ? data.fecha_deposito : null
+      fechaDeposito
     },
     breakdown: {
       diezmos: baseDiezmos,
@@ -379,12 +412,13 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
   const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer' || auth.role === 'church';
 
   // Determine which church this report is for
+  const payloadChurchIdRaw = getRecordValue(data, 'church_id');
   const scopedChurchId = isChurchRole
     ? parseRequiredChurchId(auth.churchId)
-    : parseRequiredChurchId(data.church_id);
+    : parseRequiredChurchId(payloadChurchIdRaw);
 
   // Church-level users can only submit for their own church
-  if (isChurchRole && data.church_id && parseRequiredChurchId(data.church_id) !== scopedChurchId) {
+  if (isChurchRole && payloadChurchIdRaw && parseRequiredChurchId(payloadChurchIdRaw) !== scopedChurchId) {
     throw new BadRequestError('No puede registrar informes para otra iglesia');
   }
 
@@ -393,8 +427,8 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
     throw new BadRequestError('No tiene permisos para crear informes');
   }
 
-  const reportMonth = parseRequiredMonth(data.month);
-  const reportYear = parseRequiredYear(data.year);
+  const reportMonth = parseRequiredMonth(getRecordValue(data, 'month'));
+  const reportYear = parseRequiredYear(getRecordValue(data, 'year'));
 
   await setAuditContext(auth.email);
 
@@ -426,13 +460,14 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
     return acc;
   }, {});
 
-  const donorRowsInput = Array.isArray(data.aportantes) ? (data.aportantes as GenericRecord[]) : [];
+  const aportantesRaw = getRecordValue<unknown>(data, 'aportantes');
+  const donorRowsInput = Array.isArray(aportantesRaw) ? (aportantesRaw as GenericRecord[]) : [];
   const donorRows = donorRowsInput
     .map((donor) => ({
-      first_name: String(donor.first_name ?? '').trim(),
-      last_name: String(donor.last_name ?? '').trim(),
-      document: String(donor.document ?? '').trim(),
-      amount: toNumber(donor.amount)
+      first_name: getRecordString(donor, 'first_name').trim(),
+      last_name: getRecordString(donor, 'last_name').trim(),
+      document: getRecordString(donor, 'document').trim(),
+      amount: toNumber(getRecordValue(donor, 'amount'))
     }))
     .filter((donor) => donor.amount > 0 && (donor.first_name || donor.last_name || donor.document));
 
@@ -446,12 +481,13 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
     }
   }
 
-  const montoDepositado = data.monto_depositado !== undefined
-    ? toNumber(data.monto_depositado)
+  const montoDepositadoValue = getRecordValue(data, 'monto_depositado');
+  const montoDepositado = montoDepositadoValue !== undefined
+    ? toNumber(montoDepositadoValue)
     : totals.fondoNacional + totals.totalDesignados;
 
   const attachmentPrefix = `report-${scopedChurchId}-${reportYear}-${reportMonth}`;
-  const attachments = data.attachments as { summary?: string; deposit?: string } | undefined;
+  const attachments = getRecordValue<{ summary?: string; deposit?: string } | null>(data, 'attachments') || undefined;
   const fotoInforme = await saveBase64Attachment(attachments?.summary, `${attachmentPrefix}-resumen`);
   const fotoDeposito = await saveBase64Attachment(attachments?.deposit, `${attachmentPrefix}-deposito`);
 
@@ -459,10 +495,12 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
   const isAdminSubmission = isAdminRole;
 
   // Determine submission source based on role and data
+  const submissionSourceRaw = getRecordString(data, 'submission_source', '');
+  const manualReportSourceRaw = getRecordString(data, 'manual_report_source', '');
   let submissionSource = 'church_online';
-  if (isAdminSubmission && data.submission_source) {
-    submissionSource = String(data.submission_source); // Allow admin to specify source
-  } else if (isAdminSubmission && data.manual_report_source) {
+  if (isAdminSubmission && submissionSourceRaw) {
+    submissionSource = submissionSourceRaw;
+  } else if (isAdminSubmission && manualReportSourceRaw) {
     submissionSource = 'pastor_manual'; // Admin entering on behalf of pastor
   } else if (isAdminSubmission) {
     submissionSource = 'admin_manual'; // Admin manual entry
@@ -470,12 +508,14 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
     submissionSource = 'church_online'; // Church online submission
   }
 
-  const submissionType = data.submission_type || (isChurchSubmission ? 'online' : 'manual');
-  const submittedBy = auth.email || data.submitted_by || null;
+  const submissionType = getRecordString(data, 'submission_type', isChurchSubmission ? 'online' : 'manual');
+  const submittedByPayload = getRecordString(data, 'submitted_by', '');
+  const submittedBy = auth.email || (submittedByPayload ? submittedByPayload : null);
   const submittedAt = new Date();
 
   // For admin manual entries on behalf of pastors, default to pendiente_admin
-  const initialEstado = data.estado ?? (
+  const estadoPayload = getRecordString(data, 'estado', '');
+  const initialEstado = estadoPayload || (
     isChurchSubmission ? 'pendiente_admin' :
     (submissionSource === 'pastor_manual' ? 'pendiente_admin' : 'importado_excel')
   );
@@ -483,6 +523,19 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
   // Track who entered manual reports
   const enteredBy = (isAdminSubmission && submissionSource !== 'admin_import') ? auth.email : null;
   const enteredAt = enteredBy ? new Date() : null;
+  const manualReportNotes = getRecordString(data, 'manual_report_notes', '') || null;
+
+  const numeroDepositoValue = getRecordString(data, 'numero_deposito', '');
+  const numeroDeposito = numeroDepositoValue ? numeroDepositoValue : null;
+  const fechaDepositoInput = getRecordString(data, 'fecha_deposito', '');
+  const fechaDeposito = fechaDepositoInput ? fechaDepositoInput : null;
+  const asistenciaVisitas = toIntOrZero(getRecordValue(data, 'asistencia_visitas'));
+  const bautismosAgua = toIntOrZero(getRecordValue(data, 'bautismos_agua'));
+  const bautismosEspiritu = toIntOrZero(getRecordValue(data, 'bautismos_espiritu'));
+  const observacionesRaw = getRecordValue(data, 'observaciones');
+  const observaciones = typeof observacionesRaw === 'string' ? observacionesRaw : '';
+  const manualReportSource = manualReportSourceRaw || null;
+
 
   const result = await executeWithContext(
     auth,
@@ -529,28 +582,28 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
       totals.totalEntradas,
       totals.fondoNacional,
       totals.honorariosPastoral,
-      expenseValues.servicios,
-      expenseValues.energia_electrica,
-      expenseValues.agua,
-      expenseValues.recoleccion_basura,
-      expenseValues.mantenimiento,
-      expenseValues.materiales,
-      expenseValues.otros_gastos,
+      (expenseValues['servicios'] ?? 0),
+      (expenseValues['energia_electrica'] ?? 0),
+      (expenseValues['agua'] ?? 0),
+      (expenseValues['recoleccion_basura'] ?? 0),
+      (expenseValues['mantenimiento'] ?? 0),
+      (expenseValues['materiales'] ?? 0),
+      (expenseValues['otros_gastos'] ?? 0),
       totals.totalSalidas,
       totals.saldoMes,
-      designatedDbValues.ofrendas_directas_misiones ?? 0,
-      designatedDbValues.lazos_amor ?? 0,
-      designatedDbValues.mision_posible ?? 0,
-      designatedDbValues.aporte_caballeros ?? 0,
-      designatedDbValues.apy ?? 0,
-      designatedDbValues.instituto_biblico ?? 0,
-      data.numero_deposito || null,
-      data.fecha_deposito || null,
+      designatedDbValues['ofrendas_directas_misiones'] ?? 0,
+      designatedDbValues['lazos_amor'] ?? 0,
+      designatedDbValues['mision_posible'] ?? 0,
+      designatedDbValues['aporte_caballeros'] ?? 0,
+      designatedDbValues['apy'] ?? 0,
+      designatedDbValues['instituto_biblico'] ?? 0,
+      numeroDeposito,
+      fechaDeposito,
       montoDepositado,
-      toIntOrZero(data.asistencia_visitas),
-      toIntOrZero(data.bautismos_agua),
-      toIntOrZero(data.bautismos_espiritu),
-      data.observaciones || '',
+      asistenciaVisitas,
+      bautismosAgua,
+      bautismosEspiritu,
+      observaciones,
       initialEstado,
       fotoInforme,
       fotoDeposito,
@@ -558,18 +611,24 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
       submittedBy,
       submittedAt,
       submissionSource,
-      data.manual_report_source || null,
-      data.manual_report_notes || null,
+      manualReportSource,
+      manualReportNotes,
       enteredBy,
       enteredAt
     ]
   );
 
-  const report = result.rows[0];
+  const report = expectOne(result.rows) as GenericRecord;
+  const reportIdValue = getRecordNumber(report, 'id', 0);
+  const reportEstado = getRecordString(report, 'estado', '');
 
-  await recordReportStatus(Number(report.id), null, String(report.estado), auth.email || "", auth);
+  if (!reportIdValue) {
+    throw new BadRequestError('No se pudo crear el informe correctamente');
+  }
 
-  const shouldAutoGenerateTransactions = !isChurchSubmission && String(report.estado) === 'procesado';
+  await recordReportStatus(reportIdValue, null, reportEstado, auth.email || "", auth);
+
+  const shouldAutoGenerateTransactions = !isChurchSubmission && reportEstado === 'procesado';
 
   if (shouldAutoGenerateTransactions) {
     await createReportTransactions(report, {
@@ -577,7 +636,7 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
       fondoNacional: totals.fondoNacional,
       honorariosPastoral: totals.honorariosPastoral,
       gastosOperativos: totals.gastosOperativos,
-      fechaDeposito: totals.fechaDeposito || (typeof data.fecha_deposito === 'string' ? data.fecha_deposito : null)
+      fechaDeposito: totals.fechaDeposito || fechaDeposito
     }, designatedForTransactions, auth);
 
     await executeWithContext(
@@ -589,7 +648,7 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
             transactions_created_by = $1
         WHERE id = $2
       `,
-      [auth.email || 'system', report.id]
+      [auth.email || 'system', reportIdValue]
     );
 
     await queueReportNotification(report, auth.email, 'processed', auth);
@@ -597,7 +656,7 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
     await queueReportNotification(report, auth.email, 'submission', auth);
   }
 
-  await replaceReportDonors(Number(report.id), scopedChurchId, donorRows, auth);
+  await replaceReportDonors(reportIdValue, scopedChurchId, donorRows, auth);
 
   return report;
 };
@@ -668,17 +727,20 @@ const handleUpdateReport = async (
     [reportId]
   );
 
-  if (existingResult.rows.length === 0) {
+  const existing = firstOrNull(existingResult.rows) as GenericRecord | null;
+  if (!existing) {
     throw new BadRequestError('Informe no encontrado');
   }
-
-  const existing = existingResult.rows[0];
+  const existingChurchId = getRecordNumber(existing, 'church_id', 0);
+  const existingYear = getRecordNumber(existing, 'year', 0);
+  const existingMonth = getRecordNumber(existing, 'month', 0);
 
   // Check if user has permission to modify this report
   const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer' || auth.role === 'church';
   const isAdminRole = auth.role === 'admin' || auth.role === 'super_admin' || auth.role === 'district_supervisor';
 
-  if (isChurchRole && parseRequiredChurchId(auth.churchId) !== existing.church_id) {
+
+  if (isChurchRole && parseRequiredChurchId(auth.churchId) !== existingChurchId) {
     throw new BadRequestError('No tiene permisos para modificar este informe');
   }
 
@@ -704,15 +766,25 @@ const handleUpdateReport = async (
     return acc;
   }, {});
 
-  const donorRowsInput = Array.isArray(data.aportantes) ? (data.aportantes as GenericRecord[]) : null;
+  const existingDesignatedValues = {
+    ofrendas_directas_misiones: getRecordNumber(existing, 'ofrendas_directas_misiones', 0),
+    lazos_amor: getRecordNumber(existing, 'lazos_amor', 0),
+    mision_posible: getRecordNumber(existing, 'mision_posible', 0),
+    aporte_caballeros: getRecordNumber(existing, 'aporte_caballeros', 0),
+    apy: getRecordNumber(existing, 'apy', 0),
+    instituto_biblico: getRecordNumber(existing, 'instituto_biblico', 0)
+  };
+
+  const aportantesUpdateRaw = getRecordValue<unknown>(data, 'aportantes');
+  const donorRowsInput = Array.isArray(aportantesUpdateRaw) ? (aportantesUpdateRaw as GenericRecord[]) : null;
   const donorPayloadProvided = donorRowsInput !== null;
   const donorRows = donorPayloadProvided
     ? donorRowsInput!
         .map((donor) => ({
-          first_name: String(donor.first_name ?? '').trim(),
-          last_name: String(donor.last_name ?? '').trim(),
-          document: String(donor.document ?? '').trim(),
-          amount: toNumber(donor.amount)
+          first_name: getRecordString(donor, 'first_name').trim(),
+          last_name: getRecordString(donor, 'last_name').trim(),
+          document: getRecordString(donor, 'document').trim(),
+          amount: toNumber(getRecordValue(donor, 'amount'))
         }))
         .filter((donor) => donor.amount > 0 && (donor.first_name || donor.last_name || donor.document))
     : [];
@@ -727,39 +799,81 @@ const handleUpdateReport = async (
     }
   }
 
-  const attachments = (data.attachments || {}) as { summary?: string | null; deposit?: string | null };
-  const attachmentPrefix = `report-${existing.church_id}-${existing.year}-${existing.month}`;
+  const attachmentsRaw = getRecordValue<{ summary?: string | null; deposit?: string | null } | null>(data, 'attachments') || {};
+  const attachments = attachmentsRaw as { summary?: string | null; deposit?: string | null };
+  const attachmentPrefix = `report-${existingChurchId}-${existingYear}-${existingMonth}`;
 
-  let fotoInformePath = existing.foto_informe;
+  let fotoInformePath = getRecordValue<string | null>(existing, 'foto_informe') ?? null;
   if (Object.prototype.hasOwnProperty.call(attachments, 'summary')) {
     fotoInformePath = attachments.summary === null
         ? null
         : await saveBase64Attachment(attachments.summary, `${attachmentPrefix}-resumen`);
   }
 
-  let fotoDepositoPath = existing.foto_deposito;
+  let fotoDepositoPath = getRecordValue<string | null>(existing, 'foto_deposito') ?? null;
   if (Object.prototype.hasOwnProperty.call(attachments, 'deposit')) {
     fotoDepositoPath = attachments.deposit === null
         ? null
         : await saveBase64Attachment(attachments.deposit, `${attachmentPrefix}-deposito`);
   }
 
-  const montoDepositado = data.monto_depositado !== undefined
-    ? toNumber(data.monto_depositado)
-    : toNumber(existing.monto_depositado ?? totals.fondoNacional + totals.totalDesignados);
+  const montoDepositadoValue = getRecordValue(data, 'monto_depositado');
+  const existingMontoDepositado = getRecordValue(existing, 'monto_depositado');
+  const montoDepositado = montoDepositadoValue !== undefined
+    ? toNumber(montoDepositadoValue)
+    : toNumber(existingMontoDepositado ?? totals.fondoNacional + totals.totalDesignados);
+
+  const numeroDepositoPayload = getRecordString(data, 'numero_deposito', '');
+  const providedNumeroDeposito = numeroDepositoPayload ? numeroDepositoPayload : null;
+  const existingNumeroDeposito = getRecordValue<string | null>(existing, 'numero_deposito') ?? null;
+  const hasNumeroDeposito = Object.prototype.hasOwnProperty.call(data, 'numero_deposito');
+  const numeroDepositoUpdate = hasNumeroDeposito ? providedNumeroDeposito : existingNumeroDeposito;
+
+  const fechaDepositoPayload = getRecordString(data, 'fecha_deposito', '');
+  const providedFechaDeposito = fechaDepositoPayload ? fechaDepositoPayload : null;
+  const existingFechaDepositoValue = getRecordValue(existing, 'fecha_deposito');
+  const existingFechaDeposito = typeof existingFechaDepositoValue === 'string' ? existingFechaDepositoValue : null;
+  const hasFechaDeposito = Object.prototype.hasOwnProperty.call(data, 'fecha_deposito');
+  const fechaDepositoUpdate = hasFechaDeposito ? providedFechaDeposito : existingFechaDeposito;
+
+  const asistenciaVisitasPayload = toIntOrZero(getRecordValue(data, 'asistencia_visitas'));
+  const existingAsistenciaVisitas = toIntOrZero(getRecordValue(existing, 'asistencia_visitas'));
+  const hasAsistenciaVisitas = Object.prototype.hasOwnProperty.call(data, 'asistencia_visitas');
+  const asistenciaVisitasUpdate = hasAsistenciaVisitas ? asistenciaVisitasPayload : existingAsistenciaVisitas;
+
+  const bautismosAguaPayload = toIntOrZero(getRecordValue(data, 'bautismos_agua'));
+  const existingBautismosAgua = toIntOrZero(getRecordValue(existing, 'bautismos_agua'));
+  const hasBautismosAgua = Object.prototype.hasOwnProperty.call(data, 'bautismos_agua');
+  const bautismosAguaUpdate = hasBautismosAgua ? bautismosAguaPayload : existingBautismosAgua;
+
+  const bautismosEspirituPayload = toIntOrZero(getRecordValue(data, 'bautismos_espiritu'));
+  const existingBautismosEspiritu = toIntOrZero(getRecordValue(existing, 'bautismos_espiritu'));
+  const hasBautismosEspiritu = Object.prototype.hasOwnProperty.call(data, 'bautismos_espiritu');
+  const bautismosEspirituUpdate = hasBautismosEspiritu ? bautismosEspirituPayload : existingBautismosEspiritu;
+
+  const observacionesRaw = getRecordValue(data, 'observaciones');
+  const observacionesPayload = typeof observacionesRaw === 'string' ? observacionesRaw : '';
+  const existingObservaciones = getRecordString(existing, 'observaciones', '');
+  const hasObservaciones = Object.prototype.hasOwnProperty.call(data, 'observaciones');
+  const observacionesUpdate = hasObservaciones ? observacionesPayload : existingObservaciones;
 
   const isChurchUpdate = auth.role === 'church' || auth.role === 'pastor' || auth.role === 'treasurer';
-  const submissionType = data.submission_type || existing.submission_type || (isChurchUpdate ? 'online' : 'manual');
+  const submissionTypePayload = getRecordString(data, 'submission_type', '');
+  const existingSubmissionType = getRecordString(existing, 'submission_type', '');
+  const submissionType = submissionTypePayload || existingSubmissionType || (isChurchUpdate ? 'online' : 'manual');
 
-  let estado = data.estado || existing.estado || (isChurchUpdate ? 'pendiente_admin' : 'importado_excel');
-  const previousStatus = existing.estado;
+  const estadoPayload = getRecordString(data, 'estado', '');
+  const existingEstado = getRecordString(existing, 'estado', '');
+  let estado = estadoPayload || existingEstado || (isChurchUpdate ? 'pendiente_admin' : 'importado_excel');
+  const previousStatus = existingEstado || null;
 
   if (isChurchUpdate) {
     estado = 'pendiente_admin';
   }
 
-  let processedBy = existing.processed_by;
-  let processedAt = existing.processed_at ? new Date(String(existing.processed_at)) : null;
+  let processedBy = getRecordString(existing, 'processed_by', '') || null;
+  const existingProcessedAt = getRecordValue(existing, 'processed_at');
+  let processedAt = existingProcessedAt ? new Date(String(existingProcessedAt)) : null;
 
   if (estado === 'procesado') {
     processedBy = auth.email || processedBy || null;
@@ -828,28 +942,28 @@ const handleUpdateReport = async (
       totals.totalEntradas,
       totals.fondoNacional,
       totals.honorariosPastoral,
-      expenseValues.servicios,
-      expenseValues.energia_electrica,
-      expenseValues.agua,
-      expenseValues.recoleccion_basura,
-      expenseValues.mantenimiento,
-      expenseValues.materiales,
-      expenseValues.otros_gastos,
+      (expenseValues['servicios'] ?? 0),
+      (expenseValues['energia_electrica'] ?? 0),
+      (expenseValues['agua'] ?? 0),
+      (expenseValues['recoleccion_basura'] ?? 0),
+      (expenseValues['mantenimiento'] ?? 0),
+      (expenseValues['materiales'] ?? 0),
+      (expenseValues['otros_gastos'] ?? 0),
       totals.totalSalidas,
       totals.saldoMes,
-      designatedDbValues.ofrendas_directas_misiones ?? existing.ofrendas_directas_misiones ?? 0,
-      designatedDbValues.lazos_amor ?? existing.lazos_amor ?? 0,
-      designatedDbValues.mision_posible ?? existing.mision_posible ?? 0,
-      designatedDbValues.aporte_caballeros ?? existing.aporte_caballeros ?? 0,
-      designatedDbValues.apy ?? existing.apy ?? 0,
-      designatedDbValues.instituto_biblico ?? existing.instituto_biblico ?? 0,
-      data.numero_deposito !== undefined ? data.numero_deposito || null : existing.numero_deposito || null,
-      data.fecha_deposito !== undefined ? data.fecha_deposito || null : existing.fecha_deposito || null,
+      (designatedDbValues['ofrendas_directas_misiones'] ?? existingDesignatedValues.ofrendas_directas_misiones),
+      (designatedDbValues['lazos_amor'] ?? existingDesignatedValues.lazos_amor),
+      (designatedDbValues['mision_posible'] ?? existingDesignatedValues.mision_posible),
+      (designatedDbValues['aporte_caballeros'] ?? existingDesignatedValues.aporte_caballeros),
+      (designatedDbValues['apy'] ?? existingDesignatedValues.apy),
+      (designatedDbValues['instituto_biblico'] ?? existingDesignatedValues.instituto_biblico),
+      numeroDepositoUpdate,
+      fechaDepositoUpdate,
       montoDepositado,
-      data.asistencia_visitas !== undefined ? toIntOrZero(data.asistencia_visitas) : existing.asistencia_visitas || 0,
-      data.bautismos_agua !== undefined ? toIntOrZero(data.bautismos_agua) : existing.bautismos_agua || 0,
-      data.bautismos_espiritu !== undefined ? toIntOrZero(data.bautismos_espiritu) : existing.bautismos_espiritu || 0,
-      data.observaciones !== undefined ? data.observaciones : existing.observaciones || '',
+      asistenciaVisitasUpdate,
+      bautismosAguaUpdate,
+      bautismosEspirituUpdate,
+      observacionesUpdate,
       estado,
       fotoInformePath,
       fotoDepositoPath,
@@ -860,13 +974,14 @@ const handleUpdateReport = async (
     ]
   );
 
-  const updatedReport = updatedResult.rows[0];
+  const updatedReport = expectOne(updatedResult.rows) as GenericRecord;
+  const updatedEstado = getRecordString(updatedReport, 'estado', '');
 
   if (donorPayloadProvided) {
-    await replaceReportDonors(reportId, existing.church_id, donorRows, auth);
+    await replaceReportDonors(reportId, existingChurchId, donorRows, auth);
   }
 
-  const existingTransactionsCreated = Boolean(existing.transactions_created);
+  const existingTransactionsCreated = Boolean(getRecordValue(existing, 'transactions_created'));
   const shouldGenerateTransactions = existingTransactionsCreated || estado === 'procesado';
 
   await resetAutomaticTransactions(reportId, auth);
@@ -879,7 +994,7 @@ const handleUpdateReport = async (
         fondoNacional: totals.fondoNacional,
         honorariosPastoral: totals.honorariosPastoral,
         gastosOperativos: totals.gastosOperativos,
-        fechaDeposito: totals.fechaDeposito || (typeof data.fecha_deposito === 'string' ? data.fecha_deposito : existing.fecha_deposito || null)
+        fechaDeposito: totals.fechaDeposito || fechaDepositoUpdate
       },
       designatedForTransactions,
       auth
@@ -894,7 +1009,7 @@ const handleUpdateReport = async (
             transactions_created_by = $1
         WHERE id = $2
       `,
-      [auth.email || existing.transactions_created_by || 'system', reportId]
+      [auth.email || getRecordString(existing, 'transactions_created_by', 'system') || 'system', reportId]
     );
   } else {
     await executeWithContext(
@@ -910,8 +1025,8 @@ const handleUpdateReport = async (
     );
   }
 
-  await recordReportStatus(reportId, String(previousStatus), String(updatedReport.estado), auth.email || "", auth);
-  if (previousStatus !== updatedReport.estado && updatedReport.estado === 'procesado') {
+  await recordReportStatus(reportId, String(previousStatus), updatedEstado, auth.email || "", auth);
+  if (previousStatus !== updatedEstado && updatedEstado === 'procesado') {
     await queueReportNotification(updatedReport, auth.email, 'processed', auth);
   }
 
@@ -922,16 +1037,17 @@ const handleDeleteReport = async (reportId: number, auth: AuthContext) => {
   await setAuditContext(auth.email, auth);
 
   const existingResult = await executeWithContext(auth, 'SELECT church_id, estado FROM reports WHERE id = $1', [reportId]);
-  if (existingResult.rows.length === 0) {
+  const existing = firstOrNull(existingResult.rows) as GenericRecord | null;
+  if (!existing) {
     throw new BadRequestError('Informe no encontrado');
   }
-
-  const existing = existingResult.rows[0];
+  const existingChurchId = getRecordNumber(existing, 'church_id', 0);
+  const existingEstado = getRecordString(existing, 'estado', '');
   // Check if user has permission to delete this report
   const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer' || auth.role === 'church';
   const isAdminRole = auth.role === 'admin' || auth.role === 'super_admin' || auth.role === 'district_supervisor';
 
-  if (isChurchRole && parseRequiredChurchId(auth.churchId) !== existing.church_id) {
+  if (isChurchRole && parseRequiredChurchId(auth.churchId) !== existingChurchId) {
     throw new BadRequestError('No tiene permisos para eliminar este informe');
   }
 
@@ -947,7 +1063,7 @@ const handleDeleteReport = async (reportId: number, auth: AuthContext) => {
     throw new BadRequestError('Informe no encontrado');
   }
 
-  await recordReportStatus(reportId, String(existing.estado), 'eliminado', auth.email || "", auth);
+  await recordReportStatus(reportId, existingEstado, 'eliminado', auth.email || "", auth);
 
   return { message: 'Informe eliminado exitosamente' };
 };
@@ -1005,7 +1121,7 @@ export async function GET(request: NextRequest) {
         return jsonResponse({ lastReport: null }, origin);
       }
 
-      return jsonResponse({ lastReport: lastReportResult.rows[0] }, origin);
+      return jsonResponse({ lastReport: firstOrNull(lastReportResult.rows) }, origin);
     }
 
     const rows = await handleGetReports(request, auth);

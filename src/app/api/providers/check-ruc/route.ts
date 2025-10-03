@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 import { requireAuth } from '@/lib/auth-supabase';
 import { executeWithContext } from '@/lib/db';
+import { firstOrNull } from '@/lib/db-helpers';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
 
 export async function GET(request: NextRequest) {
@@ -20,8 +21,9 @@ export async function GET(request: NextRequest) {
       [ruc]
     );
 
-    if (result.rowCount && result.rowCount > 0) {
-      return NextResponse.json({ exists: true, provider: result.rows[0] });
+    const provider = firstOrNull(result.rows);
+    if (provider) {
+      return NextResponse.json({ exists: true, provider });
     }
 
     return NextResponse.json({ exists: false, provider: null });

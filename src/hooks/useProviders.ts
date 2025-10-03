@@ -19,7 +19,7 @@ export type Provider = {
   created_by?: string | null;
 };
 
-type UseProvidersOptions = {
+export type UseProvidersOptions = {
   categoria?: string;
   es_activo?: boolean;
   limit?: number;

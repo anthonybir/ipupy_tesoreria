@@ -1,8 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 import { executeWithContext } from '@/lib/db';
+import { firstOrDefault } from '@/lib/db-helpers';
 import { buildCorsHeaders, handleCorsPreflight } from '@/lib/cors';
-import { getAuthContext, AuthContext } from '@/lib/auth-context';
+import { getAuthContext, type AuthContext } from '@/lib/auth-context';
 const toNumber = (value: unknown): number => {
   if (value === null || value === undefined) {
     return 0;
@@ -107,14 +108,30 @@ const loadDashboardSummary = async (auth: AuthContext | null) => {
     )
   ]);
 
-  const monthTotals = toNumber(currentMonthStats.rows[0]?.tithes_this_month) +
-    toNumber(currentMonthStats.rows[0]?.offerings_this_month);
+  // Use firstOrDefault for aggregate queries that always return a row
+  const churchCount = firstOrDefault(churches.rows, { count: '0' });
+  const reportedCount = firstOrDefault(reportedChurches.rows, { count: '0' });
+  const reportStats = firstOrDefault(reports.rows, {
+    total: '0',
+    total_tithes: '0',
+    total_offerings: '0',
+    total_national_fund: '0'
+  });
+  const monthStats = firstOrDefault(currentMonthStats.rows, {
+    reports_this_month: '0',
+    tithes_this_month: '0',
+    offerings_this_month: '0',
+    national_fund_this_month: '0'
+  });
+
+  const monthTotals = toNumber(monthStats.tithes_this_month) +
+    toNumber(monthStats.offerings_this_month);
 
   return {
-    totalChurches: toInt(churches.rows[0]?.count),
-    reportedChurches: toInt(reportedChurches.rows[0]?.count),
+    totalChurches: toInt(churchCount.count),
+    reportedChurches: toInt(reportedCount.count),
     monthTotal: monthTotals,
-    nationalFund: toNumber(currentMonthStats.rows[0]?.national_fund_this_month),
+    nationalFund: toNumber(monthStats.national_fund_this_month),
     recentReports: recentReports.rows.map((report) => ({
       ...report,
       churchName: report.church_name,
@@ -123,19 +140,19 @@ const loadDashboardSummary = async (auth: AuthContext | null) => {
       fondoNacional: toNumber(report.fondo_nacional)
     })),
     overview: {
-      total_churches: toInt(churches.rows[0]?.count),
-      total_reports: toInt(reports.rows[0]?.total),
-      total_tithes: toNumber(reports.rows[0]?.total_tithes),
-      total_offerings: toNumber(reports.rows[0]?.total_offerings),
-      total_national_fund: toNumber(reports.rows[0]?.total_national_fund)
+      total_churches: toInt(churchCount.count),
+      total_reports: toInt(reportStats.total),
+      total_tithes: toNumber(reportStats.total_tithes),
+      total_offerings: toNumber(reportStats.total_offerings),
+      total_national_fund: toNumber(reportStats.total_national_fund)
     },
     currentMonth: {
       month: currentMonth,
       year: currentYear,
-      reports_count: toInt(currentMonthStats.rows[0]?.reports_this_month),
-      tithes: toNumber(currentMonthStats.rows[0]?.tithes_this_month),
-      offerings: toNumber(currentMonthStats.rows[0]?.offerings_this_month),
-      national_fund: toNumber(currentMonthStats.rows[0]?.national_fund_this_month)
+      reports_count: toInt(monthStats.reports_this_month),
+      tithes: toNumber(monthStats.tithes_this_month),
+      offerings: toNumber(monthStats.offerings_this_month),
+      national_fund: toNumber(monthStats.national_fund_this_month)
     },
     monthlySummary: monthlySummary.rows,
     fundOverview: fundOverview.rows,
@@ -242,11 +259,11 @@ const loadDashboardInit = async (auth: AuthContext) => {
       name: auth.fullName ?? auth.email,
       churchId: auth.churchId ?? null
     },
-    metrics: metrics?.rows[0] || {},
+    metrics: firstOrDefault(metrics?.rows || [], {}),
     recentReports: recentReports?.rows || [],
     churches: churches?.rows || [],
-    currentPeriod: period?.rows[0] || {},
-    funds: funds?.rows[0] || {},
+    currentPeriod: firstOrDefault(period?.rows || [], {}),
+    funds: firstOrDefault(funds?.rows || [], {}),
     trends: trends?.rows || []
   };
 };

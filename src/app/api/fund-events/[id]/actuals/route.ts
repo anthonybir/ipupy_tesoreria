@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { requireAuth, hasFundAccess } from '@/lib/auth-supabase';
 import { executeWithContext } from '@/lib/db';
+import { firstOrNull, expectOne } from '@/lib/db-helpers';
 import { setCORSHeaders } from '@/lib/cors';
 
 export const runtime = 'nodejs';
@@ -18,16 +19,7 @@ export async function GET(
       SELECT fund_id FROM fund_events WHERE id = $1
     `, [eventId]);
 
-    if (eventCheck.rowCount === 0) {
-      const response = NextResponse.json(
-        { error: 'Event not found' },
-        { status: 404 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
-
-    const event = eventCheck.rows[0];
+    const event = firstOrNull(eventCheck.rows);
     if (!event) {
       const response = NextResponse.json(
         { error: 'Event not found' },
@@ -120,16 +112,7 @@ export async function POST(
       SELECT created_by, fund_id, status FROM fund_events WHERE id = $1
     `, [eventId]);
 
-    if (eventCheck.rowCount === 0) {
-      const response = NextResponse.json(
-        { error: 'Event not found' },
-        { status: 404 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
-
-    const event = eventCheck.rows[0];
+    const event = firstOrNull(eventCheck.rows);
     if (!event) {
       const response = NextResponse.json(
         { error: 'Event not found' },
@@ -169,7 +152,7 @@ export async function POST(
     const response = NextResponse.json(
       {
         success: true,
-        data: result.rows[0],
+        data: expectOne(result.rows),
         message: 'Actual recorded successfully'
       },
       { status: 201 }

@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getAuthContext } from '@/lib/auth-context';
 import { executeWithContext } from '@/lib/db';
+import { firstOrNull, expectOne } from '@/lib/db-helpers';
 
 export async function PUT(
   req: NextRequest,
@@ -35,11 +36,7 @@ export async function PUT(
       [eventId]
     );
 
-    if (eventResult.rows.length === 0) {
-      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
-    }
-
-    const event = eventResult.rows[0];
+    const event = firstOrNull(eventResult.rows);
     if (!event) {
       return NextResponse.json(
         { error: 'Event not found' },
@@ -78,7 +75,8 @@ export async function PUT(
       [budgetItemId, category, description, projected_amount, notes || null, eventId]
     );
 
-    if (result.rows.length === 0) {
+    const budgetItem = firstOrNull(result.rows);
+    if (!budgetItem) {
       return NextResponse.json({ error: 'Budget item not found' }, { status: 404 });
     }
 
@@ -88,7 +86,7 @@ export async function PUT(
       [eventId]
     );
 
-    return NextResponse.json({ success: true, data: result.rows[0] });
+    return NextResponse.json({ success: true, data: budgetItem });
   } catch (error) {
     console.error('Error updating budget item:', error);
     return NextResponse.json(
@@ -121,11 +119,7 @@ export async function DELETE(
       [eventId]
     );
 
-    if (eventResult.rows.length === 0) {
-      return NextResponse.json({ error: 'Event not found' }, { status: 404 });
-    }
-
-    const event = eventResult.rows[0];
+    const event = firstOrNull(eventResult.rows);
     if (!event) {
       return NextResponse.json(
         { error: 'Event not found' },

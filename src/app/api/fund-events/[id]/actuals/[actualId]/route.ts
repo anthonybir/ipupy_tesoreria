@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 import { requireAuth, hasFundAccess } from '@/lib/auth-supabase';
 import { executeWithContext } from '@/lib/db';
+import { firstOrNull, expectOne } from '@/lib/db-helpers';
 import { setCORSHeaders } from '@/lib/cors';
 
 export const runtime = 'nodejs';
@@ -26,28 +27,28 @@ type ActualRow = {
 async function loadEvent(
   auth: Awaited<ReturnType<typeof requireAuth>>,
   eventId: string
-): Promise<EventRow | undefined> {
+): Promise<EventRow | null> {
   const eventResult = await executeWithContext(auth, `
     SELECT fe.id, fe.created_by, fe.status, fe.fund_id
     FROM fund_events fe
     WHERE fe.id = $1
   `, [eventId]);
 
-  return eventResult.rows[0] as EventRow | undefined;
+  return firstOrNull(eventResult.rows) as EventRow | null;
 }
 
 async function loadActual(
   auth: Awaited<ReturnType<typeof requireAuth>>,
   actualId: string,
   eventId: string
-): Promise<ActualRow | undefined> {
+): Promise<ActualRow | null> {
   const result = await executeWithContext(auth, `
     SELECT id, event_id, line_type, description, amount, receipt_url, notes
     FROM fund_event_actuals
     WHERE id = $1 AND event_id = $2
   `, [actualId, eventId]);
 
-  return result.rows[0] as ActualRow | undefined;
+  return firstOrNull(result.rows) as ActualRow | null;
 }
 
 function canManageActual(
@@ -137,7 +138,7 @@ export async function PATCH(
       typeof notes === 'string' ? notes.trim() : null
     ]);
 
-    const response = NextResponse.json({ success: true, data: updateResult.rows[0] });
+    const response = NextResponse.json({ success: true, data: expectOne(updateResult.rows) });
     setCORSHeaders(response);
     return response;
   } catch (error) {

@@ -15,9 +15,8 @@ module.exports = {
     // Run ESLint with auto-fix on staged files only
     `eslint ${filenames.join(' ')} --fix --max-warnings 0`,
 
-    // TEMPORARY: TypeScript check disabled during Phase 2 error remediation
-    // TODO: Re-enable when all type errors are fixed (Phase 2 completion)
-    // 'tsc --noEmit',
+    // TypeScript type check - ensures no type errors are committed
+    'tsc --noEmit',
   ],
 
   // JSON, CSS, Markdown: Just ensure they're properly formatted (optional)

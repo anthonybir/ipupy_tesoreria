@@ -64,6 +64,16 @@ export default function FundEventsPage() {
 
   const canCreate = (isFundDirector || isTreasurer || isAdmin) && !isReadOnly;
 
+  const viewerContext = useMemo(
+    () => ({
+      ...(profile?.id ? { profileId: profile.id } : {}),
+      isAdmin,
+      isTreasurer,
+      isFundDirector,
+    }),
+    [profile?.id, isAdmin, isTreasurer, isFundDirector]
+  );
+
   const events = eventsData?.records || [];
   const stats = eventsData?.stats;
 
@@ -365,12 +375,7 @@ export default function FundEventsPage() {
       <EventDetailsDrawer
         eventId={selectedEventId}
         initialEvent={selectedEvent}
-        viewer={{
-          profileId: profile?.id,
-          isAdmin,
-          isTreasurer,
-          isFundDirector,
-        }}
+        viewer={viewerContext}
         onClose={closeDrawer}
       />
     </div>

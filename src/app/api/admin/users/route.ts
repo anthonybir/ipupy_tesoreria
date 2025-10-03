@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getAuthContext } from '@/lib/auth-context';
 import { executeWithContext } from '@/lib/db';
 import { setCORSHeaders } from '@/lib/cors';

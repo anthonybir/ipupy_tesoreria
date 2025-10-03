@@ -1,5 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { executeWithContext, executeTransaction } from '@/lib/db';
+import { firstOrDefault, expectOne } from '@/lib/db-helpers';
 import { requireAdmin } from '@/lib/auth-supabase';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createTransaction as createLedgerTransaction } from '@/app/api/reports/route-helpers';
@@ -91,11 +92,12 @@ export async function GET(request: NextRequest) {
       ${whereClause}
     `, params.slice(0, -2));
 
+    const countRow = firstOrDefault(countResult.rows, { total: 0 });
     return NextResponse.json({
       success: true,
       data: result.rows,
       pagination: {
-        total: parseInt(countResult.rows[0]?.['total'] ?? '0'),
+        total: parseInt(String(countRow['total'] ?? '0')),
         limit: parseInt(limit),
         offset: parseInt(offset)
       }
@@ -177,11 +179,7 @@ export async function DELETE(request: NextRequest) {
         [transaction_id]
       );
 
-      if (txn.rowCount === 0) {
-        throw new Error('Transaction not found');
-      }
-
-      const transaction = txn.rows[0];
+      const transaction = expectOne(txn.rows);
       deletedFundId = transaction.fund_id;
 
       await client.query(`DELETE FROM fund_movements_enhanced WHERE transaction_id = $1`, [transaction_id]);

@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 import { requireAuth, hasFundAccess } from '@/lib/auth-supabase';
 import { executeWithContext } from '@/lib/db';
+import { firstOrNull, expectOne } from '@/lib/db-helpers';
 import { setCORSHeaders } from '@/lib/cors';
 
 export const runtime = 'nodejs';
@@ -13,12 +14,12 @@ async function loadEvent(auth: Awaited<ReturnType<typeof requireAuth>>, eventId:
     WHERE fe.id = $1
   `, [eventId]);
 
-  return eventResult.rows[0] as {
+  return firstOrNull(eventResult.rows) as {
     id: string;
     created_by: string | null;
     status: string;
     fund_id: number;
-  } | undefined;
+  } | null;
 }
 
 export async function GET(
@@ -125,7 +126,7 @@ export async function POST(
 
     await executeWithContext(auth, `UPDATE fund_events SET updated_at = now() WHERE id = $1`, [eventId]);
 
-    const response = NextResponse.json({ success: true, data: insertResult.rows[0] }, { status: 201 });
+    const response = NextResponse.json({ success: true, data: expectOne(insertResult.rows) }, { status: 201 });
     setCORSHeaders(response);
     return response;
   } catch (error) {

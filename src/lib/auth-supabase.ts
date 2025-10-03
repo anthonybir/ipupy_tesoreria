@@ -1,4 +1,4 @@
-import { NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
 export type AuthContext = {
@@ -19,8 +19,9 @@ export type AuthContext = {
 /**
  * Get authentication context from Supabase Auth
  * This replaces the legacy JWT-based auth
+ *
+ * @param _request - Request parameter kept for backward compatibility, not used
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const getAuthContext = async (_request?: NextRequest): Promise<AuthContext | null> => {
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();

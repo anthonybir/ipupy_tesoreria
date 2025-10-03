@@ -31,6 +31,19 @@ type AdminTransaction = {
   document_number?: string | null;
 };
 
+const readString = (value: unknown): string | null => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  return null;
+};
+
+const readNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export function ExternalTransactionsTab({ funds }: ExternalTransactionsTabProps) {
   const queryClient = useQueryClient();
 
@@ -66,24 +79,35 @@ export function ExternalTransactionsTab({ funds }: ExternalTransactionsTabProps)
   });
 
   const rawTransactions = transactionsQuery.data?.data as Array<Record<string, unknown>> | undefined;
-  const transactions = useMemo<AdminTransaction[]>(() => {
+  const transactions: AdminTransaction[] = useMemo(() => {
     if (!rawTransactions) {
-      return [];
+      return [] as AdminTransaction[];
     }
-    return rawTransactions.map((row) => ({
-      id: Number(row.id),
-      date: row.date ? String(row.date) : null,
-      concept: String(row.concept ?? ''),
-      fund_name: row.fund_name ? String(row.fund_name) : undefined,
-      amount_in: Number(row.amount_in ?? 0),
-      amount_out: Number(row.amount_out ?? 0),
-      created_by: row.created_by ? String(row.created_by) : undefined,
-      provider: row.provider ? String(row.provider) : undefined,
-      provider_name: row.provider_name ? String(row.provider_name) : undefined,
-      provider_ruc: row.provider_ruc ? String(row.provider_ruc) : undefined,
-      provider_categoria: row.provider_categoria ? String(row.provider_categoria) : undefined,
-      document_number: row.document_number ? String(row.document_number) : undefined,
-    }));
+    return rawTransactions.map<AdminTransaction>((row) => {
+      const idValue = Number(row['id']);
+      const dateValue = (() => {
+        const candidate = row['date'];
+        if (candidate instanceof Date) {
+          return candidate.toISOString();
+        }
+        return readString(candidate);
+      })();
+
+      return {
+        id: Number.isFinite(idValue) ? idValue : 0,
+        date: dateValue,
+        concept: readString(row['concept']) ?? '',
+        fund_name: readString(row['fund_name']),
+        amount_in: readNumber(row['amount_in']),
+        amount_out: readNumber(row['amount_out']),
+        created_by: readString(row['created_by']),
+        provider: readString(row['provider']),
+        provider_name: readString(row['provider_name']),
+        provider_ruc: readString(row['provider_ruc']),
+        provider_categoria: readString(row['provider_categoria']),
+        document_number: readString(row['document_number']),
+      };
+    });
   }, [rawTransactions]);
 
   if (transactionsQuery.isLoading) {

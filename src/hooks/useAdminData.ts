@@ -7,6 +7,31 @@ const numberOrZero = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const stringOrNull = (value: unknown): string | null => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  return null;
+};
+
+const stringOrDefault = (value: unknown, fallback: string): string => stringOrNull(value) ?? fallback;
+
+const booleanFrom = (value: unknown): boolean => {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.toLowerCase();
+    if (normalized === 'true') return true;
+    if (normalized === 'false') return false;
+  }
+  if (typeof value === 'number') {
+    return value !== 0;
+  }
+  return false;
+};
+
 export interface AdminFund {
   id: number;
   name: string;
@@ -26,17 +51,20 @@ export const useAdminFunds = () => {
       const json = await fetchJson<{ data: Array<Record<string, unknown>> }>('/api/admin/funds');
       const funds = (json.data || []) as Array<Record<string, unknown>>;
 
-      return funds.map<AdminFund>((fund) => ({
-        id: Number(fund.id),
-        name: String(fund.name),
-        description: (fund.description as string) ?? null,
-        type: String(fund.type ?? 'desconocido'),
-        current_balance: numberOrZero(fund.current_balance),
-        total_in: numberOrZero(fund.total_in),
-        total_out: numberOrZero(fund.total_out),
-        calculated_balance: numberOrZero(fund.calculated_balance),
-        is_active: Boolean(fund.is_active)
-      }));
+      return funds.map<AdminFund>((fund) => {
+        const idValue = Number(fund['id']);
+        return {
+          id: Number.isFinite(idValue) ? idValue : 0,
+          name: stringOrDefault(fund['name'], 'Sin nombre'),
+          description: stringOrNull(fund['description']),
+          type: stringOrDefault(fund['type'], 'desconocido'),
+          current_balance: numberOrZero(fund['current_balance']),
+          total_in: numberOrZero(fund['total_in']),
+          total_out: numberOrZero(fund['total_out']),
+          calculated_balance: numberOrZero(fund['calculated_balance']),
+          is_active: booleanFrom(fund['is_active'])
+        };
+      });
     },
     staleTime: 60 * 1000
   });
@@ -106,18 +134,18 @@ export const useAdminReports = (filters: AdminReportFilters = {}) => {
         `/api/admin/reports?${params.toString()}`
       );
       const reports = (json.data || []).map((item: Record<string, unknown>) => {
-        const incomesSource = (item.incomes as Record<string, unknown>) ?? {};
-        const expensesSource = (item.expenses as Record<string, unknown>) ?? {};
-        const totalsSource = (item.totals as Record<string, unknown>) ?? {};
+        const incomesSource = (item['incomes'] as Record<string, unknown>) ?? {};
+        const expensesSource = (item['expenses'] as Record<string, unknown>) ?? {};
+        const totalsSource = (item['totals'] as Record<string, unknown>) ?? {};
 
         const totals = {
-          totalEntradas: numberOrZero(totalsSource.totalEntradas),
-          fondoNacional: numberOrZero(totalsSource.fondoNacional),
-          totalDesignado: numberOrZero(totalsSource.totalDesignado),
-          totalOperativo: numberOrZero(totalsSource.totalOperativo),
-          totalSalidas: numberOrZero(totalsSource.totalSalidas),
-          saldoCalculado: numberOrZero(totalsSource.saldoCalculado),
-          saldoFinMes: numberOrZero(totalsSource.saldoFinMes)
+          totalEntradas: numberOrZero(totalsSource['totalEntradas']),
+          fondoNacional: numberOrZero(totalsSource['fondoNacional']),
+          totalDesignado: numberOrZero(totalsSource['totalDesignado']),
+          totalOperativo: numberOrZero(totalsSource['totalOperativo']),
+          totalSalidas: numberOrZero(totalsSource['totalSalidas']),
+          saldoCalculado: numberOrZero(totalsSource['saldoCalculado']),
+          saldoFinMes: numberOrZero(totalsSource['saldoFinMes'])
         };
 
         const expenses = Object.fromEntries(
@@ -136,11 +164,11 @@ export const useAdminReports = (filters: AdminReportFilters = {}) => {
 
       const summarySource = json.summary ?? {};
       const summary: AdminReportSummary = {
-        totalEntradas: numberOrZero(summarySource.totalEntradas),
-        totalDesignado: numberOrZero(summarySource.totalDesignado),
-        totalOperativo: numberOrZero(summarySource.totalOperativo),
-        totalSalidas: numberOrZero(summarySource.totalSalidas),
-        pendingCount: numberOrZero(summarySource.pendingCount)
+        totalEntradas: numberOrZero(summarySource['totalEntradas']),
+        totalDesignado: numberOrZero(summarySource['totalDesignado']),
+        totalOperativo: numberOrZero(summarySource['totalOperativo']),
+        totalSalidas: numberOrZero(summarySource['totalSalidas']),
+        pendingCount: numberOrZero(summarySource['pendingCount'])
       };
 
       return {

@@ -16,12 +16,26 @@ const colorMap = {
   warning: 'bg-[var(--absd-warning)]',
   error: 'bg-[var(--absd-error)]',
   info: 'bg-[var(--absd-info)]',
-};
+} as const;
 
 const sizeMap = {
   sm: 'h-1.5',
   md: 'h-2.5',
   lg: 'h-4',
+} as const;
+
+const toPercentage = (value: number, max: number) => {
+  if (!Number.isFinite(value) || Number.isNaN(value)) {
+    return 0;
+  }
+  if (!(max > 0)) {
+    return 0;
+  }
+  const normalized = (value / max) * 100;
+  if (!Number.isFinite(normalized) || Number.isNaN(normalized)) {
+    return 0;
+  }
+  return Math.min(Math.max(normalized, 0), 100);
 };
 
 export function ProgressBar({
@@ -33,8 +47,7 @@ export function ProgressBar({
   size = 'md',
   className = '',
 }: ProgressBarProps) {
-  const percentage = Math.min(Math.max((value / max) * 100, 0), 100);
-  const displayValue = isNaN(percentage) ? 0 : percentage;
+  const displayValue = toPercentage(value, max);
 
   return (
     <div className={`space-y-1 ${className}`}>
@@ -81,35 +94,39 @@ export function MultiProgressBar({
   showLegend = true,
   className = '',
 }: MultiProgressBarProps) {
-  const percentages = segments.map((seg) => (seg.value / max) * 100);
-
   return (
     <div className={`space-y-2 ${className}`}>
       <div className={`w-full rounded-full bg-[var(--absd-subtle)] overflow-hidden flex ${sizeMap[size]}`}>
-        {segments.map((segment, index) => (
-          <div
-            key={index}
-            className={`${colorMap[segment.color]} ${sizeMap[size]} transition-all duration-500 ease-out first:rounded-l-full last:rounded-r-full`}
-            style={{ width: `${percentages[index]}%` }}
-            role="progressbar"
-            aria-valuenow={percentages[index]}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={segment.label}
-          />
-        ))}
+        {segments.map((segment, index) => {
+          const segmentPercentage = toPercentage(segment.value, max);
+          return (
+            <div
+              key={`${segment.label}-${index}`}
+              className={`${colorMap[segment.color]} ${sizeMap[size]} transition-all duration-500 ease-out first:rounded-l-full last:rounded-r-full`}
+              style={{ width: `${segmentPercentage}%` }}
+              role="progressbar"
+              aria-valuenow={segmentPercentage}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={segment.label}
+            />
+          );
+        })}
       </div>
       {showLegend && (
         <div className="flex flex-wrap gap-3">
-          {segments.map((segment, index) => (
-            <div key={index} className="flex items-center gap-1.5 text-xs">
-              <div className={`w-3 h-3 rounded-sm ${colorMap[segment.color]}`} />
-              <span className="font-medium text-[var(--absd-ink)]">{segment.label}</span>
-              <span className="text-[rgba(15,23,42,0.65)]">
-                ({percentages[index].toFixed(0)}%)
-              </span>
-            </div>
-          ))}
+          {segments.map((segment, index) => {
+            const segmentPercentage = toPercentage(segment.value, max);
+            return (
+              <div key={`${segment.label}-legend-${index}`} className="flex items-center gap-1.5 text-xs">
+                <div className={`w-3 h-3 rounded-sm ${colorMap[segment.color]}`} />
+                <span className="font-medium text-[var(--absd-ink)]">{segment.label}</span>
+                <span className="text-[rgba(15,23,42,0.65)]">
+                  ({segmentPercentage.toFixed(0)}%)
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

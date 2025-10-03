@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getAuthContext } from '@/lib/auth-context';
 import { executeWithContext } from '@/lib/db';
+import { firstOrNull, expectOne } from '@/lib/db-helpers';
 import { setCORSHeaders } from '@/lib/cors';
 import { createClient } from '@supabase/supabase-js';
 
@@ -69,7 +70,7 @@ export async function POST(req: NextRequest) {
       return response;
     }
 
-    const pastor = pastorResult.rows[0];
+    const pastor = firstOrNull(pastorResult.rows);
     if (!pastor) {
       const response = NextResponse.json(
         { error: 'Pastor not found' },
@@ -116,10 +117,10 @@ export async function POST(req: NextRequest) {
         WHERE profile_id = $1 AND id != $2
       `, [profile_id, pastor_id]);
 
-      if (existingLink.rows.length > 0) {
-        const existingRow = existingLink.rows[0];
+      const existingRow = firstOrNull(existingLink.rows);
+      if (existingRow) {
         const response = NextResponse.json(
-          { error: `Profile already linked to pastor: ${existingRow?.['full_name'] || 'Unknown'}` },
+          { error: `Profile already linked to pastor: ${existingRow['full_name'] || 'Unknown'}` },
           { status: 400 }
         );
         setCORSHeaders(response);
@@ -234,7 +235,7 @@ export async function POST(req: NextRequest) {
       message: create_profile
         ? 'Profile created and linked to pastor successfully'
         : 'Pastor linked to profile successfully',
-      data: result.rows[0]
+      data: expectOne(result.rows)
     });
 
     setCORSHeaders(response);
@@ -298,7 +299,7 @@ export async function DELETE(req: NextRequest) {
       return response;
     }
 
-    const pastor = pastorResult.rows[0];
+    const pastor = firstOrNull(pastorResult.rows);
     if (!pastor) {
       const response = NextResponse.json(
         { error: 'Pastor not found' },

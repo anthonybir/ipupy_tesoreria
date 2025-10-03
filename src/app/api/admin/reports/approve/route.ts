@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 import { requireAdmin } from '@/lib/auth-supabase';
 import { processReportApproval } from '@/lib/db-admin';

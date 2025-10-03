@@ -611,14 +611,18 @@ export default function TransactionsView() {
       <TransactionDetailsSheet
         transaction={selectedTransaction}
         onClose={() => setSelectedTransaction(null)}
-        onEdit={!isReadOnly ? (transaction) => {
-          if (!transaction) {
-            return;
-          }
-          setSelectedTransaction(null);
-          handleOpenEdit(transaction);
-        } : undefined}
-        onDelete={!isReadOnly ? (transaction) => handleDeleteTransaction(transaction) : undefined}
+        {...(!isReadOnly
+          ? {
+              onEdit: (transaction: TransactionRecord | null) => {
+                if (!transaction) {
+                  return;
+                }
+                setSelectedTransaction(null);
+                handleOpenEdit(transaction);
+              },
+              onDelete: (transaction: TransactionRecord) => handleDeleteTransaction(transaction),
+            }
+          : {})}
       />
     </div>
   );

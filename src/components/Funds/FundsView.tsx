@@ -65,7 +65,7 @@ export default function FundsView() {
 
   const { isReadOnly, isFundDirector } = useProfile();
   const fundsQuery = useFunds({ includeInactive });
-  const fundCollection: FundCollection | undefined = fundsQuery.data;
+  const fundCollection = fundsQuery.data;
   const funds = fundCollection?.records ?? [];
   const totals = fundCollection?.totals;
 
@@ -399,14 +399,18 @@ export default function FundsView() {
       <FundDetailsSheet
         fund={selectedFund}
         onClose={() => setSelectedFund(null)}
-        onEdit={!isReadOnly ? (fund) => {
-          if (!fund) {
-            return;
-          }
-          openEditForm(fund);
-        } : undefined}
-        onToggleActive={!isReadOnly ? handleToggleActive : undefined}
-        onDelete={!isReadOnly ? handleDeleteFund : undefined}
+        {...(!isReadOnly
+          ? {
+              onEdit: (fund: FundRecord | null) => {
+                if (!fund) {
+                  return;
+                }
+                openEditForm(fund);
+              },
+              onToggleActive: handleToggleActive,
+              onDelete: handleDeleteFund,
+            }
+          : {})}
       />
     </div>
   );

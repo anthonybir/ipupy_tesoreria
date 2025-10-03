@@ -7,7 +7,7 @@ import { PlusIcon, MinusIcon } from '@heroicons/react/24/outline';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { rawValueToNumber } from '@/lib/utils/currency';
 import { ProviderSelector } from '@/components/Providers/ProviderSelector';
-import { Provider } from '@/hooks/useProviders';
+import { type Provider } from '@/hooks/useProviders';
 
 interface ExternalTransactionFormProps {
   funds: Array<{ id: number; name: string }>;
@@ -56,12 +56,17 @@ export default function ExternalTransactionForm({
         amount_out: !isIncome ? Math.abs(formData.amount_out) : 0
       };
 
-      await onSubmit({
+      const providerName = selectedProvider?.nombre ?? (formData.provider ?? '').trim();
+      const documentNumber = (formData.document_number ?? '').trim();
+
+      const submission: TransactionData = {
         ...data,
-        provider_id: selectedProvider?.id,
-        provider: selectedProvider?.nombre || formData.provider?.trim() || undefined,
-        document_number: formData.document_number?.trim() || undefined
-      });
+        ...(selectedProvider?.id ? { provider_id: selectedProvider.id } : {}),
+        ...(providerName ? { provider: providerName } : {}),
+        ...(documentNumber ? { document_number: documentNumber } : {}),
+      };
+
+      await onSubmit(submission);
 
       // Reset form
       setSelectedProvider(null);

@@ -34,6 +34,19 @@ type LedgerTransaction = {
   created_by?: string | null;
 };
 
+const readString = (value: unknown): string | null => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  return null;
+};
+
+const readNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 const monthNames = [
   '',
   'Enero',
@@ -78,11 +91,11 @@ export function LedgerTab({ filters, funds }: LedgerTabProps) {
     };
 
     if (selectedFund !== 'all') {
-      params.fund_id = selectedFund;
+      params['fund_id'] = selectedFund;
     }
 
     if (typeFilter !== 'all') {
-      params.type = typeFilter;
+      params['type'] = typeFilter;
     }
 
     return params;
@@ -90,21 +103,32 @@ export function LedgerTab({ filters, funds }: LedgerTabProps) {
 
   const ledgerQuery = useAdminTransactions(queryFilters);
   const rawTransactions = ledgerQuery.data?.data as Array<Record<string, unknown>> | undefined;
-  const transactions = useMemo<LedgerTransaction[]>(() => {
+  const transactions: LedgerTransaction[] = useMemo(() => {
     if (!rawTransactions) {
       return [];
     }
 
-    return rawTransactions.map((row) => ({
-      id: Number(row.id),
-      date: row.date ? String(row.date) : null,
-      concept: String(row.concept ?? ''),
-      fund_name: row.fund_name ? String(row.fund_name) : undefined,
-      church_name: row.church_name ? String(row.church_name) : undefined,
-      amount_in: Number(row.amount_in ?? 0),
-      amount_out: Number(row.amount_out ?? 0),
-      created_by: row.created_by ? String(row.created_by) : undefined,
-    }));
+    return rawTransactions.map<LedgerTransaction>((row) => {
+      const idValue = Number(row['id']);
+      const dateValue = (() => {
+        const candidate = row['date'];
+        if (candidate instanceof Date) {
+          return candidate.toISOString();
+        }
+        return readString(candidate);
+      })();
+
+      return {
+        id: Number.isFinite(idValue) ? idValue : 0,
+        date: dateValue,
+        concept: readString(row['concept']) ?? '',
+        fund_name: readString(row['fund_name']),
+        church_name: readString(row['church_name']),
+        amount_in: readNumber(row['amount_in']),
+        amount_out: readNumber(row['amount_out']),
+        created_by: readString(row['created_by']),
+      };
+    });
   }, [rawTransactions]);
 
   const aggregates = useMemo(() => {

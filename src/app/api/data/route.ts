@@ -1,9 +1,10 @@
 import { Buffer } from "node:buffer";
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 
 import { getAuthContext, type AuthContext } from "@/lib/auth-context";
 import { executeWithContext } from "@/lib/db";
+import { firstOrNull } from "@/lib/db-helpers";
 import { setCORSHeaders } from "@/lib/cors";
 
 export const runtime = "nodejs";
@@ -22,6 +23,37 @@ type ImportResult = {
 
 type ReportsImportRow = Record<string, unknown>;
 type ChurchesImportRow = Record<string, unknown>;
+
+type AnyRow = Record<string, unknown> | undefined;
+
+const getCell = <T = unknown>(row: AnyRow, ...keys: string[]): T | undefined => {
+  if (!row) return undefined;
+  for (const key of keys) {
+    const value = row[key];
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return value as T;
+    }
+  }
+  return undefined;
+};
+
+const toNumber = (value: unknown, fallback = 0): number => {
+  const parsed = Number(value ?? fallback);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const toInteger = (value: unknown, fallback = 0): number => {
+  const parsed = Number.parseInt(String(value ?? fallback), 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const toStringValue = (value: unknown, fallback = ""): string => {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return fallback;
+};
 
 const jsonResponse = (body: unknown, status = 200) => {
   const response = NextResponse.json(body, { status });
@@ -271,10 +303,11 @@ function buildWorkbook(
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.json_to_sheet(data);
 
-  if (data.length > 0) {
-    const columns = Object.keys(data[0]);
+  const firstRow = data[0];
+  if (firstRow) {
+    const columns = Object.keys(firstRow);
     const columnWidths = columns.map((key) => {
-      const values = data.map((row) => String(row[key] ?? ""));
+      const values = data.map((row) => String(row?.[key] ?? ""));
       const maxLength = Math.max(key.length, ...values.map((value) => value.length));
       const minWidth = 10;
       const maxWidth = 50;
@@ -331,7 +364,15 @@ async function handleImportRequest(auth: AuthContext | null, req: NextRequest) {
   const buffer = Buffer.from(await file.arrayBuffer());
   const workbook = XLSX.read(buffer, { type: "buffer" });
   const sheetName = workbook.SheetNames[0];
+  if (!sheetName) {
+    return badRequest("El archivo Excel no contiene hojas");
+  }
+
   const worksheet = workbook.Sheets[sheetName];
+  if (!worksheet) {
+    return badRequest(`La hoja "${sheetName}" no se encontró en el archivo`);
+  }
+
   const rows = XLSX.utils.sheet_to_json(worksheet) as ReportsImportRow[];
 
   if (!rows || rows.length === 0) {
@@ -388,13 +429,14 @@ async function importReports(
 
   for (let index = 0; index < data.length; index++) {
     const row = data[index];
+    if (!row) {
+      results.errors.push(`Fila ${index + 1}: datos faltantes`);
+      continue;
+    }
 
     try {
-      const churchName =
-        (row["Iglesia"] as string | undefined) ||
-        (row["Church"] as string | undefined) ||
-        (row["Nombre"] as string | undefined) ||
-        (row["Name"] as string | undefined);
+      const churchNameRaw = getCell<string>(row, "Iglesia", "Church", "Nombre", "Name");
+      const churchName = toStringValue(churchNameRaw, "").trim();
 
       if (!churchName) {
         results.errors.push(`Fila ${index + 1}: Nombre de iglesia requerido`);
@@ -403,7 +445,7 @@ async function importReports(
 
       const churchResult = await executeWithContext(auth, 
         "SELECT id FROM churches WHERE LOWER(name) LIKE LOWER($1) AND active = true",
-        [`%${churchName.trim()}%`]
+        [`%${churchName}%`]
       );
 
       if (!churchResult.rows || churchResult.rows.length === 0) {
@@ -411,14 +453,21 @@ async function importReports(
         continue;
       }
 
-      const churchId = churchResult.rows[0].id;
+      const churchRow = firstOrNull(churchResult.rows) as AnyRow | null;
+      const churchIdValue = churchRow ? churchRow["id"] : undefined;
+      const churchId = toInteger(churchIdValue, 0);
+      if (!churchId) {
+        results.errors.push(`Fila ${index + 1}: Iglesia "${churchName}" sin identificador válido`);
+        continue;
+      }
 
       const existingReport = await executeWithContext(auth, 
         "SELECT id FROM reports WHERE church_id = $1 AND month = $2 AND year = $3",
         [churchId, month, year]
       );
 
-      if (existingReport.rows.length > 0 && !overwrite) {
+      const hasExistingReport = existingReport.rows.length > 0;
+      if (hasExistingReport && !overwrite) {
         results.skipped++;
         results.details.push(
           `Iglesia "${churchName}": Ya existe un informe para ${month}/${year}`
@@ -426,19 +475,17 @@ async function importReports(
         continue;
       }
 
-      const parseCurrency = (value: unknown) => parseFloat(String(value ?? 0)) || 0;
-      const parseInteger = (value: unknown) => Number.parseInt(String(value ?? 0), 10) || 0;
+      const parseCurrency = (value: unknown) => toNumber(value, 0);
+      const parseInteger = (value: unknown) => toInteger(value, 0);
 
-      const diezmos = parseCurrency(row["Diezmos"] ?? row["Diezmos (Gs.)"]);
-      const ofrendas = parseCurrency(row["Ofrendas"] ?? row["Ofrendas (Gs.)"]);
-      const anexos = parseCurrency(row["Anexos"] ?? row["Anexos (Gs.)"]);
-      const caballeros = parseCurrency(row["Caballeros"] ?? row["Caballeros (Gs.)"]);
-      const damas = parseCurrency(row["Damas"] ?? row["Damas (Gs.)"]);
-      const jovenes = parseCurrency(
-        row["Jóvenes"] ?? row["Jovenes"] ?? row["Jóvenes (Gs.)"]
-      );
-      const ninos = parseCurrency(row["Niños"] ?? row["Ninos"] ?? row["Niños (Gs.)"]);
-      const otros = parseCurrency(row["Otros"] ?? row["Otros (Gs.)"]);
+      const diezmos = parseCurrency(getCell(row, "Diezmos", "Diezmos (Gs.)"));
+      const ofrendas = parseCurrency(getCell(row, "Ofrendas", "Ofrendas (Gs.)"));
+      const anexos = parseCurrency(getCell(row, "Anexos", "Anexos (Gs.)"));
+      const caballeros = parseCurrency(getCell(row, "Caballeros", "Caballeros (Gs.)"));
+      const damas = parseCurrency(getCell(row, "Damas", "Damas (Gs.)"));
+      const jovenes = parseCurrency(getCell(row, "Jóvenes", "Jovenes", "Jóvenes (Gs.)"));
+      const ninos = parseCurrency(getCell(row, "Niños", "Ninos", "Niños (Gs.)"));
+      const otros = parseCurrency(getCell(row, "Otros", "Otros (Gs.)"));
 
       const totalEntradas =
         diezmos + ofrendas + anexos + caballeros + damas + jovenes + ninos + otros;
@@ -451,22 +498,23 @@ async function importReports(
       const totalSalidas = honorariosPastoral + fondoNacional + servicios;
       const saldoMes = totalEntradas - totalSalidas;
 
-      const numeroDeposito =
-        (row["Número Depósito"] as string | undefined) ||
-        (row["Numero Deposito"] as string | undefined) ||
-        "";
-      const fechaDeposito =
-        (row["Fecha Depósito"] as string | undefined) ||
-        (row["Fecha Deposito"] as string | undefined) ||
-        null;
-      const asistenciaVisitas = parseInteger(row["Asistencia Visitas"]);
-      const bautismosAgua = parseInteger(row["Bautismos Agua"]);
-      const bautismosEspiritu = parseInteger(
-        row["Bautismos Espíritu Santo"] ?? row["Bautismos Espiritu"]
+      const numeroDeposito = toStringValue(
+        getCell<string>(row, "Número Depósito", "Numero Deposito"),
+        ""
       );
-      const observaciones = (row["Observaciones"] as string | undefined) || "";
+      const fechaDepositoValue = toStringValue(
+        getCell<string>(row, "Fecha Depósito", "Fecha Deposito"),
+        ""
+      );
+      const fechaDeposito = fechaDepositoValue ? fechaDepositoValue : null;
+      const asistenciaVisitas = parseInteger(getCell(row, "Asistencia Visitas"));
+      const bautismosAgua = parseInteger(getCell(row, "Bautismos Agua"));
+      const bautismosEspiritu = parseInteger(
+        getCell(row, "Bautismos Espíritu Santo", "Bautismos Espiritu")
+      );
+      const observaciones = toStringValue(getCell(row, "Observaciones"), "");
 
-      if (existingReport.rows.length > 0 && overwrite) {
+      if (hasExistingReport && overwrite) {
         await executeWithContext(auth, 
           `
           UPDATE reports SET
@@ -549,10 +597,9 @@ async function importReports(
       }
 
       results.imported++;
+      const actionLabel = overwrite && hasExistingReport ? "actualizado" : "importado";
       results.details.push(
-        `Iglesia "${churchName}": Informe ${
-          overwrite && existingReport.rows.length > 0 ? "actualizado" : "importado"
-        } exitosamente`
+        `Iglesia "${churchName}": Informe ${actionLabel} exitosamente`
       );
     } catch (error) {
       results.errors.push(`Fila ${index + 1}: ${(error as Error).message}`);
@@ -577,15 +624,18 @@ async function importChurches(
 
   for (let index = 0; index < data.length; index++) {
     const row = data[index];
+    if (!row) {
+      results.errors.push(`Fila ${index + 1}: datos faltantes`);
+      continue;
+    }
 
     try {
-      const name =
-        (row["Nombre Iglesia"] as string | undefined) ||
-        (row["Iglesia"] as string | undefined) ||
-        (row["Name"] as string | undefined) ||
-        (row["Church"] as string | undefined);
-      const city = (row["Ciudad"] as string | undefined) || (row["City"] as string | undefined);
-      const pastor = row["Pastor"] as string | undefined;
+      const name = toStringValue(
+        getCell<string>(row, "Nombre Iglesia", "Iglesia", "Name", "Church"),
+        ""
+      ).trim();
+      const city = toStringValue(getCell<string>(row, "Ciudad", "City"), "").trim();
+      const pastor = toStringValue(getCell<string>(row, "Pastor"), "").trim();
 
       if (!name || !city || !pastor) {
         results.errors.push(`Fila ${index + 1}: Nombre, ciudad y pastor son requeridos`);
@@ -597,28 +647,20 @@ async function importChurches(
         [name.trim()]
       );
 
-      if (existingChurch.rows.length > 0 && !overwrite) {
+      const hasExistingChurch = existingChurch.rows.length > 0;
+      if (hasExistingChurch && !overwrite) {
         results.skipped++;
         results.details.push(`Iglesia "${name}": Ya existe`);
         continue;
       }
 
-      const phone =
-        (row["Teléfono"] as string | undefined) ||
-        (row["Phone"] as string | undefined) ||
-        "";
-      const ruc = (row["RUC"] as string | undefined) || "";
-      const cedula =
-        (row["Cédula"] as string | undefined) ||
-        (row["Cedula"] as string | undefined) ||
-        "";
-      const grado = (row["Grado"] as string | undefined) || "";
-      const posicion =
-        (row["Posición"] as string | undefined) ||
-        (row["Posicion"] as string | undefined) ||
-        "";
+      const phone = toStringValue(getCell<string>(row, "Teléfono", "Phone"), "");
+      const ruc = toStringValue(getCell<string>(row, "RUC"), "");
+      const cedula = toStringValue(getCell<string>(row, "Cédula", "Cedula"), "");
+      const grado = toStringValue(getCell<string>(row, "Grado"), "");
+      const posicion = toStringValue(getCell<string>(row, "Posición", "Posicion"), "");
 
-      if (existingChurch.rows.length > 0 && overwrite) {
+      if (hasExistingChurch && overwrite) {
         await executeWithContext(auth, 
           `
           UPDATE churches SET
@@ -640,11 +682,8 @@ async function importChurches(
       }
 
       results.imported++;
-      results.details.push(
-        `Iglesia "${name}": ${
-          overwrite && existingChurch.rows.length > 0 ? "Actualizada" : "Importada"
-        } exitosamente`
-      );
+      const churchAction = overwrite && hasExistingChurch ? "Actualizada" : "Importada";
+      results.details.push(`Iglesia "${name}": ${churchAction} exitosamente`);
     } catch (error) {
       results.errors.push(`Fila ${index + 1}: ${(error as Error).message}`);
     }

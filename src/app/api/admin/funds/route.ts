@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { fetchFundBalances, addExternalTransaction } from '@/lib/db-admin';
 import { executeWithContext } from '@/lib/db';
+import { expectOne } from '@/lib/db-helpers';
 import { requireAdmin } from '@/lib/auth-supabase';
 
 // Admin-only fund management using direct pool access
@@ -109,7 +110,7 @@ export async function PUT(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        data: result.rows[0],
+        data: expectOne(result.rows),
         message: 'Fund balance reconciled'
       });
     }

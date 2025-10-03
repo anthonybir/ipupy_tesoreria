@@ -209,7 +209,7 @@ export function getEnv(): Env {
       console.error('\n💡 Please check your .env.local file and ensure all required variables are set correctly.');
 
       // In production, throw to prevent startup with invalid config
-      if (process.env.NODE_ENV === 'production' && missing.length > 0) {
+      if (process.env['NODE_ENV'] === 'production' && missing.length > 0) {
         throw new Error('Required environment variables are missing. See logs for details.');
       }
     }

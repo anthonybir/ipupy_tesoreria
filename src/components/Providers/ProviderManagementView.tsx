@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { MagnifyingGlassIcon, PencilIcon, TrashIcon, PlusIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
-import { useProviders, Provider } from '@/hooks/useProviders';
+import { useProviders } from '@/hooks/useProviders';
+import type { Provider, UseProvidersOptions } from '@/hooks/useProviders';
 import { AddProviderDialog } from './AddProviderDialog';
 import { EditProviderDialog } from './EditProviderDialog';
 import { PageHeader } from '@/components/Shared';
@@ -16,11 +17,18 @@ export function ProviderManagementView() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingProvider, setEditingProvider] = useState<Provider | null>(null);
 
-  const { data, isLoading, deleteProvider, reactivateProvider } = useProviders({
-    categoria: selectedCategoria || undefined,
-    es_activo: showInactive ? undefined : true,
-    limit: 100,
-  });
+  const providerFilters = useMemo<UseProvidersOptions>(() => {
+    const filters: UseProvidersOptions = { limit: 100 };
+    if (selectedCategoria) {
+      filters.categoria = selectedCategoria;
+    }
+    if (!showInactive) {
+      filters.es_activo = true;
+    }
+    return filters;
+  }, [selectedCategoria, showInactive]);
+
+  const { data, isLoading, deleteProvider, reactivateProvider } = useProviders(providerFilters);
 
   const providers = data?.data || [];
 

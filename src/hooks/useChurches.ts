@@ -1,9 +1,9 @@
 'use client';
 
-import { useQuery, UseQueryOptions } from '@tanstack/react-query';
+import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
 
 import { fetchJson } from '@/lib/api-client';
-import { ChurchRecord, RawChurchRecord, normalizeChurchRecord } from '@/types/api';
+import { type ChurchRecord, type RawChurchRecord, normalizeChurchRecord } from '@/types/api';
 
 type Options = Pick<UseQueryOptions<ChurchRecord[], Error>, 'enabled'>;
 

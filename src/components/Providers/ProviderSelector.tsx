@@ -3,7 +3,7 @@
 import { useState, useEffect, Fragment, useCallback } from 'react';
 import { Combobox, Transition } from '@headlessui/react';
 import { CheckIcon, ChevronUpDownIcon, PlusIcon } from '@heroicons/react/24/outline';
-import { useProviderSearch, useCheckRuc, Provider } from '@/hooks/useProviders';
+import { useProviderSearch, useCheckRuc, type Provider } from '@/hooks/useProviders';
 import { AddProviderDialog } from './AddProviderDialog';
 
 interface ProviderSelectorProps {
@@ -187,7 +187,7 @@ export function ProviderSelector({
         onClose={() => setShowAddDialog(false)}
         onProviderCreated={handleProviderCreated}
         initialQuery={query}
-        categoria={categoria}
+        {...(categoria ? { categoria } : {})}
       />
     </>
   );

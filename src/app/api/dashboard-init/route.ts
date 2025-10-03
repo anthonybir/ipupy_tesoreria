@@ -1,13 +1,13 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { getAuthContext } from '@/lib/auth-context';
 import { executeWithContext } from '@/lib/db';
+import { firstOrDefault } from '@/lib/db-helpers';
 import { setCORSHeaders } from '@/lib/cors';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const jsonResponse = (origin: string | null, body: any, status = 200) => {
+const jsonResponse = (origin: string | null, body: Record<string, unknown>, status = 200) => {
   const response = NextResponse.json(body, { status });
   setCORSHeaders(response, origin);
   return response;
@@ -103,11 +103,11 @@ export async function GET(req: NextRequest) {
         role: auth.role || 'user',
         name: auth.email
       },
-      metrics: results[0]?.rows[0] || {},
+      metrics: firstOrDefault(results[0]?.rows || [], {}),
       recentReports: results[1]?.rows || [],
       churches: results[2]?.rows || [],
-      currentPeriod: results[3]?.rows[0] || {},
-      funds: results[4]?.rows[0] || {},
+      currentPeriod: firstOrDefault(results[3]?.rows || [], {}),
+      funds: firstOrDefault(results[4]?.rows || [], {}),
       trends: results[5]?.rows || []
     };
 

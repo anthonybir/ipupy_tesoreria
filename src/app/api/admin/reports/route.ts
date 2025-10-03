@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 import { executeWithContext } from '@/lib/db';
+import { firstOrNull } from '@/lib/db-helpers';
 import { requireAdmin } from '@/lib/auth-supabase';
 
 const toNumber = (value: unknown): number => {
@@ -73,57 +74,66 @@ const buildWhereClause = (searchParams: URLSearchParams) => {
 };
 
 const mapReportRow = (row: Record<string, unknown>) => {
+  const pick = <T = unknown>(key: string): T | undefined => row[key] as T | undefined;
+  const numeric = (key: string, fallback?: string) => {
+    const value = pick(key);
+    if ((value === undefined || value === null) && fallback) {
+      return toNumber(pick(fallback));
+    }
+    return toNumber(value);
+  };
+
   const incomes = {
-    diezmos: toNumber(row.diezmos),
-    ofrendas: toNumber(row.ofrendas),
-    anexos: toNumber(row.anexos),
-    misiones: toNumber(row.misiones),
-    lazosAmor: toNumber(row.lazos_amor),
-    misionPosible: toNumber(row.mision_posible),
-    caballeros: toNumber(row.caballeros ?? row.aporte_caballeros),
-    damas: toNumber(row.damas),
-    apy: toNumber(row.apy),
-    iba: toNumber(row.iba ?? row.instituto_biblico),
-    jovenes: toNumber(row.jovenes),
-    ninos: toNumber(row.ninos),
-    otros: toNumber(row.otros)
+    diezmos: numeric('diezmos'),
+    ofrendas: numeric('ofrendas'),
+    anexos: numeric('anexos'),
+    misiones: numeric('misiones'),
+    lazosAmor: numeric('lazos_amor'),
+    misionPosible: numeric('mision_posible'),
+    caballeros: numeric('caballeros', 'aporte_caballeros'),
+    damas: numeric('damas'),
+    apy: numeric('apy'),
+    iba: numeric('iba', 'instituto_biblico'),
+    jovenes: numeric('jovenes'),
+    ninos: numeric('ninos'),
+    otros: numeric('otros')
   };
 
   const expenses = {
-    energiaElectrica: toNumber(row.energia_electrica),
-    agua: toNumber(row.agua),
-    recoleccionBasura: toNumber(row.recoleccion_basura),
-    servicios: toNumber(row.servicios),
-    mantenimiento: toNumber(row.mantenimiento),
-    materiales: toNumber(row.materiales),
-    otrosGastos: toNumber(row.otros_gastos),
-    honorariosPastoral: toNumber(row.honorarios_pastoral)
+    energiaElectrica: numeric('energia_electrica'),
+    agua: numeric('agua'),
+    recoleccionBasura: numeric('recoleccion_basura'),
+    servicios: numeric('servicios'),
+    mantenimiento: numeric('mantenimiento'),
+    materiales: numeric('materiales'),
+    otrosGastos: numeric('otros_gastos'),
+    honorariosPastoral: numeric('honorarios_pastoral')
   };
 
   const totals = {
-    totalEntradas: toNumber(row.total_entradas) || Object.values(incomes).reduce((sum, val) => sum + val, 0),
-    fondoNacional: toNumber(row.fondo_nacional) || toNumber(row.diezmo_nacional_calculado),
-    totalDesignado: toNumber(row.total_designado),
-    totalOperativo: toNumber(row.total_operativo),
-    totalSalidas: toNumber(row.total_salidas_calculadas) || toNumber(row.total_salidas),
-    saldoCalculado: toNumber(row.saldo_calculado),
-    saldoFinMes: toNumber(row.saldo_fin_mes)
+    totalEntradas: numeric('total_entradas') || Object.values(incomes).reduce((sum, val) => sum + val, 0),
+    fondoNacional: numeric('fondo_nacional') || numeric('diezmo_nacional_calculado'),
+    totalDesignado: numeric('total_designado'),
+    totalOperativo: numeric('total_operativo'),
+    totalSalidas: numeric('total_salidas_calculadas') || numeric('total_salidas'),
+    saldoCalculado: numeric('saldo_calculado'),
+    saldoFinMes: numeric('saldo_fin_mes')
   };
 
   return {
-    id: row.id,
-    churchId: row.church_id,
-    churchName: row.church_name,
-    month: row.month,
-    year: row.year,
-    status: (row.estado as string) || 'desconocido',
-    transactionsCreated: Boolean(row.transactions_created),
-    transactionsCreatedAt: row.transactions_created_at,
-    processedBy: row.processed_by,
-    processedAt: row.processed_at,
-    submittedAt: row.submitted_at,
-    submissionType: row.submission_type,
-    observations: row.observaciones,
+    id: pick('id'),
+    churchId: pick('church_id'),
+    churchName: pick('church_name'),
+    month: pick('month'),
+    year: pick('year'),
+    status: pick<string>('estado') ?? 'desconocido',
+    transactionsCreated: Boolean(pick('transactions_created')),
+    transactionsCreatedAt: pick('transactions_created_at'),
+    processedBy: pick('processed_by'),
+    processedAt: pick('processed_at'),
+    submittedAt: pick('submitted_at'),
+    submissionType: pick('submission_type'),
+    observations: pick('observaciones'),
     incomes,
     expenses,
     totals,
@@ -246,9 +256,17 @@ export async function PATCH(request: NextRequest) {
       params
     );
 
+    const updatedRow = firstOrNull(result.rows);
+    if (!updatedRow) {
+      return NextResponse.json(
+        { success: false, error: 'Report not found' },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json({
       success: true,
-      data: mapReportRow(result.rows[0])
+      data: mapReportRow(updatedRow)
     });
   } catch (error) {
     console.error('Error updating report:', error);

@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import MainNav from "./MainNav";
 import UserMenu from "./UserMenu";
@@ -35,12 +35,12 @@ export default function AppLayout({ children }: AppLayoutProps) {
   }, []);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset['theme'] = theme;
     window.localStorage.setItem("absd::theme", theme);
   }, [theme]);
 
   useEffect(() => {
-    document.documentElement.dataset.density = density;
+    document.documentElement.dataset['density'] = density;
     window.localStorage.setItem("absd::density", density);
   }, [density]);
 

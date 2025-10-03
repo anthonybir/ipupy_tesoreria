@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 import { requireAuth } from '@/lib/auth-supabase';
 import { executeWithContext } from '@/lib/db';
+import { firstOrDefault, expectOne } from '@/lib/db-helpers';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
 
 type ProviderRow = {
@@ -81,7 +82,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       data: providersResult.rows,
-      count: Number.parseInt(countResult.rows[0]?.count ?? '0', 10)
+      count: Number.parseInt(String(firstOrDefault(countResult.rows, { count: '0' }).count), 10)
     });
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'GET /api/providers');
@@ -137,7 +138,7 @@ export async function POST(request: NextRequest) {
       ]
     );
 
-    return NextResponse.json({ data: result.rows[0] }, { status: 201 });
+    return NextResponse.json({ data: expectOne(result.rows) }, { status: 201 });
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'POST /api/providers');
   }
@@ -203,7 +204,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Proveedor no encontrado' }, { status: 404 });
     }
 
-    return NextResponse.json({ data: result.rows[0] });
+    return NextResponse.json({ data: expectOne(result.rows) });
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'PUT /api/providers');
   }

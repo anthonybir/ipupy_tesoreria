@@ -1,5 +1,6 @@
 import { executeWithContext, executeTransaction } from '@/lib/db';
-import { AuthContext } from '@/lib/auth-context';
+import { firstOrNull, expectOne } from '@/lib/db-helpers';
+import { type AuthContext } from '@/lib/auth-context';
 
 type GenericRecord = Record<string, unknown>;
 
@@ -17,24 +18,56 @@ const DESIGNATED_FUND_LABELS: Record<DesignatedKey, string> = {
   ninos: 'Niños'
 };
 
-const getOrCreateFund = async (name: string, type: string, description: string, auth?: AuthContext | null) => {
+const getNumberField = (record: GenericRecord, key: string): number => {
+  const value = record[key];
+  if (typeof value === 'number') return value;
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getStringField = (record: GenericRecord, key: string, fallback = ''): string => {
+  const value = record[key];
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    return String(value);
+  }
+  return fallback;
+};
+
+interface FundRecord extends GenericRecord {
+  id: number;
+}
+
+const getOrCreateFund = async (
+  name: string,
+  type: string,
+  description: string,
+  auth?: AuthContext | null
+): Promise<FundRecord> => {
   let result = await executeWithContext(auth || null, 'SELECT * FROM funds WHERE name = $1', [name]);
 
-  if (result.rows.length > 0) {
-    return result.rows[0];
+  let row = firstOrNull(result.rows) as FundRecord | null;
+  if (!row || typeof row.id !== 'number') {
+    result = await executeWithContext(
+      auth || null,
+      `
+        INSERT INTO funds (name, type, description, current_balance, is_active, created_by)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING *
+      `,
+      [name, type, description, 0, true, 'system']
+    );
+
+    row = expectOne(result.rows) as FundRecord;
   }
 
-  result = await executeWithContext(
-    auth || null,
-    `
-      INSERT INTO funds (name, type, description, current_balance, is_active, created_by)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING *
-    `,
-    [name, type, description, 0, true, 'system']
-  );
+  if (!row || typeof row.id !== 'number') {
+    throw new Error(`Unable to resolve fund ${name}`);
+  }
 
-  return result.rows[0];
+  return row;
 };
 
 type CreateTransactionInput = GenericRecord & {
@@ -58,16 +91,17 @@ export const createTransaction = async (
   let transaction: GenericRecord | null = null;
 
   await executeTransaction(auth ?? null, async (client) => {
-    const fundResult = await client.query<{ current_balance: string }>(
+    const fundResult = await client.query<{ current_balance: string | null }>(
       'SELECT current_balance FROM funds WHERE id = $1 FOR UPDATE',
       [data.fund_id]
     );
 
-    if (fundResult.rows.length === 0) {
+    const fundRow = firstOrNull(fundResult.rows);
+    if (!fundRow) {
       throw new Error('Fund not found');
     }
 
-    const currentBalance = parseFloat(fundResult.rows[0].current_balance) || 0;
+    const currentBalance = parseFloat(fundRow.current_balance ?? '0') || 0;
     const amountIn = Number(data.amount_in) || 0;
     const amountOut = Number(data.amount_out) || 0;
     const movement = amountIn > 0 ? amountIn : -amountOut;
@@ -102,7 +136,10 @@ export const createTransaction = async (
       ]
     );
 
-    transaction = transactionResult.rows[0];
+    const insertedTransaction = expectOne(transactionResult.rows) as GenericRecord;
+
+    const transactionId = getNumberField(insertedTransaction, 'id');
+    transaction = insertedTransaction;
 
     await client.query(
       `
@@ -110,7 +147,7 @@ export const createTransaction = async (
           fund_id, transaction_id, previous_balance, movement, new_balance
         ) VALUES ($1, $2, $3, $4, $5)
       `,
-      [data.fund_id, (transaction as GenericRecord).id, currentBalance, movement, newBalance]
+      [data.fund_id, transactionId, currentBalance, movement, newBalance]
     );
 
     await client.query(
@@ -142,48 +179,68 @@ export const createReportTransactions = async (
     const churchFund = await getOrCreateFund('Fondo General', 'nacional', 'Fondo principal de la iglesia', auth);
     const nationalFund = await getOrCreateFund('Fondo Nacional', 'nacional', 'Fondo nacional IPU Paraguay (10%)', auth);
 
+    const churchId = getNumberField(report, 'church_id');
+    const reportIdValue = getNumberField(report, 'id');
+    if (!churchId || !reportIdValue) {
+      throw new Error('Report is missing required identifiers');
+    }
+
+    const churchName = getStringField(report, 'church_name', 'iglesia');
+    const monthValue = getNumberField(report, 'month');
+    const yearValue = getNumberField(report, 'year');
+    const periodLabel = `${monthValue || '??'}/${yearValue || '????'}`;
+
     const totalEntradas = Number(totals.totalEntradas) || 0;
     const fondoNacional = Number(totals.fondoNacional) || 0;
     const honorariosPastoral = Number(totals.honorariosPastoral) || 0;
     const gastosOperativos = Number(totals.gastosOperativos) || 0;
-    const transactionDate = totals.fechaDeposito || new Date().toISOString().split('T')[0];
+
+    const fechaDeposito = totals.fechaDeposito ?? null;
+    const todayIso = new Date().toISOString().slice(0, 10);
+    let transactionDateValue: string;
+    if (typeof fechaDeposito === 'string') {
+      const trimmed = fechaDeposito.trim();
+      transactionDateValue = trimmed.length > 0 ? trimmed : todayIso;
+    } else {
+      transactionDateValue = todayIso;
+    }
 
     if (totalEntradas > 0) {
       await createTransaction({
-        church_id: report.church_id as number,
-        fund_id: churchFund.id as number,
-        report_id: report.id as number,
-        concept: `Ingresos del mes ${report.month}/${report.year} - Diezmos y Ofrendas`,
+        church_id: churchId,
+        fund_id: churchFund.id,
+        report_id: reportIdValue,
+        concept: `Ingresos del mes ${periodLabel} - Diezmos y Ofrendas`,
         amount_in: totalEntradas,
         amount_out: 0,
-        date: transactionDate
+        date: transactionDateValue
       }, auth);
     }
 
     if (fondoNacional > 0) {
       await createTransaction({
-        church_id: report.church_id as number,
-        fund_id: churchFund.id as number,
-        report_id: report.id as number,
-        concept: `Transferencia fondo nacional ${report.month}/${report.year} (10%)`,
+        church_id: churchId,
+        fund_id: churchFund.id,
+        report_id: reportIdValue,
+        concept: `Transferencia fondo nacional ${periodLabel} (10%)`,
         amount_in: 0,
         amount_out: fondoNacional,
-        date: transactionDate
+        date: transactionDateValue
       }, auth);
 
       await createTransaction({
-        church_id: report.church_id as number,
-        fund_id: nationalFund.id as number,
-        report_id: report.id as number,
-        concept: `Ingreso fondo nacional desde ${report.church_name || 'iglesia'} ${report.month}/${report.year}`,
+        church_id: churchId,
+        fund_id: nationalFund.id,
+        report_id: reportIdValue,
+        concept: `Ingreso fondo nacional desde ${churchName} ${periodLabel}`,
         amount_in: fondoNacional,
         amount_out: 0,
-        date: transactionDate
+        date: transactionDateValue
       }, auth);
     }
 
     for (const key of Object.keys(designated) as DesignatedKey[]) {
-      const amount = designated[key] ?? 0;
+      const amount = Number(designated[key] ?? 0);
       if (amount <= 0) {
         continue;
       }
@@ -191,47 +248,47 @@ export const createReportTransactions = async (
       const designatedFund = await getOrCreateFund(fundLabel, 'designado', `Fondo designado ${fundLabel}`, auth);
 
       await createTransaction({
-        church_id: report.church_id as number,
-        fund_id: churchFund.id as number,
-        report_id: report.id as number,
-        concept: `Salida designada ${fundLabel} ${report.month}/${report.year}`,
+        church_id: churchId,
+        fund_id: churchFund.id,
+        report_id: reportIdValue,
+        concept: `Salida designada ${fundLabel} ${periodLabel}`,
         amount_in: 0,
         amount_out: amount,
-        date: transactionDate
+        date: transactionDateValue
       }, auth);
 
       await createTransaction({
-        church_id: report.church_id as number,
-        fund_id: designatedFund.id as number,
-        report_id: report.id as number,
-        concept: `Ingreso designado ${fundLabel} desde ${report.church_name || 'iglesia'} ${report.month}/${report.year}`,
+        church_id: churchId,
+        fund_id: designatedFund.id,
+        report_id: reportIdValue,
+        concept: `Ingreso designado ${fundLabel} desde ${churchName} ${periodLabel}`,
         amount_in: amount,
         amount_out: 0,
-        date: transactionDate
+        date: transactionDateValue
       }, auth);
     }
 
     if (honorariosPastoral > 0) {
       await createTransaction({
-        church_id: report.church_id as number,
-        fund_id: churchFund.id as number,
-        report_id: report.id as number,
-        concept: `Honorarios pastorales ${report.month}/${report.year}`,
+        church_id: churchId,
+        fund_id: churchFund.id,
+        report_id: reportIdValue,
+        concept: `Honorarios pastorales ${periodLabel}`,
         amount_in: 0,
         amount_out: honorariosPastoral,
-        date: transactionDate
+        date: transactionDateValue
       }, auth);
     }
 
     if (gastosOperativos > 0) {
       await createTransaction({
-        church_id: report.church_id as number,
-        fund_id: churchFund.id as number,
-        report_id: report.id as number,
-        concept: `Servicios y gastos operativos ${report.month}/${report.year}`,
+        church_id: churchId,
+        fund_id: churchFund.id,
+        report_id: reportIdValue,
+        concept: `Servicios y gastos operativos ${periodLabel}`,
         amount_in: 0,
         amount_out: gastosOperativos,
-        date: transactionDate
+        date: transactionDateValue
       }, auth);
     }
   } catch (error) {

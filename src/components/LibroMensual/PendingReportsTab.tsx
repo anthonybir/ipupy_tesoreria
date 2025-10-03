@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { DataTableColumn } from '@/components/Shared/DataTable';
 import {
-  AdminReportRecord,
+  type AdminReportRecord,
   useAdminReports,
   useApproveReport,
   useUpdateReport,
@@ -66,6 +66,19 @@ const friendlyLabel = (key: string) =>
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/^[a-z]/, (char) => char.toUpperCase());
+
+const readString = (value: unknown): string | null => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  return null;
+};
+
+const readNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 export function PendingReportsTab({ filters }: PendingReportsTabProps) {
   const [showManualForm, setShowManualForm] = useState(false);
   const [selectedReport, setSelectedReport] = useState<AdminReportRecord | null>(null);
@@ -76,10 +89,10 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps) {
   const queryFilters = useMemo(() => {
     const params: Record<string, string> = { status: 'pending' };
     if (filters.year) {
-      params.year = filters.year;
+      params['year'] = filters.year;
     }
     if (filters.month !== 'all') {
-      params.month = filters.month;
+      params['month'] = filters.month;
     }
     return params;
   }, [filters]);
@@ -106,6 +119,7 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps) {
   const reports = reportsQuery.data?.reports ?? [];
   const summary = reportsQuery.data?.summary ?? {};
   const pendingCount = reports.length;
+  const selectedReportRaw = (selectedReport?.raw ?? {}) as Record<string, unknown>;
 
   const handleOpenReview = useCallback((report: AdminReportRecord) => {
     setSelectedReport(report);
@@ -510,7 +524,7 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps) {
                 {friendlyLabel(selectedReport.status ?? 'pendiente')}
               </StatusPill>
               <span className="text-xs text-[rgba(15,23,42,0.55)]">
-                Depósito: {(selectedReport.raw?.numero_deposito as string) ?? 'No registrado'}
+                Depósito: {readString(selectedReportRaw['numero_deposito']) ?? 'No registrado'}
               </span>
             </div>
 
@@ -600,20 +614,20 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps) {
                   <dt className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">
                     Fecha depósito
                   </dt>
-                  <dd className="text-[var(--absd-ink)]">{(selectedReport.raw?.fecha_deposito as string) ?? 'N/A'}</dd>
+                  <dd className="text-[var(--absd-ink)]">{readString(selectedReportRaw['fecha_deposito']) ?? 'N/A'}</dd>
                 </div>
                 <div className="space-y-1">
                   <dt className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">
                     Nº de depósito
                   </dt>
-                  <dd className="text-[var(--absd-ink)]">{(selectedReport.raw?.numero_deposito as string) ?? 'N/A'}</dd>
+                  <dd className="text-[var(--absd-ink)]">{readString(selectedReportRaw['numero_deposito']) ?? 'N/A'}</dd>
                 </div>
                 <div className="space-y-1">
                   <dt className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">
                     Monto depositado
                   </dt>
                   <dd className="text-[var(--absd-ink)]">
-                    {formatCurrency(selectedReport.raw?.monto_depositado as number | undefined)}
+                    {formatCurrency(readNumber(selectedReportRaw['monto_depositado']))}
                   </dd>
                 </div>
                 <div className="space-y-1 md:col-span-2">

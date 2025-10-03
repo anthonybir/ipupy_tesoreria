@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 
 // Build ID for cache busting (Vercel sets VERCEL_GIT_COMMIT_SHA)
@@ -13,10 +14,8 @@ const publicRoutes = [
   "/api/auth/callback",
 ];
 
-export async function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
-
-  console.log("[Middleware] Processing path:", pathname);
 
   // Update user session and get user
   const { response, user } = await updateSession(request);

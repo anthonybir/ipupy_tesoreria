@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 import { executeWithContext } from '@/lib/db';
+import { firstOrDefault, expectOne } from '@/lib/db-helpers';
 import { buildCorsHeaders, handleCorsPreflight } from '@/lib/cors';
 import { requireAuth, type AuthContext } from '@/lib/auth-context';
 
@@ -156,7 +157,7 @@ const fetchMembers = async (auth: AuthContext | null, query: MembersQuery) => {
   return {
     data: records.rows,
     pagination: {
-      total: Number(count.rows[0]?.['total'] ?? 0),
+      total: Number(firstOrDefault(count.rows, { total: 0 })['total']),
       limit: query.limit,
       offset: query.offset
     }
@@ -192,7 +193,7 @@ const createMember = async (auth: AuthContext | null, payload: MemberPayload) =>
     ]
   );
 
-  return result.rows[0];
+  return expectOne(result.rows);
 };
 const updateMember = async (auth: AuthContext | null, memberId: number, payload: MemberPayload) => {
   const existing = await executeWithContext(auth, 'SELECT id FROM members WHERE id = $1', [memberId]);
@@ -236,7 +237,7 @@ const updateMember = async (auth: AuthContext | null, memberId: number, payload:
     ]
   );
 
-  return result.rows[0];
+  return expectOne(result.rows);
 };
 const deleteMember = async (auth: AuthContext | null, memberId: number) => {
   const result = await executeWithContext(auth, 'DELETE FROM members WHERE id = $1 RETURNING id', [memberId]);

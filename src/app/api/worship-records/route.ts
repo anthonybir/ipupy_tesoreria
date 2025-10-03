@@ -1,7 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { requireAuth, type AuthContext } from '@/lib/auth-context';
 import { executeWithContext, executeTransaction } from '@/lib/db';
+import { expectOne } from '@/lib/db-helpers';
 import { setCORSHeaders } from '@/lib/cors';
+import type { PoolClient } from 'pg';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -111,6 +113,7 @@ interface WorshipPayload {
   contributions: Contribution[];
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const normalizeWorshipPayload = (body: any, auth: AuthContext): WorshipPayload => {
   const churchId = enforceChurchAccess(auth, body.church_id);
   const fechaCulto = sanitizeString(body.fecha_culto || body.fechaCulto);
@@ -143,6 +146,7 @@ const normalizeWorshipPayload = (body: any, auth: AuthContext): WorshipPayload =
     throw new BadRequestError('Debe registrar al menos una contribución.');
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const normalizedContributions: Contribution[] = contributions.map((entry: any, index: number) => {
     const donorName = sanitizeString(entry.nombre_aportante || entry.nombreAportante);
     const donorId = entry.donor_id || entry.donorId;
@@ -245,7 +249,7 @@ const buildContributionRows = (entry: Contribution, rowIndex: number): Contribut
   const rows: ContributionRow[] = [];
 
   BUCKET_KEYS.forEach(({ key, bucket }) => {
-    const amount = parseNumber((entry as any)[key]);
+    const amount = parseNumber(entry[key as keyof Contribution] as number);
     if (amount > 0) {
       rows.push({
         donorId: entry.donorId,
@@ -302,7 +306,7 @@ const summarizeContributionTotals = (rows: ContributionRow[]) => {
   } as Record<string, number>);
 };
 
-const resolveDonorId = async (client: any, churchId: number, row: ContributionRow): Promise<number> => {
+const resolveDonorId = async (client: PoolClient, churchId: number, row: ContributionRow): Promise<number> => {
   if (row.donorId) {
     const result = await client.query(
       'SELECT id FROM donors WHERE id = $1 AND church_id = $2',
@@ -323,7 +327,7 @@ const resolveDonorId = async (client: any, churchId: number, row: ContributionRo
     [churchId, row.donorName, row.ciRuc]
   );
 
-  return result.rows[0].donor_id;
+  return expectOne(result.rows)['donor_id'];
 };
 
 const saveWorshipRecord = async (payload: WorshipPayload, auth: AuthContext): Promise<any> => {
@@ -390,7 +394,7 @@ const saveWorshipRecord = async (payload: WorshipPayload, auth: AuthContext): Pr
       ]
     );
 
-    const record = insertRecordResult.rows[0];
+    const record = expectOne(insertRecordResult.rows);
     const insertedContributions = [] as unknown[];
 
     for (const row of contributionRows) {
@@ -437,7 +441,7 @@ const saveWorshipRecord = async (payload: WorshipPayload, auth: AuthContext): Pr
         ]
       );
 
-      insertedContributions.push(result.rows[0]);
+      insertedContributions.push(expectOne(result.rows));
     }
 
     return {
@@ -449,6 +453,7 @@ const saveWorshipRecord = async (payload: WorshipPayload, auth: AuthContext): Pr
   });
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const listWorshipRecords = async (query: any, auth: AuthContext): Promise<any[]> => {
   const churchId = enforceChurchAccess(auth, query.church_id);
   const month = parseInteger(query.month);
@@ -475,6 +480,7 @@ const listWorshipRecords = async (query: any, auth: AuthContext): Promise<any[]>
     return [];
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recordIds = records.map((r: any) => r.id);
 
   const contributionsResult = await executeWithContext(auth, `
@@ -485,6 +491,7 @@ const listWorshipRecords = async (query: any, auth: AuthContext): Promise<any[]>
   `, [recordIds]);
 
   const contributionsByRecord = new Map();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   contributionsResult.rows.forEach((row: any) => {
     if (!contributionsByRecord.has(row.worship_record_id)) {
       contributionsByRecord.set(row.worship_record_id, []);
@@ -492,13 +499,14 @@ const listWorshipRecords = async (query: any, auth: AuthContext): Promise<any[]>
     contributionsByRecord.get(row.worship_record_id).push(row);
   });
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return records.map((record: any) => ({
     ...record,
     contributions: contributionsByRecord.get(record.id) || []
   }));
 };
 
-const jsonResponse = (origin: string | null, body: any, status = 200) => {
+const jsonResponse = (origin: string | null, body: Record<string, unknown>, status = 200) => {
   const response = NextResponse.json(body, { status });
   setCORSHeaders(response, origin);
   return response;
@@ -536,7 +544,7 @@ export async function GET(req: NextRequest) {
 
     return jsonResponse(origin, {
       error: 'Error interno del servidor',
-      details: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+      details: process.env['NODE_ENV'] === 'development' ? (error as Error).message : undefined
     }, 500);
   }
 }
@@ -568,7 +576,7 @@ export async function POST(req: NextRequest) {
 
     return jsonResponse(origin, {
       error: 'Error interno del servidor',
-      details: process.env.NODE_ENV === 'development' ? (error as Error).message : undefined
+      details: process.env['NODE_ENV'] === 'development' ? (error as Error).message : undefined
     }, 500);
   }
 }

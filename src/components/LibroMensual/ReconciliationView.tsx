@@ -36,6 +36,19 @@ const statusTag = (status: string) => {
   return <StatusPill tone="warning">Revisar</StatusPill>;
 };
 
+const readString = (value: unknown): string | null => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  return null;
+};
+
+const readNumber = (value: unknown): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
 export function ReconciliationView() {
   const [selectedFund, setSelectedFund] = useState<string>('all');
 
@@ -46,26 +59,48 @@ export function ReconciliationView() {
 
   const funds = fundsQuery.data ?? [];
   const rawReconciliation = (reconciliationQuery.data as { data?: Array<Record<string, unknown>> })?.data;
-  const reconciliation = useMemo<ReconciliationRow[]>(() => {
+  const reconciliation: ReconciliationRow[] = useMemo(() => {
     if (!rawReconciliation) {
       return [];
     }
-    return rawReconciliation.map((row) => ({
-      id: Number(row.id),
-      name: String(row.name ?? ''),
-      stored_balance: Number(row.stored_balance ?? 0),
-      calculated_balance: Number(row.calculated_balance ?? 0),
-      difference: Number(row.difference ?? 0),
-      transaction_count: row.transaction_count !== undefined ? Number(row.transaction_count) : undefined,
-      last_transaction: row.last_transaction ? String(row.last_transaction) : null,
-      status: row.status ? String(row.status) : undefined,
-    }));
+    return rawReconciliation.map<ReconciliationRow>((row) => {
+      const idValue = Number(row['id']);
+      const base: ReconciliationRow = {
+        id: Number.isFinite(idValue) ? idValue : 0,
+        name: readString(row['name']) ?? 'Fondo sin nombre',
+        stored_balance: readNumber(row['stored_balance']),
+        calculated_balance: readNumber(row['calculated_balance']),
+        difference: readNumber(row['difference']),
+        last_transaction: (() => {
+          const rawDate = row['last_transaction'];
+          if (rawDate instanceof Date) {
+            return rawDate.toISOString();
+          }
+          return readString(rawDate);
+        })(),
+      };
+
+      const transactionCountValue = row['transaction_count'];
+      if (transactionCountValue !== undefined && transactionCountValue !== null) {
+        base.transaction_count = readNumber(transactionCountValue);
+      }
+
+      const statusValue = readString(row['status']);
+      if (statusValue) {
+        base.status = statusValue;
+      }
+
+      return base;
+    });
   }, [rawReconciliation]);
   const summary = (reconciliationQuery.data as { summary?: Record<string, unknown> })?.summary ?? {};
 
   const discrepancyTotal = useMemo(() => {
     return reconciliation.reduce((sum, row) => sum + row.difference, 0);
   }, [reconciliation]);
+
+  const balancedCount = readNumber(summary['balanced']);
+  const totalFundsCount = readNumber(summary['totalFunds']) || reconciliation.length;
 
   const metrics = [
     {
@@ -76,7 +111,7 @@ export function ReconciliationView() {
     },
     {
       label: 'Fondos conciliados',
-      value: `${summary.balanced ?? 0}/${summary.totalFunds ?? reconciliation.length}`,
+      value: `${balancedCount}/${totalFundsCount}`,
       description: 'Fondos conciliados / totales',
       tone: 'info' as const,
     },
@@ -146,7 +181,7 @@ export function ReconciliationView() {
 
       <SectionCard
         title="Detalle de conciliación"
-        description={`Fondos conciliados: ${summary.balanced ?? 0} / ${summary.totalFunds ?? reconciliation.length}`}
+        description={`Fondos conciliados: ${balancedCount} / ${totalFundsCount}`}
         padding="lg"
       >
         <div className="overflow-x-auto">
@@ -176,17 +211,17 @@ export function ReconciliationView() {
                 <tr key={row.id} className="transition hover:bg-[color-mix(in_oklab,var(--absd-authority) 6%,white)]">
                   <td className="px-4 py-3 text-sm font-semibold text-[var(--absd-ink)]">{row.name}</td>
                   <td className="px-4 py-3 text-right text-sm text-[rgba(15,23,42,0.7)]">
-                    {formatCurrencyDisplay(Number(row.stored_balance ?? 0))}
+                    {formatCurrencyDisplay(row.stored_balance)}
                   </td>
                   <td className="px-4 py-3 text-right text-sm text-[rgba(15,23,42,0.7)]">
-                    {formatCurrencyDisplay(Number(row.calculated_balance ?? 0))}
+                    {formatCurrencyDisplay(row.calculated_balance)}
                   </td>
                   <td
                     className={`px-4 py-3 text-right text-sm font-semibold ${
-                      Number(row.difference ?? 0) === 0 ? 'text-[var(--absd-success)]' : 'text-[var(--absd-error)]'
+                      row.difference === 0 ? 'text-[var(--absd-success)]' : 'text-[var(--absd-error)]'
                     }`}
                   >
-                    {formatCurrencyDisplay(Number(row.difference ?? 0))}
+                    {formatCurrencyDisplay(row.difference)}
                   </td>
                   <td className="px-4 py-3 text-xs text-[rgba(15,23,42,0.55)]">
                     {row.transaction_count ?? 0} movimientos — último{' '}

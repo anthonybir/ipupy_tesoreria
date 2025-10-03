@@ -6,8 +6,8 @@
  * RLS policies cannot identify the current user and will fail to isolate data.
  */
 
-import { PoolClient } from 'pg';
-import { AuthContext } from '@/lib/auth-supabase';
+import { type PoolClient } from 'pg';
+import { type AuthContext } from '@/lib/auth-supabase';
 
 /**
  * Set database session context for RLS policies

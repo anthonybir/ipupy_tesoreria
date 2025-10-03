@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 import { generateReconciliation } from '@/lib/db-admin';
 import { requireAdmin } from '@/lib/auth-supabase';
