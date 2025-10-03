@@ -111,7 +111,7 @@ export async function PATCH(
       return response;
     }
 
-    if (amount != null && Number(amount) < 0) {
+    if (amount !== null && amount !== undefined && Number(amount) < 0) {
       const response = NextResponse.json({ error: 'amount must be non-negative' }, { status: 400 });
       setCORSHeaders(response);
       return response;
@@ -133,7 +133,7 @@ export async function PATCH(
       eventId,
       line_type ?? null,
       typeof description === 'string' ? description.trim() : null,
-      amount != null ? Number(amount) : null,
+      amount !== null && amount !== undefined ? Number(amount) : null,
       typeof receipt_url === 'string' ? receipt_url.trim() : null,
       typeof notes === 'string' ? notes.trim() : null
     ]);

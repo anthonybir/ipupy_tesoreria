@@ -30,15 +30,15 @@ export function Providers({ children }: { children: ReactNode }) {
 
       // Clear service worker if present (defensive - we don't use PWA)
       if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) {
-        navigator.serviceWorker.getRegistrations().then(regs => {
-          regs.forEach(r => r.unregister());
+        void navigator.serviceWorker.getRegistrations().then(regs => {
+          regs.forEach(r => void r.unregister());
         });
       }
 
       // Clear Cache Storage API
       if (typeof window !== 'undefined' && 'caches' in window) {
-        caches.keys().then(keys => {
-          keys.forEach(key => caches.delete(key));
+        void caches.keys().then(keys => {
+          keys.forEach(key => void caches.delete(key));
         });
       }
 

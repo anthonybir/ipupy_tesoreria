@@ -24,7 +24,7 @@ import { CurrencyInput } from '@/components/ui/currency-input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { formatCurrencyDisplay, rawValueToNumber } from '@/lib/utils/currency';
-import type { FundCollection, FundRecord } from '@/types/financial';
+import type { FundRecord } from '@/types/financial';
 
 const formatCurrency = (value: number): string => formatCurrencyDisplay(value);
 
@@ -407,8 +407,8 @@ export default function FundsView() {
                 }
                 openEditForm(fund);
               },
-              onToggleActive: handleToggleActive,
-              onDelete: handleDeleteFund,
+              onToggleActive: (fund: FundRecord) => void handleToggleActive(fund),
+              onDelete: (fund: FundRecord) => void handleDeleteFund(fund),
             }
           : {})}
       />

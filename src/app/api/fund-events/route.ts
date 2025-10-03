@@ -4,7 +4,6 @@ import { executeWithContext, executeTransaction } from '@/lib/db';
 import { expectOne, firstOrDefault } from '@/lib/db-helpers';
 import { handleApiError } from '@/lib/api-errors';
 import { setCORSHeaders } from '@/lib/cors';
-import type { CreateEventInput } from '@/types/financial';
 import { createFundEventSchema, formatValidationError } from '@/lib/validations/api-schemas';
 import { ZodError } from 'zod';
 

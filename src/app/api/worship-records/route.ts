@@ -330,7 +330,15 @@ const resolveDonorId = async (client: PoolClient, churchId: number, row: Contrib
   return expectOne(result.rows)['donor_id'];
 };
 
-const saveWorshipRecord = async (payload: WorshipPayload, auth: AuthContext): Promise<any> => {
+const saveWorshipRecord = async (
+  payload: WorshipPayload,
+  auth: AuthContext
+): Promise<{
+  record: Record<string, unknown>;
+  totals: Record<string, number>;
+  anonymousOffering: number;
+  contributions: unknown[]
+}> => {
   const contributionRows = payload.contributions.flatMap((entry, index) =>
     buildContributionRows(entry, index).map((row) => ({
       ...row,

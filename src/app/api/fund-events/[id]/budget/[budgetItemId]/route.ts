@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { getAuthContext } from '@/lib/auth-context';
 import { executeWithContext } from '@/lib/db';
-import { firstOrNull, expectOne } from '@/lib/db-helpers';
+import { firstOrNull } from '@/lib/db-helpers';
 
 export async function PUT(
   req: NextRequest,
@@ -17,7 +17,7 @@ export async function PUT(
     const body = await req.json();
     const { category, description, projected_amount, notes } = body;
 
-    if (!description?.trim() || projected_amount == null || projected_amount < 0) {
+    if (!description?.trim() || projected_amount === null || projected_amount === undefined || projected_amount < 0) {
       return NextResponse.json(
         { error: 'Description and non-negative amount are required' },
         { status: 400 }

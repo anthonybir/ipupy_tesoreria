@@ -68,7 +68,7 @@ const parseOptionalChurchId = (value: string | null) => {
 };
 
 const parseRequiredChurchId = (value: unknown) => {
-  const normalized = typeof value === 'string' ? value : value != null ? String(value) : null;
+  const normalized = typeof value === 'string' ? value : value !== null && value !== undefined ? String(value) : null;
   const parsed = parseOptionalChurchId(normalized);
   if (parsed === null) {
     throw new BadRequestError('church_id es requerido');
@@ -77,7 +77,7 @@ const parseRequiredChurchId = (value: unknown) => {
 };
 
 const parseRequiredYear = (value: unknown) => {
-  const normalized = typeof value === 'string' ? value : value != null ? String(value) : null;
+  const normalized = typeof value === 'string' ? value : value !== null && value !== undefined ? String(value) : null;
   const parsed = parseInteger(normalized);
   if (parsed === null) {
     throw new BadRequestError('El año es requerido y debe ser numérico');
@@ -86,7 +86,7 @@ const parseRequiredYear = (value: unknown) => {
 };
 
 const parseRequiredMonth = (value: unknown) => {
-  const normalized = typeof value === 'string' ? value : value != null ? String(value) : null;
+  const normalized = typeof value === 'string' ? value : value !== null && value !== undefined ? String(value) : null;
   const parsed = parseInteger(normalized);
   if (parsed === null || parsed < 1 || parsed > 12) {
     throw new BadRequestError('El mes debe estar entre 1 y 12');
@@ -108,7 +108,7 @@ const toNumber = (value: unknown, fallback = 0): number => {
 };
 
 const toIntOrZero = (value: unknown): number => {
-  const parsed = parseInteger(typeof value === 'string' ? value : value != null ? String(value) : null);
+  const parsed = parseInteger(typeof value === 'string' ? value : value !== null && value !== undefined ? String(value) : null);
   return parsed === null ? 0 : parsed;
 };
 

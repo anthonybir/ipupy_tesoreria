@@ -76,7 +76,7 @@ export async function POST(
     const body = await req.json();
     const { category, description, projected_amount, notes } = body ?? {};
 
-    if (!category || !description?.trim() || projected_amount == null || Number(projected_amount) < 0) {
+    if (!category || !description?.trim() || projected_amount === null || projected_amount === undefined || Number(projected_amount) < 0) {
       const response = NextResponse.json(
         { error: 'category, description and non-negative projected_amount are required' },
         { status: 400 }

@@ -620,7 +620,7 @@ export default function TransactionsView() {
                 setSelectedTransaction(null);
                 handleOpenEdit(transaction);
               },
-              onDelete: (transaction: TransactionRecord) => handleDeleteTransaction(transaction),
+              onDelete: (transaction: TransactionRecord) => void handleDeleteTransaction(transaction),
             }
           : {})}
       />
