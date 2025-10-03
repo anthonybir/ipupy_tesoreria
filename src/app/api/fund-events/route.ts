@@ -145,16 +145,16 @@ export async function GET(req: NextRequest) {
       success: true,
       data: result.rows,
       pagination: {
-        total: parseInt(stats.total),
+        total: parseInt(stats?.['total'] ?? '0'),
         limit,
         offset,
       },
       stats: {
-        draft: parseInt(stats.draft),
-        submitted: parseInt(stats.submitted),
-        approved: parseInt(stats.approved),
-        rejected: parseInt(stats.rejected),
-        pending_revision: parseInt(stats.pending_revision),
+        draft: parseInt(stats?.['draft'] ?? '0'),
+        submitted: parseInt(stats?.['submitted'] ?? '0'),
+        approved: parseInt(stats?.['approved'] ?? '0'),
+        rejected: parseInt(stats?.['rejected'] ?? '0'),
+        pending_revision: parseInt(stats?.['pending_revision'] ?? '0'),
       }
     });
 
