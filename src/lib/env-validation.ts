@@ -321,27 +321,30 @@ export function getEmailConfig(): {
 
 /**
  * Get Supabase configuration
- * Works on both client and server by accessing NEXT_PUBLIC_* variables statically
+ * Uses direct inline access for Next.js static analysis
  */
 export function getSupabaseConfig(): {
   url: string;
   anonKey: string;
   serviceRoleKey?: string;
 } {
-  // Access NEXT_PUBLIC_* variables statically for client-side compatibility
-  const url = process.env['NEXT_PUBLIC_SUPABASE_URL'];
-  const anonKey = process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'];
-
-  // During build, these may be undefined - use placeholder values
-  // Vercel injects real values at runtime
+  // Next.js requires INLINE process.env.NEXT_PUBLIC_* access for static replacement
+  // Any variable assignment or indirection breaks the replacement
   const config: {
     url: string;
     anonKey: string;
     serviceRoleKey?: string;
   } = {
-    url: url || 'https://placeholder.supabase.co',
-    anonKey: anonKey || 'placeholder-anon-key',
+    url: process.env['NEXT_PUBLIC_SUPABASE_URL'] ?? '',
+    anonKey: process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'] ?? '',
   };
+
+  // Validate after assignment
+  if (!config.url || !config.anonKey) {
+    throw new Error(
+      'Missing required environment variables: NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set'
+    );
+  }
 
   // Service role key is server-only
   if (typeof window === 'undefined') {
