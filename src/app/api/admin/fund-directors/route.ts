@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { getAuthContext } from '@/lib/auth-context';
 import { createClient } from '@/lib/supabase/server';
 import { setCORSHeaders } from '@/lib/cors';
+import { executeWithContext } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
@@ -204,6 +205,23 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     if (insertError) throw insertError;
 
+    // Log fund director assignment with security context
+    await executeWithContext(auth, `
+      INSERT INTO user_activity (user_id, action, details, ip_address, user_agent, created_at)
+      VALUES ($1, $2, $3, $4, $5, NOW())
+    `, [
+      auth.userId,
+      'admin.fund_director.assign',
+      JSON.stringify({
+        assignment_id: assignment?.id,
+        profile_id: body.profile_id,
+        fund_id: body.fund_id,
+        church_id: body.church_id
+      }),
+      req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+      req.headers.get('user-agent') || 'unknown'
+    ]);
+
     const response = NextResponse.json({
       success: true,
       data: assignment,
@@ -248,12 +266,36 @@ export async function DELETE(req: NextRequest): Promise<NextResponse> {
 
     const supabase = await createClient();
 
+    // Get assignment details before deleting for audit log
+    const { data: assignmentData } = await supabase
+      .from('fund_director_assignments')
+      .select('profile_id, fund_id, church_id')
+      .eq('id', assignmentId)
+      .single();
+
     const { error: deleteError } = await supabase
       .from('fund_director_assignments')
       .delete()
       .eq('id', assignmentId);
 
     if (deleteError) throw deleteError;
+
+    // Log fund director unassignment with security context
+    await executeWithContext(auth, `
+      INSERT INTO user_activity (user_id, action, details, ip_address, user_agent, created_at)
+      VALUES ($1, $2, $3, $4, $5, NOW())
+    `, [
+      auth.userId,
+      'admin.fund_director.unassign',
+      JSON.stringify({
+        assignment_id: assignmentId,
+        profile_id: assignmentData?.profile_id,
+        fund_id: assignmentData?.fund_id,
+        church_id: assignmentData?.church_id
+      }),
+      req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+      req.headers.get('user-agent') || 'unknown'
+    ]);
 
     const response = NextResponse.json({
       success: true,

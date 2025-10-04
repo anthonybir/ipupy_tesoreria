@@ -166,14 +166,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       auth.userId
     ]);
 
-    // Log user creation
+    // Log user creation with security context
     await executeWithContext(auth, `
-      INSERT INTO user_activity (user_id, action, details, created_at)
-      VALUES ($1, $2, $3, NOW())
+      INSERT INTO user_activity (user_id, action, details, ip_address, user_agent, created_at)
+      VALUES ($1, $2, $3, $4, $5, NOW())
     `, [
       auth.userId,
-      'user.create',
-      JSON.stringify({ created_user_id: authData.user.id, email, role })
+      'admin.user.create',
+      JSON.stringify({ created_user_id: authData.user.id, email, role }),
+      req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+      req.headers.get('user-agent') || 'unknown'
     ]);
 
     const response = NextResponse.json({
@@ -290,14 +292,16 @@ export async function PUT(req: NextRequest): Promise<NextResponse> {
       });
     }
 
-    // Log user update
+    // Log user update with security context
     await executeWithContext(auth, `
-      INSERT INTO user_activity (user_id, action, details, created_at)
-      VALUES ($1, $2, $3, NOW())
+      INSERT INTO user_activity (user_id, action, details, ip_address, user_agent, created_at)
+      VALUES ($1, $2, $3, $4, $5, NOW())
     `, [
       auth.userId,
-      'user.update',
-      JSON.stringify({ updated_user_id: id, changes: body })
+      'admin.user.update',
+      JSON.stringify({ updated_user_id: id, changes: body }),
+      req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+      req.headers.get('user-agent') || 'unknown'
     ]);
 
     const response = NextResponse.json({
@@ -351,14 +355,16 @@ export async function DELETE(req: NextRequest): Promise<NextResponse> {
       // Profile will be deleted via cascade or trigger
       await executeWithContext(auth, 'DELETE FROM profiles WHERE id = $1', [userId]);
 
-      // Log user deletion
+      // Log user deletion with security context
       await executeWithContext(auth, `
-        INSERT INTO user_activity (user_id, action, details, created_at)
-        VALUES ($1, $2, $3, NOW())
+        INSERT INTO user_activity (user_id, action, details, ip_address, user_agent, created_at)
+        VALUES ($1, $2, $3, $4, $5, NOW())
       `, [
         auth.userId,
-        'user.delete',
-        JSON.stringify({ deleted_user_id: userId, hard_delete: true })
+        'admin.user.delete',
+        JSON.stringify({ deleted_user_id: userId, hard_delete: true }),
+        req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+        req.headers.get('user-agent') || 'unknown'
       ]);
 
       const response = NextResponse.json({
@@ -375,14 +381,16 @@ export async function DELETE(req: NextRequest): Promise<NextResponse> {
         WHERE id = $1
       `, [userId]);
 
-      // Log user deactivation
+      // Log user deactivation with security context
       await executeWithContext(auth, `
-        INSERT INTO user_activity (user_id, action, details, created_at)
-        VALUES ($1, $2, $3, NOW())
+        INSERT INTO user_activity (user_id, action, details, ip_address, user_agent, created_at)
+        VALUES ($1, $2, $3, $4, $5, NOW())
       `, [
         auth.userId,
-        'user.deactivate',
-        JSON.stringify({ deactivated_user_id: userId })
+        'admin.user.deactivate',
+        JSON.stringify({ deactivated_user_id: userId }),
+        req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+        req.headers.get('user-agent') || 'unknown'
       ]);
 
       const response = NextResponse.json({

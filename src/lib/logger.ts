@@ -81,7 +81,7 @@ function log(level: LogLevel, message: string, context?: LogContext, error?: Err
 
   // Server-side: Use process streams (Node.js only)
   // Client-side: Use console methods
-  if (typeof window === 'undefined' && typeof process !== 'undefined' && process.stdout && process.stderr) {
+  if (typeof window === 'undefined' && typeof process !== 'undefined') {
     const output = `${formatted}\n`;
     if (level === 'error') {
       process.stderr.write(output);
@@ -89,8 +89,8 @@ function log(level: LogLevel, message: string, context?: LogContext, error?: Err
       process.stdout.write(output);
     }
   } else {
-    // Browser fallback
-    const consoleMethod = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
+    // Browser fallback - use only allowed console methods (warn, error)
+    const consoleMethod = level === 'error' ? console.error : console.warn;
     consoleMethod(formatted);
   }
 

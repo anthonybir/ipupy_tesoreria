@@ -247,14 +247,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         `, [section, key, JSON.stringify(value), userId]);
       }
 
-      // Log configuration change
+      // Log configuration change with security context
       await client.query(`
-        INSERT INTO user_activity (user_id, action, details, created_at)
-        VALUES ($1, $2, $3, NOW())
+        INSERT INTO user_activity (user_id, action, details, ip_address, user_agent, created_at)
+        VALUES ($1, $2, $3, $4, $5, NOW())
       `, [
         userId,
-        'configuration.update',
-        JSON.stringify({ section, keys: Object.keys(data) })
+        'admin.configuration.update',
+        JSON.stringify({ section, keys: Object.keys(data) }),
+        req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+        req.headers.get('user-agent') || 'unknown'
       ]);
     });
 
@@ -343,6 +345,18 @@ export async function PUT(req: NextRequest): Promise<NextResponse> {
         `, [section, key, JSON.stringify(value), userId]);
       }
     }
+
+    // Log configuration reset with security context
+    await executeWithContext(auth, `
+      INSERT INTO user_activity (user_id, action, details, ip_address, user_agent, created_at)
+      VALUES ($1, $2, $3, $4, $5, NOW())
+    `, [
+      userId,
+      'admin.configuration.reset',
+      JSON.stringify({ reset_to: 'defaults', sections: Object.keys(defaultConfig) }),
+      req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+      req.headers.get('user-agent') || 'unknown'
+    ]);
 
     const response = NextResponse.json({
       success: true,

@@ -9,7 +9,7 @@ import { createTransaction as createLedgerTransaction } from '@/app/api/reports/
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     // SECURITY: Rate limiting check
-    const rateLimitResponse = withRateLimit(request, 'admin');
+    const rateLimitResponse = await withRateLimit(request, 'admin');
     if (rateLimitResponse) return rateLimitResponse;
 
     // SECURITY: Require admin authentication

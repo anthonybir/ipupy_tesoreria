@@ -86,7 +86,9 @@ export async function fetchFundBalances(auth: AuthContext | null, filters: FundB
 export async function processReportApproval(
   auth: AuthContext | null,
   reportId: number,
-  approvedBy: string
+  approvedBy: string,
+  ipAddress?: string,
+  userAgent?: string
 ): Promise<{ success: true; reportId: number; approvedBy: string }> {
   const contextSubset = auth ? { userId: auth.userId, role: auth.role, churchId: auth.churchId } : null;
 
@@ -182,6 +184,27 @@ export async function processReportApproval(
         updated_at = NOW()
     WHERE id = $2
   `, [approvedBy, reportId]);
+
+  // Log report approval with security context
+  if (auth?.userId) {
+    await executeWithContext(contextSubset, `
+      INSERT INTO user_activity (user_id, action, details, ip_address, user_agent, created_at)
+      VALUES ($1, $2, $3, $4, $5, NOW())
+    `, [
+      auth.userId,
+      'admin.report.approve',
+      JSON.stringify({
+        report_id: reportId,
+        church_id: report['church_id'],
+        church_name: report['church_name'],
+        year: report['anio'],
+        month: report['mes'],
+        total_ingresos: totalIngresos
+      }),
+      ipAddress || 'unknown',
+      userAgent || 'unknown'
+    ]);
+  }
 
   return { success: true, reportId, approvedBy };
 }

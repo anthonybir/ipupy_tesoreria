@@ -1,13 +1,32 @@
 /**
  * Rate limiting implementation for API endpoints
  * Protects against brute force attacks and API abuse
+ *
+ * Uses Vercel KV (Redis) for persistent, distributed rate limiting
  */
 
 import { type NextRequest, NextResponse } from 'next/server';
 
-// Store for rate limit tracking
-// In production, use Redis or similar persistent store
-const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+// Import Vercel KV - graceful fallback for local development
+let kv: {
+  incr: (key: string) => Promise<number>;
+  expire: (key: string, seconds: number) => Promise<number>;
+  ttl: (key: string) => Promise<number>;
+} | null = null;
+
+// Try to import @vercel/kv if available (production)
+try {
+  // Dynamic import to avoid build errors when KV is not configured
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const kvModule = require('@vercel/kv');
+  kv = kvModule.kv;
+} catch {
+  // Fallback to in-memory for local development
+  console.warn('[Rate Limit] Vercel KV not available, using in-memory fallback (NOT RECOMMENDED FOR PRODUCTION)');
+}
+
+// Fallback in-memory store for local development only
+const memoryStore = new Map<string, { count: number; resetTime: number }>();
 
 // Configuration for different endpoint types
 interface RateLimitConfig {
@@ -64,57 +83,81 @@ function getClientId(request: NextRequest): string {
 }
 
 /**
- * Clean up expired entries from the store
- * Should be called periodically in production
+ * Clean up expired entries from the memory store (fallback only)
  */
 function cleanupExpiredEntries(): void {
   const now = Date.now();
-  for (const [key, value] of rateLimitStore.entries()) {
+  for (const [key, value] of memoryStore.entries()) {
     if (value.resetTime < now) {
-      rateLimitStore.delete(key);
+      memoryStore.delete(key);
     }
   }
 }
 
 /**
  * Check if request should be rate limited
- * @returns true if request should be blocked, false if allowed
+ * Uses Vercel KV (Redis) in production, memory fallback for development
  */
-export function isRateLimited(
+export async function isRateLimited(
   request: NextRequest,
   configType: keyof typeof configs = 'api'
-): { limited: boolean; retryAfter?: number | undefined; message?: string | undefined } {
+): Promise<{ limited: boolean; retryAfter?: number | undefined; message?: string | undefined }> {
   const config = configs[configType] ?? configs['api'];
   if (!config) {
     throw new Error(`Rate limit config not found for type: ${configType}`);
   }
-  const clientId = `${configType}:${getClientId(request)}`;
-  const now = Date.now();
 
-  // Clean up old entries periodically
-  if (Math.random() < 0.01) {  // 1% chance
+  const clientId = `ratelimit:${configType}:${getClientId(request)}`;
+  const now = Date.now();
+  const windowSec = Math.floor(config.windowMs / 1000);
+  const windowKey = `${clientId}:${Math.floor(now / config.windowMs)}`;
+
+  // Use Vercel KV if available (production)
+  if (kv) {
+    try {
+      const count = await kv.incr(windowKey);
+
+      // Set expiration on first request in window
+      if (count === 1) {
+        await kv.expire(windowKey, windowSec);
+      }
+
+      if (count > config.maxRequests) {
+        const ttl = await kv.ttl(windowKey);
+        return {
+          limited: true,
+          retryAfter: ttl > 0 ? ttl : windowSec,
+          message: config.message
+        };
+      }
+
+      return { limited: false };
+    } catch (error) {
+      console.error('[Rate Limit] KV error, falling back to memory:', error);
+      // Fall through to memory store on KV error
+    }
+  }
+
+  // Fallback to in-memory store (development only)
+  if (Math.random() < 0.01) {
     cleanupExpiredEntries();
   }
 
-  // Get or create rate limit entry
-  let entry = rateLimitStore.get(clientId);
+  let entry = memoryStore.get(windowKey);
 
   if (!entry || entry.resetTime < now) {
-    // Create new window
     entry = {
       count: 1,
       resetTime: now + config.windowMs
     };
-    rateLimitStore.set(clientId, entry);
+    memoryStore.set(windowKey, entry);
     return { limited: false };
   }
 
-  // Increment count
   entry.count++;
 
-  // Check if limit exceeded
   if (entry.count > config.maxRequests) {
-    const retryAfter = Math.ceil((entry.resetTime - now) / 1000);  // seconds
+    const retryAfter = Math.ceil((entry.resetTime - now) / 1000);
     return {
       limited: true,
       retryAfter: retryAfter,
@@ -126,24 +169,24 @@ export function isRateLimited(
 }
 
 /**
- * Rate limiting middleware for API routes
+ * Rate limiting middleware for API routes (async)
  * Usage:
  * ```typescript
  * import { withRateLimit } from '@/lib/rate-limit';
  *
  * export async function GET(request: NextRequest) {
- *   const rateLimit = withRateLimit(request, 'api');
+ *   const rateLimit = await withRateLimit(request, 'api');
  *   if (rateLimit) return rateLimit;
  *
  *   // Your API logic here
  * }
  * ```
  */
-export function withRateLimit(
+export async function withRateLimit(
   request: NextRequest,
   configType: keyof typeof configs = 'api'
-): NextResponse | null {
-  const result = isRateLimited(request, configType);
+): Promise<NextResponse | null> {
+  const result = await isRateLimited(request, configType);
 
   if (result.limited) {
     return NextResponse.json(
@@ -168,21 +211,21 @@ export function withRateLimit(
 }
 
 /**
- * Create a custom rate limiter with specific configuration
+ * Create a custom rate limiter with specific configuration (uses in-memory store)
  */
 export function createRateLimiter(config: RateLimitConfig): (request: NextRequest) => NextResponse | null {
   return (request: NextRequest): NextResponse | null => {
     const clientId = `custom:${getClientId(request)}`;
     const now = Date.now();
 
-    let entry = rateLimitStore.get(clientId);
+    let entry = memoryStore.get(clientId);
 
     if (!entry || entry.resetTime < now) {
       entry = {
         count: 1,
         resetTime: now + config.windowMs
       };
-      rateLimitStore.set(clientId, entry);
+      memoryStore.set(clientId, entry);
       return null;
     }
 
@@ -209,29 +252,29 @@ export function createRateLimiter(config: RateLimitConfig): (request: NextReques
 }
 
 /**
- * Reset rate limit for a specific client (useful for testing)
+ * Reset rate limit for a specific client (useful for testing - uses in-memory store)
  */
 export function resetRateLimit(clientId: string, configType?: string): void {
   const key = configType ? `${configType}:${clientId}` : clientId;
-  rateLimitStore.delete(key);
+  memoryStore.delete(key);
 }
 
 /**
- * Get current rate limit status for monitoring
+ * Get current rate limit status for monitoring (uses in-memory store)
  */
 export function getRateLimitStatus(): {
   storeSize: number;
   entries: Array<{ key: string; count: number; expiresIn: number }>;
 } {
   const now = Date.now();
-  const entries = Array.from(rateLimitStore.entries()).map(([key, value]) => ({
+  const entries = Array.from(memoryStore.entries()).map(([key, value]) => ({
     key,
     count: value.count,
     expiresIn: Math.max(0, Math.ceil((value.resetTime - now) / 1000))
   }));
 
   return {
-    storeSize: rateLimitStore.size,
+    storeSize: memoryStore.size,
     entries
   };
 }

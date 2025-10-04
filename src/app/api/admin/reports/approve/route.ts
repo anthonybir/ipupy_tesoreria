@@ -19,7 +19,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const approvedBy = auth.email || auth.userId || 'system';
-    const result = await processReportApproval(auth, reportId, approvedBy);
+    const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const userAgent = request.headers.get('user-agent') || 'unknown';
+
+    const result = await processReportApproval(auth, reportId, approvedBy, ipAddress, userAgent);
     return NextResponse.json({ success: true, data: result });
   } catch (error) {
     console.error('Error approving report:', error);

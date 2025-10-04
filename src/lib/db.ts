@@ -214,63 +214,25 @@ const normalizeStatement = (statement: Statement, maybeParams?: unknown): Normal
 
   return { text: resolvedText, params: toArray(config.values ?? maybeParams) };
 };
+/**
+ * SECURITY: execute() is DISABLED to enforce RLS context
+ *
+ * This function has been intentionally disabled to prevent accidental queries
+ * without Row Level Security context, which would bypass data isolation policies.
+ *
+ * @deprecated Use executeWithContext() or executeTransaction() instead
+ * @throws {Error} Always throws - this function cannot be used
+ */
 export const execute = async <T extends QueryResultRow = QueryResultRow>(
-  statement: Statement,
-  params?: unknown,
-  retries = 3
+  _statement: Statement,
+  _params?: unknown,
+  _retries = 3
 ): Promise<QueryResult<T>> => {
-  for (let attempt = 1; attempt <= retries; attempt += 1) {
-    try {
-      if (shouldRecreatePool()) {
-        await destroyPool();
-      }
-
-      const poolRef = createConnection();
-      const client = await Promise.race([
-        poolRef.connect(),
-        new Promise<PoolClient>((_, reject) => {
-          setTimeout(() => reject(new Error('Pool connect timeout')), 15000);
-        })
-      ]);
-
-      const { text, params: boundParams } = normalizeStatement(statement, params);
-
-      try {
-        // CRITICAL SECURITY TODO: Set RLS context before executing query
-        // This is required for Row Level Security policies to work!
-        // Without this, RLS policies cannot identify the current user.
-        // Implementation blocked: Need to pass AuthContext through execute()
-        // await setDatabaseContext(client, authContext);
-
-        return await Promise.race([
-          client.query<T>(text, boundParams),
-          new Promise<QueryResult<T>>((_, reject) => {
-            setTimeout(() => reject(new Error('Query timeout')), 30000);
-          })
-        ]);
-      } finally {
-        client.release();
-      }
-    } catch (error) {
-      consecutiveErrors += 1;
-
-      if (attempt === retries) {
-        await destroyPool();
-        throw error;
-      }
-
-      if (isConnectionError(error) || (error as { message?: string }).message?.includes('timeout')) {
-        await destroyPool();
-      }
-
-      const baseDelay = attempt * 1000;
-      const jitter = Math.random() * 1000;
-      const delay = Math.min(baseDelay + jitter, 3000);
-      await new Promise((resolve) => setTimeout(resolve, delay));
-    }
-  }
-
-  throw new Error('Unreachable execute retry loop');
+  throw new Error(
+    'SECURITY VIOLATION: execute() is disabled to enforce RLS. ' +
+    'Use executeWithContext(authContext, query, params) or ' +
+    'executeTransaction(authContext, callback) to ensure Row Level Security policies are applied.'
+  );
 };
 export const query = execute;
 
@@ -464,13 +426,17 @@ export const executeWithContext = async <T extends QueryResultRow = QueryResultR
   throw new Error('Unreachable execute retry loop');
 };
 
-export const batch = async (statements: Statement[]): Promise<QueryResult[]> => {
-  const results: QueryResult[] = [];
-  for (const statement of statements) {
-    const result = await execute(statement);
-    results.push(result);
-  }
-  return results;
+/**
+ * SECURITY: batch() is DISABLED to enforce RLS context
+ *
+ * @deprecated Use executeTransaction() with multiple queries instead
+ * @throws {Error} Always throws - this function cannot be used
+ */
+export const batch = async (_statements: Statement[]): Promise<QueryResult[]> => {
+  throw new Error(
+    'SECURITY VIOLATION: batch() is disabled to enforce RLS. ' +
+    'Use executeTransaction(authContext, async (client) => { /* multiple queries */ }) instead.'
+  );
 };
 
 export const initDatabase = async (): Promise<void> => {

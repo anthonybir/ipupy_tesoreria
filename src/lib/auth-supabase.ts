@@ -20,6 +20,8 @@ export type AuthContext = {
  * Get authentication context from Supabase Auth
  * This replaces the legacy JWT-based auth
  *
+ * SECURITY: Enforces @ipupy.org.py domain restriction
+ *
  * @param _request - Request parameter kept for backward compatibility, not used
  */
 export const getAuthContext = async (_request?: NextRequest): Promise<AuthContext | null> => {
@@ -27,6 +29,22 @@ export const getAuthContext = async (_request?: NextRequest): Promise<AuthContex
   const { data: { user }, error } = await supabase.auth.getUser();
 
   if (error || !user) {
+    return null;
+  }
+
+  // SECURITY: Enforce allowed email domain
+  const allowedDomain = '@ipupy.org.py';
+  const userEmail = user.email?.toLowerCase() || '';
+
+  if (!userEmail.endsWith(allowedDomain)) {
+    console.warn(
+      `[Auth Security] Rejected login from unauthorized domain: ${user.email}`,
+      { userId: user.id, domain: userEmail.split('@')[1] }
+    );
+
+    // Invalidate the session immediately
+    await supabase.auth.signOut();
+
     return null;
   }
 
