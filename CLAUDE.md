@@ -304,6 +304,104 @@ NODE_ENV=production
 5. **Rate limiting**: Applied on sensitive API routes
 6. **Audit logging**: User actions logged in `user_activity` table
 
+## Development Best Practices
+
+### Manual and Systematic Approach ⚠️
+
+**CRITICAL**: When fixing issues, especially production bugs, always take a manual and systematic approach:
+
+1. **Avoid Bulk Automation Scripts** ❌
+   - Scripts that modify multiple files or environment variables at once can mask issues
+   - Automated fixes often miss edge cases or create new problems
+   - Example: `fix-vercel-env.sh` looked for `NEXT_PUBLIC_*` vars that didn't exist, silently skipped them
+
+2. **Manual Investigation First** ✅
+   - Read error messages carefully and trace the root cause
+   - Check actual state (Vercel env vars, file contents, build output)
+   - Verify assumptions before applying fixes
+   - Example: Check `vercel env ls` to see what variables actually exist
+
+3. **Fix One Thing at a Time** ✅
+   - Make single, focused changes
+   - Test each change before moving to the next
+   - Commit each fix separately with clear messages
+   - Example: Fix env validation, then logger, then OAuth - each as separate commits
+
+4. **Verify at Each Step** ✅
+   - TypeScript compilation: `npx tsc --noEmit`
+   - Build locally: `npm run build`
+   - Check deployment status after each change
+   - Test in browser before marking as complete
+
+### Environment Variables - Critical Patterns
+
+**NEXT_PUBLIC_* Variables** (Client-Side):
+- Required for any env var accessed in browser/client components
+- Must use **inline** access for Next.js static replacement:
+  ```typescript
+  // ✅ Correct - inline access in object literal
+  const config = {
+    url: process.env['NEXT_PUBLIC_SUPABASE_URL'] ?? ''
+  };
+
+  // ❌ Wrong - intermediate variable breaks replacement
+  const url = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+  const config = { url };
+  ```
+
+**Server-Only Variables**:
+- No prefix needed
+- Access via `getEnv()` or direct `process.env`
+- Never expose secrets to client bundle
+
+**Vercel-Specific**:
+- Always verify variable names match between code and Vercel dashboard
+- Use `vercel env ls` to inspect actual variable names
+- Remember: `SUPABASE_URL` ≠ `NEXT_PUBLIC_SUPABASE_URL`
+
+### Client/Server Code Separation
+
+**Server-Only Code Patterns**:
+```typescript
+// ✅ Proper server-only check
+if (typeof window === 'undefined' && process.stdout) {
+  process.stdout.write('...');
+}
+
+// ❌ Insufficient check
+if (typeof process !== 'undefined') {
+  process.stdout.write('...'); // process exists in browser, but stdout doesn't!
+}
+```
+
+**Client-Safe Utilities**:
+- Always provide browser fallbacks
+- Check for Node.js APIs before using them
+- Example: Logger uses `console` in browser, `process.stdout` in Node.js
+
+### Debugging Production Issues
+
+1. **Check Browser Console** (Client errors)
+   - Environment variable errors
+   - Runtime exceptions
+   - Network request failures
+
+2. **Check Vercel Logs** (Server errors)
+   - Build errors
+   - API route failures
+   - Environment variable issues
+
+3. **Verify Environment Variables**
+   ```bash
+   vercel env ls                    # List all variables
+   vercel env pull .env.local       # Pull to check values locally
+   ```
+
+4. **Test Specific Deployments**
+   - Use deployment URL to test specific builds
+   - Compare working vs failing deployments
+   - Check what changed between versions
+
 ## Common Development Tasks
 
 ### Adding a New API Route
