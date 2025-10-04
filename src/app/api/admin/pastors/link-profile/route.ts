@@ -8,11 +8,13 @@ import { getSupabaseConfig } from '@/lib/env-validation';
 
 export const runtime = 'nodejs';
 
-const { url, serviceRoleKey } = getSupabaseConfig();
-if (!serviceRoleKey) {
-  throw new Error('SUPABASE_SERVICE_KEY is required for admin operations');
+function getSupabaseAdminClient() {
+  const { url, serviceRoleKey } = getSupabaseConfig();
+  if (!serviceRoleKey) {
+    throw new Error('SUPABASE_SERVICE_KEY is required for admin operations');
+  }
+  return createClient(url, serviceRoleKey);
 }
-const supabase = createClient(url, serviceRoleKey);
 
 /**
  * POST /api/admin/pastors/link-profile
@@ -156,6 +158,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       }
 
       // Create auth user in Supabase
+      const supabase = getSupabaseAdminClient();
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email,
         password: password || Math.random().toString(36).slice(-12), // Generate random password if not provided
@@ -330,6 +333,7 @@ export async function DELETE(req: NextRequest): Promise<NextResponse> {
     // Optionally delete the profile
     if (deleteProfile) {
       // Delete from Supabase auth
+      const supabase = getSupabaseAdminClient();
       await supabase.auth.admin.deleteUser(pastor['profile_id']);
 
       // Profile will be deleted via cascade

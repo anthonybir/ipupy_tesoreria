@@ -7,11 +7,13 @@ import { getSupabaseConfig } from '@/lib/env-validation';
 
 export const runtime = 'nodejs';
 
-const { url, serviceRoleKey } = getSupabaseConfig();
-if (!serviceRoleKey) {
-  throw new Error('SUPABASE_SERVICE_KEY is required for admin operations');
+function getSupabaseAdminClient() {
+  const { url, serviceRoleKey } = getSupabaseConfig();
+  if (!serviceRoleKey) {
+    throw new Error('SUPABASE_SERVICE_KEY is required for admin operations');
+  }
+  return createClient(url, serviceRoleKey);
 }
-const supabase = createClient(url, serviceRoleKey);
 
 // GET /api/admin/users - Get all users
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -117,6 +119,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     // Create auth user in Supabase
+    const supabase = getSupabaseAdminClient();
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
       password,
@@ -280,6 +283,7 @@ export async function PUT(req: NextRequest): Promise<NextResponse> {
 
     // Update Supabase auth metadata if email changed
     if (email) {
+      const supabase = getSupabaseAdminClient();
       await supabase.auth.admin.updateUserById(id, {
         email,
         user_metadata: { full_name, role, church_id }
@@ -341,6 +345,7 @@ export async function DELETE(req: NextRequest): Promise<NextResponse> {
 
     if (hardDelete) {
       // Delete from Supabase auth
+      const supabase = getSupabaseAdminClient();
       await supabase.auth.admin.deleteUser(userId);
 
       // Profile will be deleted via cascade or trigger
