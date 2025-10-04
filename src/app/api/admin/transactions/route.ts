@@ -5,6 +5,9 @@ import { requireAdmin } from '@/lib/auth-supabase';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createTransaction as createLedgerTransaction } from '@/app/api/reports/route-helpers';
 
+// IMPORTANT: Node.js runtime required for Supabase rate limiting
+export const runtime = 'nodejs';
+
 // Admin endpoint for full transaction management
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {

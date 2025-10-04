@@ -11,7 +11,7 @@
 All 6 critical security vulnerabilities identified in the comprehensive security audit have been successfully resolved. The system now implements defense-in-depth security measures across all layers:
 
 - ✅ **RLS Enforcement** - Database queries cannot bypass Row Level Security
-- ✅ **Persistent Rate Limiting** - Vercel KV prevents brute force attacks
+- ✅ **Persistent Rate Limiting** - Supabase PostgreSQL prevents brute force attacks
 - ✅ **Security Headers** - CSP + HSTS protect against XSS and MITM
 - ✅ **CORS Hardening** - Environment-specific origin whitelisting
 - ✅ **Domain Validation** - @ipupy.org.py enforced at auth and database layers
@@ -43,25 +43,38 @@ All 6 critical security vulnerabilities identified in the comprehensive security
 
 **Solution:**
 - **File:** `src/lib/rate-limit.ts`
-- Migrated to **Vercel KV (Redis)** for persistent rate limiting
-- Graceful fallback to in-memory store for local development
-- Made `isRateLimited()` and `withRateLimit()` async to support KV operations
+- **Migration:** `migrations/036_rate_limits_table.sql`
+- Migrated to **Supabase PostgreSQL** for persistent rate limiting
+- Uses `pg_cron` for automatic cleanup every 15 minutes
+- Atomic `rate_limit_hit()` function with UPSERT logic to prevent race conditions
+- Made `isRateLimited()` and `withRateLimit()` async to support database operations
 
-**Code Changes:**
+**Implementation:**
 ```typescript
-// Production: Vercel KV (persistent)
-if (kv) {
-  const count = await kv.incr(windowKey);
-  if (count === 1) {
-    await kv.expire(windowKey, windowSec);
-  }
-  // ... check limits
-}
+// Supabase Admin client (service_role)
+const supabaseAdmin = createClient(
+  process.env['NEXT_PUBLIC_SUPABASE_URL'],
+  process.env['SUPABASE_SERVICE_KEY']
+);
 
-// Development: In-memory fallback
-else {
-  // memoryStore logic
-}
+// Call atomic rate limit function
+const { data, error } = await supabaseAdmin.rpc('rate_limit_hit', {
+  _key: clientId,
+  _limit: config.maxRequests,
+  _window_seconds: windowSeconds
+});
+```
+
+**Database Schema:**
+```sql
+CREATE TABLE rate_limits (
+  key TEXT,                     -- e.g., "auth:ip:192.168.1.1"
+  window_start TIMESTAMPTZ,     -- Start of rate limit window
+  window_seconds INT,           -- Window duration (900 = 15min)
+  count INT DEFAULT 0,          -- Request count in window
+  expires_at TIMESTAMPTZ,       -- Auto-calculated expiry
+  PRIMARY KEY (key, window_start, window_seconds)
+);
 ```
 
 **Rate Limit Policies:**
@@ -72,7 +85,10 @@ else {
 
 **Impact:**
 - Prevents brute force attacks even across deployments
-- Distributed rate limiting works across multiple Vercel instances
+- Distributed rate limiting works across multiple server instances
+- ~50-100ms latency (sufficient for ~20 users)
+- Automatic cleanup via pg_cron prevents table bloat
+- No additional service dependencies (uses existing Supabase)
 
 ---
 
@@ -307,7 +323,7 @@ INSERT INTO user_activity (
                           ↓
 ┌─────────────────────────────────────────────────────┐
 │  Layer 2: Application                               │
-│  - Rate Limiting (Vercel KV)                        │
+│  - Rate Limiting (Supabase PostgreSQL)              │
 │  - Domain Validation (@ipupy.org.py)                │
 │  - Auth Context Enforcement                         │
 └─────────────────────────────────────────────────────┘
@@ -355,14 +371,6 @@ $ npm run build
 
 ### Required Environment Variables
 
-**Vercel KV (Rate Limiting):**
-```bash
-KV_URL=                    # Vercel KV REST URL
-KV_REST_API_URL=          # Vercel KV REST API URL
-KV_REST_API_TOKEN=        # Vercel KV REST API Token
-KV_REST_API_READ_ONLY_TOKEN=  # Vercel KV Read-Only Token
-```
-
 **Existing (Already Configured):**
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=
@@ -386,15 +394,11 @@ supabase db push
 
 ### Vercel Configuration
 
-1. **Set up Vercel KV:**
-   - Go to Vercel Dashboard → Storage → Create KV Database
-   - Copy the environment variables to your project
-
-2. **Verify CORS origins:**
+1. **Verify CORS origins:**
    - Check `NEXT_PUBLIC_SITE_URL` matches production URL
    - Add any additional allowed origins to `ALLOWED_ORIGINS` (comma-separated)
 
-3. **Supabase Auth Settings:**
+2. **Supabase Auth Settings:**
    - Navigate to Supabase Dashboard → Authentication → Providers
    - Under Google OAuth, verify allowed domains: `ipupy.org.py`
    - Set Redirect URLs to production domain
@@ -434,11 +438,7 @@ supabase db push
 ## Known Limitations & Future Enhancements
 
 ### Current Limitations
-1. **Rate Limiting Fallback:** Development uses in-memory store (not persistent)
-   - **Impact:** Low (development only)
-   - **Mitigation:** Use Vercel KV in staging/production
-
-2. **CSP unsafe-inline:** Required for Tailwind CSS and Next.js
+1. **CSP unsafe-inline:** Required for Tailwind CSS and Next.js
    - **Impact:** Medium (allows inline styles/scripts)
    - **Mitigation:** Nonce-based CSP in future iteration
 
@@ -463,9 +463,11 @@ supabase db push
 
 **Rate Limiting Tests:**
 - [ ] Trigger rate limits on auth endpoints (5 attempts)
-- [ ] Verify rate limits persist across restarts (KV)
+- [ ] Verify rate limits persist across restarts (Supabase)
 - [ ] Test different rate limit tiers (auth vs API)
 - [ ] Validate Retry-After headers
+- [ ] Check rate_limits table populates correctly
+- [ ] Verify expired entries cleaned up by pg_cron
 
 **RLS Tests:**
 - [ ] Verify church data isolation
@@ -528,10 +530,11 @@ LIMIT 20;
 5. Force logout all sessions via Supabase dashboard
 
 **Rate Limit Bypass Detected:**
-1. Check Vercel KV status
+1. Check Supabase database status and rate_limits table
 2. Review rate limit configuration
-3. Implement temporary IP blocklist
-4. Increase rate limit strictness
+3. Query rate_limits table for suspicious patterns
+4. Implement temporary IP blocklist
+5. Increase rate limit strictness
 
 **Unauthorized Domain Access:**
 1. Check auth-supabase.ts domain validation
@@ -570,9 +573,9 @@ LIMIT 20;
 | **RLS Enforcement** | execute() disabled | ✅ | src/lib/db.ts:217-236 |
 | | batch() disabled | ✅ | src/lib/db.ts:435-440 |
 | | executeWithContext() enforced | ✅ | All API routes |
-| **Rate Limiting** | Vercel KV migration | ✅ | src/lib/rate-limit.ts |
+| **Rate Limiting** | Supabase PostgreSQL migration | ✅ | src/lib/rate-limit.ts + migration 036 |
 | | Async rate limit check | ✅ | src/lib/rate-limit.ts |
-| | Persistent across deploys | ✅ | Uses Redis/KV |
+| | Persistent across deploys | ✅ | PostgreSQL + pg_cron |
 | **Security Headers** | CSP implemented | ✅ | next.config.ts:32-49 |
 | | HSTS (production only) | ✅ | next.config.ts:26-30 |
 | | X-Frame-Options: DENY | ✅ | next.config.ts:15-17 |

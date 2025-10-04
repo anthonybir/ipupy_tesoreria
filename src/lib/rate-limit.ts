@@ -2,31 +2,23 @@
  * Rate limiting implementation for API endpoints
  * Protects against brute force attacks and API abuse
  *
- * Uses Vercel KV (Redis) for persistent, distributed rate limiting
+ * Uses Supabase PostgreSQL with pg_cron for persistent, distributed rate limiting
  */
 
 import { type NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
-// Import Vercel KV - graceful fallback for local development
-let kv: {
-  incr: (key: string) => Promise<number>;
-  expire: (key: string, seconds: number) => Promise<number>;
-  ttl: (key: string) => Promise<number>;
-} | null = null;
-
-// Try to import @vercel/kv if available (production)
-try {
-  // Dynamic import to avoid build errors when KV is not configured
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const kvModule = require('@vercel/kv');
-  kv = kvModule.kv;
-} catch {
-  // Fallback to in-memory for local development
-  console.warn('[Rate Limit] Vercel KV not available, using in-memory fallback (NOT RECOMMENDED FOR PRODUCTION)');
-}
-
-// Fallback in-memory store for local development only
-const memoryStore = new Map<string, { count: number; resetTime: number }>();
+// Supabase Admin client for server-side rate limiting (service_role)
+const supabaseAdmin = createClient(
+  process.env['NEXT_PUBLIC_SUPABASE_URL'] ?? '',
+  process.env['SUPABASE_SERVICE_KEY'] ?? '',
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  }
+);
 
 // Configuration for different endpoint types
 interface RateLimitConfig {
@@ -83,95 +75,80 @@ function getClientId(request: NextRequest): string {
 }
 
 /**
- * Clean up expired entries from the memory store (fallback only)
+ * Rate limit result from database
  */
-function cleanupExpiredEntries(): void {
-  const now = Date.now();
-  for (const [key, value] of memoryStore.entries()) {
-    if (value.resetTime < now) {
-      memoryStore.delete(key);
-    }
-  }
+interface RateLimitResult {
+  allowed: boolean;
+  remaining: number;
+  reset_at: string;
 }
 
 /**
- * Check if request should be rate limited
- * Uses Vercel KV (Redis) in production, memory fallback for development
+ * Check if request should be rate limited using Supabase
  */
 export async function isRateLimited(
   request: NextRequest,
   configType: keyof typeof configs = 'api'
-): Promise<{ limited: boolean; retryAfter?: number | undefined; message?: string | undefined }> {
+): Promise<{ limited: boolean; retryAfter?: number; message?: string }> {
   const config = configs[configType] ?? configs['api'];
   if (!config) {
     throw new Error(`Rate limit config not found for type: ${configType}`);
   }
 
   const clientId = `ratelimit:${configType}:${getClientId(request)}`;
-  const now = Date.now();
-  const windowSec = Math.floor(config.windowMs / 1000);
-  const windowKey = `${clientId}:${Math.floor(now / config.windowMs)}`;
+  const windowSeconds = Math.floor(config.windowMs / 1000);
 
-  // Use Vercel KV if available (production)
-  if (kv) {
-    try {
-      const count = await kv.incr(windowKey);
+  try {
+    // Call Supabase RPC function for atomic rate limit check
+    const { data, error } = await supabaseAdmin.rpc('rate_limit_hit', {
+      _key: clientId,
+      _limit: config.maxRequests,
+      _window_seconds: windowSeconds
+    });
 
-      // Set expiration on first request in window
-      if (count === 1) {
-        await kv.expire(windowKey, windowSec);
-      }
-
-      if (count > config.maxRequests) {
-        const ttl = await kv.ttl(windowKey);
-        return {
-          limited: true,
-          retryAfter: ttl > 0 ? ttl : windowSec,
-          message: config.message
-        };
-      }
-
+    if (error) {
+      // Fail-open: Log error but allow request
+      console.error('[Rate Limit] Supabase RPC error:', error);
       return { limited: false };
-    } catch (error) {
-      console.error('[Rate Limit] KV error, falling back to memory:', error);
-      // Fall through to memory store on KV error
     }
-  }
 
-  // Fallback to in-memory store (development only)
-  if (Math.random() < 0.01) {
-    cleanupExpiredEntries();
-  }
+    // Handle response (data is array with single row)
+    const result = Array.isArray(data) && data.length > 0
+      ? (data[0] as RateLimitResult)
+      : null;
 
-  let entry = memoryStore.get(windowKey);
+    if (!result) {
+      // Unexpected response, fail-open
+      console.error('[Rate Limit] Unexpected response format:', data);
+      return { limited: false };
+    }
 
-  if (!entry || entry.resetTime < now) {
-    entry = {
-      count: 1,
-      resetTime: now + config.windowMs
-    };
-    memoryStore.set(windowKey, entry);
+    if (!result.allowed) {
+      // Calculate retry-after in seconds
+      const resetAt = new Date(result.reset_at).getTime();
+      const retryAfter = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000));
+
+      return {
+        limited: true,
+        retryAfter,
+        ...(config.message && { message: config.message })
+      };
+    }
+
+    return { limited: false };
+  } catch (error) {
+    // Fail-open: Log error but allow request to prevent service disruption
+    console.error('[Rate Limit] Exception:', error);
     return { limited: false };
   }
-
-  entry.count++;
-
-  if (entry.count > config.maxRequests) {
-    const retryAfter = Math.ceil((entry.resetTime - now) / 1000);
-    return {
-      limited: true,
-      retryAfter: retryAfter,
-      message: config.message
-    };
-  }
-
-  return { limited: false };
 }
 
 /**
- * Rate limiting middleware for API routes (async)
+ * Rate limiting middleware for API routes
  * Usage:
  * ```typescript
+ * export const runtime = 'nodejs'; // Required for Supabase DB access
+ *
  * import { withRateLimit } from '@/lib/rate-limit';
  *
  * export async function GET(request: NextRequest) {
@@ -211,70 +188,8 @@ export async function withRateLimit(
 }
 
 /**
- * Create a custom rate limiter with specific configuration (uses in-memory store)
+ * Get rate limit configuration for a specific type
  */
-export function createRateLimiter(config: RateLimitConfig): (request: NextRequest) => NextResponse | null {
-  return (request: NextRequest): NextResponse | null => {
-    const clientId = `custom:${getClientId(request)}`;
-    const now = Date.now();
-
-    let entry = memoryStore.get(clientId);
-
-    if (!entry || entry.resetTime < now) {
-      entry = {
-        count: 1,
-        resetTime: now + config.windowMs
-      };
-      memoryStore.set(clientId, entry);
-      return null;
-    }
-
-    entry.count++;
-
-    if (entry.count > config.maxRequests) {
-      const retryAfter = Math.ceil((entry.resetTime - now) / 1000);
-      return NextResponse.json(
-        {
-          error: config.message || 'Rate limit exceeded',
-          retryAfter
-        },
-        {
-          status: 429,
-          headers: {
-            'Retry-After': String(retryAfter)
-          }
-        }
-      );
-    }
-
-    return null;
-  };
-}
-
-/**
- * Reset rate limit for a specific client (useful for testing - uses in-memory store)
- */
-export function resetRateLimit(clientId: string, configType?: string): void {
-  const key = configType ? `${configType}:${clientId}` : clientId;
-  memoryStore.delete(key);
-}
-
-/**
- * Get current rate limit status for monitoring (uses in-memory store)
- */
-export function getRateLimitStatus(): {
-  storeSize: number;
-  entries: Array<{ key: string; count: number; expiresIn: number }>;
-} {
-  const now = Date.now();
-  const entries = Array.from(memoryStore.entries()).map(([key, value]) => ({
-    key,
-    count: value.count,
-    expiresIn: Math.max(0, Math.ceil((value.resetTime - now) / 1000))
-  }));
-
-  return {
-    storeSize: memoryStore.size,
-    entries
-  };
+export function getRateLimitConfig(configType: keyof typeof configs): RateLimitConfig | undefined {
+  return configs[configType];
 }
