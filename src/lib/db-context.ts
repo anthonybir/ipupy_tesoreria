@@ -40,7 +40,7 @@ export async function setDatabaseContext(
 
   await client.query(
     "SELECT set_config('app.current_user_role', $1, true)",
-    [auth.role || 'viewer']
+    [auth.role || '']
   );
 
   await client.query(
