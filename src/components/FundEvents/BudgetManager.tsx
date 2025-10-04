@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type JSX } from 'react';
 
 import { FormField, StatusPill } from '@/components/Shared';
 import { Button } from '@/components/ui/button';

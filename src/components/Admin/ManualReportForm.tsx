@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent, type JSX } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { FormField, FormSection, SectionCard } from '@/components/Shared';

@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode } from 'react';
+import { type ReactNode, type JSX } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/components/Auth/SupabaseAuthProvider';
 

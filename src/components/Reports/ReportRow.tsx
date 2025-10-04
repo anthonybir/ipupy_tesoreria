@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type JSX } from "react";
 import toast from "react-hot-toast";
 
 import { useDeleteReport, useUpdateReport } from "@/hooks/useReportMutations";

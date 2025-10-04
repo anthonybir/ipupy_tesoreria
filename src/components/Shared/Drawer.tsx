@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, type MutableRefObject, type ReactNode } from 'react';
+import { Fragment, type MutableRefObject, type ReactNode, type JSX } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 

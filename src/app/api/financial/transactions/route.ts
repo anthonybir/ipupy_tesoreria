@@ -202,7 +202,9 @@ async function handlePost(req: NextRequest) {
           created_by: user.email
         }, user);
 
-        results.push(createdTransaction);
+        if (createdTransaction) {
+          results.push(createdTransaction);
+        }
       } catch (error) {
         errors.push({
           transaction,

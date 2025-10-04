@@ -76,6 +76,7 @@ export function useFundEventActuals(eventId: string | null): UseQueryResult<unkn
   });
 }
 
+// eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
 export function useEventMutations() {
   const queryClient = useQueryClient();
 

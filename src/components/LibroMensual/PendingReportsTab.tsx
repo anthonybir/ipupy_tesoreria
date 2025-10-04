@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type JSX } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { PlusCircleIcon } from '@heroicons/react/24/outline';

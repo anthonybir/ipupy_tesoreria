@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import type { ChurchRecord, ReportRecord } from '@/types/api';
 import { SectionCard, StatCard, StatusPill } from '@/components/Shared';
 import { formatCurrencyDisplay } from '@/lib/utils/currency';

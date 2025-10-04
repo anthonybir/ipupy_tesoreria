@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Fragment, useCallback } from 'react';
+import { useState, useEffect, Fragment, useCallback, type JSX } from 'react';
 import { Combobox, Transition } from '@headlessui/react';
 import { CheckIcon, ChevronUpDownIcon, PlusIcon } from '@heroicons/react/24/outline';
 import { useProviderSearch, useCheckRuc, type Provider } from '@/hooks/useProviders';

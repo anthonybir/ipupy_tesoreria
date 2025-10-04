@@ -3,7 +3,7 @@
  * Protects against brute force attacks and API abuse
  */
 
-import { type NextRequest } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 
 // Store for rate limit tracking
 // In production, use Redis or similar persistent store
@@ -142,15 +142,15 @@ export function isRateLimited(
 export function withRateLimit(
   request: NextRequest,
   configType: keyof typeof configs = 'api'
-): Response | null {
+): NextResponse | null {
   const result = isRateLimited(request, configType);
 
   if (result.limited) {
-    return new Response(
-      JSON.stringify({
+    return NextResponse.json(
+      {
         error: result.message || 'Too many requests',
         retryAfter: result.retryAfter
-      }),
+      },
       {
         status: 429,
         headers: {
@@ -170,8 +170,8 @@ export function withRateLimit(
 /**
  * Create a custom rate limiter with specific configuration
  */
-export function createRateLimiter(config: RateLimitConfig): (request: NextRequest) => Response | null {
-  return (request: NextRequest): Response | null => {
+export function createRateLimiter(config: RateLimitConfig): (request: NextRequest) => NextResponse | null {
+  return (request: NextRequest): NextResponse | null => {
     const clientId = `custom:${getClientId(request)}`;
     const now = Date.now();
 
@@ -190,11 +190,11 @@ export function createRateLimiter(config: RateLimitConfig): (request: NextReques
 
     if (entry.count > config.maxRequests) {
       const retryAfter = Math.ceil((entry.resetTime - now) / 1000);
-      return new Response(
-        JSON.stringify({
+      return NextResponse.json(
+        {
           error: config.message || 'Rate limit exceeded',
           retryAfter
-        }),
+        },
         {
           status: 429,
           headers: {

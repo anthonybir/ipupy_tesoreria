@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { useFunds } from '@/hooks/useFunds';
 import { useChurches } from '@/hooks/useChurches';
 import { useEventMutations } from '@/hooks/useFundEvents';

@@ -7,7 +7,7 @@
  * Can be used for individual page sections instead of crashing the entire app.
  */
 
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 
 type ErrorFallbackProps = {
   title?: string;

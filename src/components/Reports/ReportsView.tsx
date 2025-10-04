@@ -1,6 +1,6 @@
 'use client';
 
-import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { type ChangeEvent, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import { useChurches } from '@/hooks/useChurches';

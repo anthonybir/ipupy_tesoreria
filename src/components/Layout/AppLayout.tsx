@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState, type JSX } from "react";
 import { usePathname } from "next/navigation";
 import MainNav from "./MainNav";
 import UserMenu from "./UserMenu";

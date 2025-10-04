@@ -1,3 +1,5 @@
+import { NextResponse } from 'next/server';
+
 const defaultOrigins = [
   'http://localhost:3000',
   'http://localhost:8000',
@@ -39,12 +41,12 @@ export const buildCorsHeaders = (origin?: string | null): HeadersInit => {
   return headers;
 };
 
-export const handleCorsPreflight = (request: Request): Response | null => {
+export const handleCorsPreflight = (request: Request): NextResponse | null => {
   if (request.method !== 'OPTIONS') {
     return null;
   }
   const headers = buildCorsHeaders(request.headers.get('origin'));
-  return new Response(null, { status: 204, headers });
+  return new NextResponse(null, { status: 204, headers });
 };
 
 export const setCORSHeaders = (response: Response, origin?: string | null): void => {

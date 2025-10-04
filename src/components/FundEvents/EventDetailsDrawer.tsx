@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type JSX } from 'react';
 
 import { Drawer, EventStatusPill, StatusPill } from '@/components/Shared';
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,7 @@ type EventDetailsDrawerProps = {
   onClose: () => void;
 };
 
-export function EventDetailsDrawer({ eventId, initialEvent, viewer, onClose }: EventDetailsDrawerProps): JSX.Element {
+export function EventDetailsDrawer({ eventId, initialEvent, viewer, onClose }: EventDetailsDrawerProps): JSX.Element | null {
   const { submitEvent, approveEvent, rejectEvent } = useEventMutations();
   const { data: detailedEvent, isLoading } = useFundEvent(eventId);
 

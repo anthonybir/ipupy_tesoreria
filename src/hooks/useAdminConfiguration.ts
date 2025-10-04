@@ -256,13 +256,13 @@ export function useSaveConfig(): UseMutationResult<unknown, Error, { section: Co
  * Use this when you need multiple sections at once
  */
 export function useAllConfigs(): {
-  systemConfig: UseQueryResult<Partial<SystemConfig>, Error>;
-  financialConfig: UseQueryResult<Partial<FinancialConfig>, Error>;
-  securityConfig: UseQueryResult<Partial<SystemConfig>, Error>;
-  integrationConfig: UseQueryResult<Partial<IntegrationConfig>, Error>;
-  notificationConfig: UseQueryResult<Partial<NotificationConfig>, Error>;
-  fundsConfig: UseQueryResult<Partial<FundsConfig>, Error>;
-  rolesConfig: UseQueryResult<Partial<RolesConfig>, Error>;
+  systemConfig: UseQueryResult<Partial<SystemConfig> | null, Error>;
+  financialConfig: UseQueryResult<Partial<FinancialConfig> | null, Error>;
+  securityConfig: UseQueryResult<Partial<SystemConfig> | null, Error>;
+  integrationConfig: UseQueryResult<Partial<IntegrationConfig> | null, Error>;
+  notificationConfig: UseQueryResult<Partial<NotificationConfig> | null, Error>;
+  fundsConfig: UseQueryResult<Partial<FundsConfig> | null, Error>;
+  rolesConfig: UseQueryResult<Partial<RolesConfig> | null, Error>;
   isLoading: boolean;
   isError: boolean;
 } {

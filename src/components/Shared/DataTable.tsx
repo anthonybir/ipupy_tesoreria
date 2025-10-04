@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode, type UIEvent } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type UIEvent, type JSX } from 'react';
 
 export type Alignment = 'left' | 'center' | 'right';
 

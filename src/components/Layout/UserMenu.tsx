@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment } from "react";
+import { Fragment, type JSX } from "react";
 import { useAuth } from "@/components/Auth/SupabaseAuthProvider";
 import { Menu, Transition } from "@headlessui/react";
 import {
@@ -9,7 +9,7 @@ import {
   Cog6ToothIcon,
 } from "@heroicons/react/24/outline";
 
-export default function UserMenu(): JSX.Element {
+export default function UserMenu(): JSX.Element | null {
   const { user, loading, signOut } = useAuth();
 
   if (loading) {

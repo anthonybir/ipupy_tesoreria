@@ -1,3 +1,4 @@
+import type { JSX } from 'react';
 import { ProviderManagementView } from '@/components/Providers/ProviderManagementView';
 
 export const metadata = {

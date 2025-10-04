@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, JSX } from "react";
 import { MiniLineChart } from './Charts/MiniLineChart';
 import { ArrowUpIcon, ArrowDownIcon } from '@heroicons/react/20/solid';
 
