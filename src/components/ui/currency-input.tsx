@@ -52,6 +52,8 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
     const inputRef = React.useRef<HTMLInputElement | null>(null);
     const pendingCaret = React.useRef<number | null>(null);
 
+    const { onFocus: onFocusProp, onPointerUp: onPointerUpProp, ...restProps } = rest;
+
     const combinedRef = React.useCallback(
       (node: HTMLInputElement | null) => {
         inputRef.current = node;
@@ -65,6 +67,33 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
     );
 
     const formattedValue = React.useMemo(() => formatCurrencyInput(value), [value]);
+
+    const enforceSelectionBeforeSuffix = React.useCallback(
+      (target: HTMLInputElement) => {
+        const suffixIndex = formattedValue.indexOf(CURRENCY_SUFFIX);
+        if (suffixIndex === -1) {
+          return;
+        }
+
+        const applyClamp = () => {
+          const selectionStart = target.selectionStart ?? 0;
+          const selectionEnd = target.selectionEnd ?? 0;
+
+          if (selectionStart >= suffixIndex && selectionEnd >= suffixIndex) {
+            target.setSelectionRange(suffixIndex, suffixIndex);
+          } else if (selectionEnd > suffixIndex) {
+            target.setSelectionRange(selectionStart, suffixIndex);
+          }
+        };
+
+        if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+          window.requestAnimationFrame(applyClamp);
+        } else {
+          setTimeout(applyClamp, 0);
+        }
+      },
+      [formattedValue]
+    );
 
     const handleChange = React.useCallback(
       (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -115,6 +144,22 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
       }
     }, [formattedValue]);
 
+    const handleFocus = React.useCallback(
+      (event: React.FocusEvent<HTMLInputElement>) => {
+        enforceSelectionBeforeSuffix(event.currentTarget);
+        onFocusProp?.(event);
+      },
+      [enforceSelectionBeforeSuffix, onFocusProp]
+    );
+
+    const handlePointerUp = React.useCallback(
+      (event: React.PointerEvent<HTMLInputElement>) => {
+        enforceSelectionBeforeSuffix(event.currentTarget);
+        onPointerUpProp?.(event);
+      },
+      [enforceSelectionBeforeSuffix, onPointerUpProp]
+    );
+
     React.useLayoutEffect(() => {
       if (!inputRef.current || pendingCaret.current === null) {
         return;
@@ -137,11 +182,13 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
         value={formattedValue}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
+        onFocus={handleFocus}
+        onPointerUp={handlePointerUp}
         inputMode="decimal"
         type="text"
         className={className}
         autoComplete="off"
-        {...rest}
+        {...restProps}
       />
     );
   }
