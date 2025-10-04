@@ -44,7 +44,7 @@ const INITIAL_FORM_STATE: ActualFormData = {
 
 type DialogMode = 'create' | 'edit';
 
-export function ActualsManager({ event, canEdit }: ActualsManagerProps) {
+export function ActualsManager({ event, canEdit }: ActualsManagerProps): JSX.Element {
   const { data: actualsData = [] } = useFundEventActuals(event.id);
   const { addActual, updateActual, deleteActual } = useEventMutations();
 
@@ -57,7 +57,7 @@ export function ActualsManager({ event, canEdit }: ActualsManagerProps) {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const actuals: RawEventActual[] = useMemo(
-    () => (actualsData as RawEventActual[]) || [],
+    () => actualsData as RawEventActual[],
     [actualsData]
   );
 

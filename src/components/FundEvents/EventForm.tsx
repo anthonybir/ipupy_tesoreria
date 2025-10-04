@@ -31,7 +31,7 @@ const CATEGORY_LABELS: Record<EventCategory, string> = {
   other: 'Otro',
 };
 
-export function EventForm({ onSuccess, onCancel }: EventFormProps) {
+export function EventForm({ onSuccess, onCancel }: EventFormProps): JSX.Element {
   const [formData, setFormData] = useState<CreateEventInput>({
     fund_id: 0,
     church_id: null,

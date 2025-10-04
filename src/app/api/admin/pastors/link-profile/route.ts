@@ -23,7 +23,7 @@ const supabase = createClient(url, serviceRoleKey);
  * - profile_id?: string (optional, link to existing profile)
  * - create_profile?: { email: string, password: string, role: string } (optional, create new)
  */
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 
@@ -261,7 +261,7 @@ export async function POST(req: NextRequest) {
  * - pastor_id: number (required)
  * - delete_profile: boolean (optional, also delete the profile)
  */
-export async function DELETE(req: NextRequest) {
+export async function DELETE(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 
@@ -357,7 +357,7 @@ export async function DELETE(req: NextRequest) {
 }
 
 // OPTIONS handler for CORS
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 204 });
   setCORSHeaders(response);
   return response;

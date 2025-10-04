@@ -14,7 +14,7 @@ if (!serviceRoleKey) {
 const supabase = createClient(url, serviceRoleKey);
 
 // GET /api/admin/users - Get all users
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 
@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/admin/users - Create new user
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 
@@ -199,7 +199,7 @@ export async function POST(req: NextRequest) {
 }
 
 // PUT /api/admin/users - Update user
-export async function PUT(req: NextRequest) {
+export async function PUT(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 
@@ -315,7 +315,7 @@ export async function PUT(req: NextRequest) {
 }
 
 // DELETE /api/admin/users - Delete or deactivate user
-export async function DELETE(req: NextRequest) {
+export async function DELETE(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 
@@ -400,7 +400,7 @@ export async function DELETE(req: NextRequest) {
 }
 
 // OPTIONS handler for CORS
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 204 });
   setCORSHeaders(response);
   return response;

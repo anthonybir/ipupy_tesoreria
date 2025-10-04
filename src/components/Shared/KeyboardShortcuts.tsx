@@ -31,7 +31,7 @@ const shortcuts: Shortcut[] = [
   { key: 'd', label: 'Densidad', description: 'Cambiar densidad', category: 'Interfaz' },
 ];
 
-export function useKeyboardShortcuts() {
+export function useKeyboardShortcuts(): { showHelp: boolean; setShowHelp: React.Dispatch<React.SetStateAction<boolean>> } {
   const [showHelp, setShowHelp] = useState(false);
 
   useEffect(() => {
@@ -153,7 +153,7 @@ export function useKeyboardShortcuts() {
   return { showHelp, setShowHelp };
 }
 
-export function KeyboardShortcutsDialog() {
+export function KeyboardShortcutsDialog(): JSX.Element {
   const { showHelp, setShowHelp } = useKeyboardShortcuts();
 
   const categories = Array.from(new Set(shortcuts.map((s) => s.category)));

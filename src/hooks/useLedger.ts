@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
+import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
 
 import { fetchJson } from '@/lib/api-client';
 import {
@@ -68,7 +68,7 @@ export const ledgerQueryKey = (
     filters.offset ?? 0,
   ] as const;
 
-export function useLedger(filters: FundMovementFilters, options?: UseLedgerOptions) {
+export function useLedger(filters: FundMovementFilters, options?: UseLedgerOptions): UseQueryResult<FundMovementCollection, Error> {
   const { enabled = true, staleTime, placeholderData } = options ?? {};
 
   return useQuery<FundMovementCollection, Error>({

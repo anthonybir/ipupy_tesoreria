@@ -31,7 +31,7 @@ export function ErrorState({
   retryLabel = 'Reintentar',
   variant = 'error',
   className,
-}: ErrorStateProps) {
+}: ErrorStateProps): JSX.Element {
   return (
     <div
       className={cn(

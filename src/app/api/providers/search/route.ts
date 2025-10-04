@@ -4,7 +4,7 @@ import { requireAuth } from '@/lib/auth-supabase';
 import { executeWithContext } from '@/lib/db';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const auth = await requireAuth(request);
     const searchParams = request.nextUrl.searchParams;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 
@@ -68,7 +68,7 @@ export type UpdateReportPayload = Partial<CreateReportPayload> & {
   };
 };
 
-export function useCreateReport() {
+export function useCreateReport(): UseMutationResult<ReportRecord, unknown, CreateReportPayload, unknown> {
   const queryClient = useQueryClient();
 
   return useMutation<ReportRecord, unknown, CreateReportPayload>({
@@ -96,7 +96,7 @@ export function useCreateReport() {
   });
 }
 
-export function useUpdateReport(reportId: number) {
+export function useUpdateReport(reportId: number): UseMutationResult<ReportRecord, unknown, UpdateReportPayload, unknown> {
   const queryClient = useQueryClient();
 
   return useMutation<ReportRecord, unknown, UpdateReportPayload>({
@@ -125,7 +125,7 @@ export function useUpdateReport(reportId: number) {
   });
 }
 
-export function useDeleteReport() {
+export function useDeleteReport(): UseMutationResult<{ message: string }, unknown, { reportId: number }, unknown> {
   const queryClient = useQueryClient();
 
   return useMutation<{ message: string }, unknown, { reportId: number }>({

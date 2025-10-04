@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, type JSX } from 'react';
 
 export type SimpleBarChartProps = {
   data: Array<{ label: string; value: number; color?: string }>;
@@ -16,7 +16,7 @@ export function SimpleBarChart({
   showValues = true,
   showLabels = true,
   className = '',
-}: SimpleBarChartProps) {
+}: SimpleBarChartProps): JSX.Element {
   const maxValue = useMemo(() => Math.max(...data.map((d) => d.value)), [data]);
 
   const barWidth = useMemo(() => {
@@ -88,7 +88,7 @@ export function ComparisonBar({
   budget,
   formatValue = (v) => v.toLocaleString('es-PY'),
   className = '',
-}: ComparisonBarProps) {
+}: ComparisonBarProps): JSX.Element {
   const percentage = budget > 0 ? (actual / budget) * 100 : 0;
   const variance = actual - budget;
   const isOver = variance > 0;

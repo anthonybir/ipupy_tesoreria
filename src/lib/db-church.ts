@@ -22,8 +22,27 @@ interface ChurchTransaction {
   date: string;
 }
 
+interface ChurchTransactionWithFund extends ChurchTransaction {
+  funds?: {
+    name: string | null;
+    type?: string | null;
+  } | null;
+}
+
+interface ChurchDashboardData {
+  recentReports: ChurchReport[] | null;
+  recentTransactions: ChurchTransactionWithFund[] | null;
+  currentMonthReport: ChurchReport | null;
+  hasSubmittedCurrentMonth: boolean;
+}
+
+interface ChurchProfileData {
+  church: Record<string, unknown> | null;
+  statistics: unknown;
+}
+
 // Get church's own reports (RLS protected)
-export async function getChurchReports(churchId: string) {
+export async function getChurchReports(churchId: string): Promise<ChurchReport[] | null> {
   const supabase = createClient();
 
   const { data, error } = await supabase
@@ -34,15 +53,18 @@ export async function getChurchReports(churchId: string) {
     .order('month', { ascending: false });
 
   if (error) throw error;
-  return data as ChurchReport[];
+  return data as ChurchReport[] | null;
 }
 
 // Get church's transactions (RLS protected)
-export async function getChurchTransactions(churchId: string, filters?: {
-  startDate?: string;
-  endDate?: string;
-  fundId?: number;
-}) {
+export async function getChurchTransactions(
+  churchId: string,
+  filters?: {
+    startDate?: string;
+    endDate?: string;
+    fundId?: number;
+  }
+): Promise<ChurchTransactionWithFund[] | null> {
   const supabase = createClient();
 
   let query = supabase
@@ -69,11 +91,11 @@ export async function getChurchTransactions(churchId: string, filters?: {
   const { data, error } = await query;
 
   if (error) throw error;
-  return data as ChurchTransaction[];
+  return data as ChurchTransactionWithFund[] | null;
 }
 
 // Submit new church report
-export async function submitChurchReport(reportData: Omit<ChurchReport, 'id' | 'created_at'>) {
+export async function submitChurchReport(reportData: Omit<ChurchReport, 'id' | 'created_at'>): Promise<ChurchReport> {
   const supabase = createClient();
 
   const { data, error } = await supabase
@@ -87,7 +109,7 @@ export async function submitChurchReport(reportData: Omit<ChurchReport, 'id' | '
 }
 
 // Get church profile and statistics
-export async function getChurchProfile(churchId: string) {
+export async function getChurchProfile(churchId: string): Promise<ChurchProfileData> {
   const supabase = createClient();
 
   // Get church details
@@ -106,13 +128,13 @@ export async function getChurchProfile(churchId: string) {
   if (statsError) throw statsError;
 
   return {
-    church,
-    statistics: stats
+    church: church as Record<string, unknown> | null,
+    statistics: stats ?? null
   };
 }
 
 // Get church dashboard data
-export async function getChurchDashboard(churchId: string) {
+export async function getChurchDashboard(churchId: string): Promise<ChurchDashboardData> {
   const supabase = createClient();
 
   // Get latest reports
@@ -153,10 +175,10 @@ export async function getChurchDashboard(churchId: string) {
   if (currentError) throw currentError;
 
   return {
-    recentReports,
-    recentTransactions,
-    currentMonthReport: currentReport,
-    hasSubmittedCurrentMonth: !!currentReport
+    recentReports: recentReports as ChurchReport[] | null,
+    recentTransactions: recentTransactions as ChurchTransactionWithFund[] | null,
+    currentMonthReport: currentReport as ChurchReport | null,
+    hasSubmittedCurrentMonth: Boolean(currentReport)
   };
 }
 
@@ -165,7 +187,7 @@ export async function updateChurchReport(
   reportId: number,
   churchId: string,
   updates: Partial<ChurchReport>
-) {
+): Promise<ChurchReport> {
   const supabase = createClient();
 
   // Only allow updates to pending reports

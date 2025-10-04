@@ -7,6 +7,6 @@ export const metadata: Metadata = {
   description: 'Seguimiento de movimientos automáticos y manuales por fondo y reporte',
 };
 
-export default function LedgerPage() {
+export default function LedgerPage(): JSX.Element {
   return <LedgerView />;
 }

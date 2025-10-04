@@ -21,7 +21,7 @@ export function ErrorFallback({
   error = null,
   onRetry,
   showDetails = false,
-}: ErrorFallbackProps) {
+}: ErrorFallbackProps): JSX.Element {
   const [detailsVisible, setDetailsVisible] = useState(false);
 
   return (
@@ -105,7 +105,7 @@ export function ErrorFallback({
 /**
  * Minimal error state for inline use
  */
-export function InlineErrorMessage({ message }: { message: string }) {
+export function InlineErrorMessage({ message }: { message: string }): JSX.Element {
   return (
     <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
       <p className="text-sm text-red-800">{message}</p>
@@ -124,7 +124,7 @@ export function EmptyState({
   title?: string;
   message?: string;
   icon?: 'inbox' | 'search' | 'folder';
-}) {
+}): JSX.Element {
   const iconPaths = {
     inbox: (
       <path

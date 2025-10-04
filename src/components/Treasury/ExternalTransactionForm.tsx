@@ -30,7 +30,7 @@ export default function ExternalTransactionForm({
   funds,
   onSubmit,
   onCancel
-}: ExternalTransactionFormProps) {
+}: ExternalTransactionFormProps): JSX.Element {
   const [isIncome, setIsIncome] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);

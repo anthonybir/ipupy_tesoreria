@@ -25,7 +25,23 @@ type FundBalanceFilters = {
   type?: string | null;
 };
 
-export async function fetchFundBalances(auth: AuthContext | null, filters: FundBalanceFilters = {}) {
+type LedgerTransactionResult = Awaited<ReturnType<typeof createLedgerTransaction>>;
+
+type FundReconciliationRow = {
+  id: number;
+  name: string;
+  stored_balance: string;
+  total_income: string;
+  total_expenses: string;
+  calculated_balance: string;
+  transaction_count: number;
+  first_transaction: string | null;
+  last_transaction: string | null;
+  difference: string;
+  status: 'balanced' | 'discrepancy';
+};
+
+export async function fetchFundBalances(auth: AuthContext | null, filters: FundBalanceFilters = {}): Promise<FundBalanceRow[]> {
   const conditions: string[] = [];
   const params: unknown[] = [];
 
@@ -67,11 +83,15 @@ export async function fetchFundBalances(auth: AuthContext | null, filters: FundB
 }
 
 // Process report approval and create fund transactions
-export async function processReportApproval(auth: AuthContext | null, reportId: number, approvedBy: string) {
+export async function processReportApproval(
+  auth: AuthContext | null,
+  reportId: number,
+  approvedBy: string
+): Promise<{ success: true; reportId: number; approvedBy: string }> {
   const contextSubset = auth ? { userId: auth.userId, role: auth.role, churchId: auth.churchId } : null;
 
   // Get report details
-  const reportResult = await executeWithContext(contextSubset, `
+  const reportResult = await executeWithContext<Record<string, unknown>>(contextSubset, `
     SELECT r.*, c.name as church_name
     FROM reports r
     JOIN churches c ON r.church_id = c.id
@@ -144,7 +164,7 @@ export async function processReportApproval(auth: AuthContext | null, reportId: 
       fondoNacional,
       honorariosPastoral,
       gastosOperativos,
-      fechaDeposito: report['fecha_deposito']
+      fechaDeposito: report['fecha_deposito'] as string | null
     },
     designated,
     auth
@@ -167,7 +187,9 @@ export async function processReportApproval(auth: AuthContext | null, reportId: 
 }
 
 // Add external transaction (treasurer manual entry)
-export async function addExternalTransaction(auth: AuthContext | null, data: {
+export async function addExternalTransaction(
+  auth: AuthContext | null,
+  data: {
   fund_id: number;
   concept: string;
   amount_in: number;
@@ -176,7 +198,7 @@ export async function addExternalTransaction(auth: AuthContext | null, data: {
   provider?: string | null;
   provider_id?: number | null;
   document_number?: string | null;
-}) {
+}): Promise<LedgerTransactionResult> {
   const transaction = await createLedgerTransaction({
     fund_id: data.fund_id,
     concept: data.concept,
@@ -193,12 +215,15 @@ export async function addExternalTransaction(auth: AuthContext | null, data: {
 }
 
 // Generate reconciliation report
-export async function generateReconciliation(auth: AuthContext | null, fundId?: number) {
+export async function generateReconciliation(
+  auth: AuthContext | null,
+  fundId?: number
+): Promise<FundReconciliationRow[]> {
   const contextSubset = auth ? { userId: auth.userId, role: auth.role, churchId: auth.churchId } : null;
   const fundFilter = fundId ? 'WHERE f.id = $1' : '';
   const params = fundId ? [fundId] : [];
 
-  const result = await executeWithContext(contextSubset, `
+  const result = await executeWithContext<FundReconciliationRow>(contextSubset, `
     WITH fund_summary AS (
       SELECT
         f.id,

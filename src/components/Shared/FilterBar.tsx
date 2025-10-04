@@ -5,7 +5,7 @@ export type FilterBarProps = {
   actions?: ReactNode;
 };
 
-export function FilterBar({ children, actions }: FilterBarProps) {
+export function FilterBar({ children, actions }: FilterBarProps): JSX.Element {
   return (
     <div className="absd-card flex flex-col gap-4 border border-[var(--absd-border)] bg-[var(--absd-surface)] px-5 py-4 shadow-sm lg:flex-row lg:items-end lg:justify-between">
       <div className="grid flex-1 gap-4 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end lg:gap-4">

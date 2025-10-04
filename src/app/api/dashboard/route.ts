@@ -276,7 +276,7 @@ const jsonError = (status: number, message: string, origin: string | null) => {
   const headers = buildCorsHeaders(origin);
   return NextResponse.json({ error: message }, { status, headers });
 };
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS(request: NextRequest): Promise<NextResponse> {
   const preflight = handleCorsPreflight(request);
   if (preflight) {
     return preflight;
@@ -284,7 +284,7 @@ export async function OPTIONS(request: NextRequest) {
   return jsonError(405, 'Method not allowed', request.headers.get('origin'));
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const origin = request.headers.get('origin');
   const preflight = handleCorsPreflight(request);
   if (preflight) {

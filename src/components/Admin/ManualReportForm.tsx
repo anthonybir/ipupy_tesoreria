@@ -83,7 +83,7 @@ const statsFields = [
   { key: 'bautismos_agua', label: 'Bautismos en agua' },
   { key: 'bautismos_espiritu', label: 'Bautismos del Espíritu' },
 ] as const;
-export default function ManualReportForm({ churches, onSuccess, onCancel }: ManualReportFormProps) {
+export default function ManualReportForm({ churches, onSuccess, onCancel }: ManualReportFormProps): JSX.Element {
   const queryClient = useQueryClient();
   const currentYear = new Date().getFullYear();
   const currentMonth = new Date().getMonth() + 1;
@@ -404,7 +404,7 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
             <FormField key={key} htmlFor={`income-${key}`} label={label}>
               <CurrencyInput
                 id={`income-${key}`}
-                value={String(formData[key] ?? 0)}
+                value={String(formData[key])}
                 onValueChange={handleCurrencyFieldChange(key)}
                 placeholder="0"
               />
@@ -421,7 +421,7 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
             <FormField key={key} htmlFor={`designated-${key}`} label={label}>
               <CurrencyInput
                 id={`designated-${key}`}
-                value={String(formData[key] ?? 0)}
+                value={String(formData[key])}
                 onValueChange={handleCurrencyFieldChange(key)}
                 placeholder="0"
               />
@@ -438,7 +438,7 @@ export default function ManualReportForm({ churches, onSuccess, onCancel }: Manu
             <FormField key={key} htmlFor={`expense-${key}`} label={label}>
               <CurrencyInput
                 id={`expense-${key}`}
-                value={String(formData[key] ?? 0)}
+                value={String(formData[key])}
                 onValueChange={handleCurrencyFieldChange(key)}
                 placeholder="0"
               />

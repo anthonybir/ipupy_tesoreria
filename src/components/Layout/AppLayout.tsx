@@ -16,9 +16,9 @@ const MINIMAL_ROUTES = new Set(["/login"]);
 type ThemeOption = "light" | "dark";
 type DensityOption = "comfortable" | "compact";
 
-export default function AppLayout({ children }: AppLayoutProps) {
+export default function AppLayout({ children }: AppLayoutProps): JSX.Element {
   const pathname = usePathname();
-  const isMinimal = useMemo(() => MINIMAL_ROUTES.has(pathname ?? ""), [pathname]);
+  const isMinimal = useMemo(() => MINIMAL_ROUTES.has(pathname), [pathname]);
   const [theme, setTheme] = useState<ThemeOption>("light");
   const [density, setDensity] = useState<DensityOption>("comfortable");
 

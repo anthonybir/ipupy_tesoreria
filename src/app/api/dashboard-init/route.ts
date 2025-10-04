@@ -13,13 +13,13 @@ const jsonResponse = (origin: string | null, body: Record<string, unknown>, stat
   return response;
 };
 
-export async function OPTIONS(req: NextRequest) {
+export async function OPTIONS(req: NextRequest): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 200 });
   setCORSHeaders(response, req.headers.get('origin'));
   return response;
 }
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   const origin = req.headers.get('origin');
   try {
     const auth = await getAuthContext(req);
@@ -117,12 +117,12 @@ export async function GET(req: NextRequest) {
     return jsonResponse(
       origin,
       { error: (error as Error).message || 'Error loading dashboard data' },
-      (error as Error).message?.includes('Authentication') ? 401 : 500
+      (error as Error).message.includes('Authentication') ? 401 : 500
     );
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   const origin = req.headers.get('origin');
   return jsonResponse(origin, { error: 'Method not allowed' }, 405);
 }

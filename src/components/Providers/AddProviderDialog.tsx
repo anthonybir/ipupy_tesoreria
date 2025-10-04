@@ -19,7 +19,7 @@ export function AddProviderDialog({
   onProviderCreated,
   initialQuery = '',
   categoria,
-}: AddProviderDialogProps) {
+}: AddProviderDialogProps): JSX.Element {
   const [formData, setFormData] = useState({
     ruc: '',
     nombre: initialQuery,

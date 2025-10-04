@@ -65,7 +65,7 @@ export function DataTable<T>({
   virtualized = false,
   itemHeight = 56,
   maxHeight = 420,
-}: DataTableProps<T>) {
+}: DataTableProps<T>): JSX.Element {
   const [isMobile, setIsMobile] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [scrollTop, setScrollTop] = useState(0);

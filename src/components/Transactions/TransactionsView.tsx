@@ -121,7 +121,7 @@ const buildTransactionFilters = (
 
   return filters;
 };
-export default function TransactionsView() {
+export default function TransactionsView(): JSX.Element {
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
   const [offset, setOffset] = useState(0);
   const [selectedTransaction, setSelectedTransaction] = useState<TransactionRecord | null>(null);
@@ -198,7 +198,7 @@ export default function TransactionsView() {
 
     if (direction === 'previous') {
       setOffset(Math.max(0, currentOffset - limit));
-    } else if (direction === 'next') {
+    } else {
       const nextOffset = currentOffset + limit;
       if (nextOffset < total) {
         setOffset(nextOffset);
@@ -512,7 +512,7 @@ export default function TransactionsView() {
           <LoadingState description="Obteniendo las transacciones registradas" fullHeight />
         ) : isError ? (
           <ErrorState
-            description={(transactionsQuery.error as Error)?.message ?? 'Error inesperado'}
+            description={(transactionsQuery.error as Error).message}
             onRetry={refetchTransactions}
           />
         ) : transactions.length === 0 ? (

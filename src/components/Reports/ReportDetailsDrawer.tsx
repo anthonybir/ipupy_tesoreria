@@ -50,7 +50,7 @@ const makeAttachmentHref = (path?: string | null) => {
   return `/${path.replace(/^\/+/, "")}`;
 };
 
-export function ReportDetailsDrawer({ report, onClose }: ReportDetailsDrawerProps) {
+export function ReportDetailsDrawer({ report, onClose }: ReportDetailsDrawerProps): JSX.Element {
   const attachments = useMemo(() => {
     if (!report) {
       return [] as Array<{ label: string; href: string | null }>;
@@ -88,7 +88,7 @@ export function ReportDetailsDrawer({ report, onClose }: ReportDetailsDrawerProp
       open={Boolean(report)}
       onClose={onClose}
       title={report ? `${report.churchName} — ${report.month}/${report.year}` : "Detalle de informe"}
-      description={report?.metadata?.city ? `Ubicación: ${report.metadata.city}` : undefined}
+      description={report?.metadata.city ? `Ubicación: ${report.metadata.city}` : undefined}
       size="lg"
     >
       {!report ? null : (

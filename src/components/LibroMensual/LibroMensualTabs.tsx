@@ -36,7 +36,7 @@ type FilterState = {
 const currentYear = new Date().getFullYear();
 const selectableYears = Array.from({ length: 5 }).map((_, index) => String(currentYear - index));
 
-export function LibroMensualTabs() {
+export function LibroMensualTabs(): JSX.Element {
   const [activeTab, setActiveTab] = useState<ActiveTab>('pending');
   const [filters, setFilters] = useState<FilterState>({
     year: String(currentYear),

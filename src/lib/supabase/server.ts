@@ -1,8 +1,37 @@
-import { createServerClient } from '@supabase/ssr';
+import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import type { SupabaseClient, User } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { getSupabaseConfig } from '@/lib/env-validation';
+import type { ProfileRow } from '@/types/database';
 
-export async function createClient() {
+type ServerUserProfile = Omit<User, 'phone'> & {
+  phone: string | null;
+  role: string;
+  churchId: number | null;
+  churchName: string | null;
+  fullName: string | null;
+  isAuthenticated: true;
+  isActive: boolean;
+};
+
+const buildDefaultProfile = (baseUser: User): ServerUserProfile => {
+  const metadata = baseUser.user_metadata as Record<string, unknown>;
+  const metadataFullName = metadata['full_name'];
+  const fullName = typeof metadataFullName === 'string' ? metadataFullName : null;
+
+  return {
+    ...baseUser,
+    role: 'viewer',
+    churchId: null,
+    churchName: null,
+    fullName,
+    phone: baseUser.phone ?? null,
+    isAuthenticated: true,
+    isActive: true,
+  };
+};
+
+export async function createClient(): Promise<SupabaseClient> {
   const cookieStore = await cookies();
   const { url, anonKey } = getSupabaseConfig();
 
@@ -11,10 +40,10 @@ export async function createClient() {
     anonKey,
     {
       cookies: {
-        getAll() {
+        getAll(): ReturnType<typeof cookieStore.getAll> {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: Array<{ name: string; value: string; options: CookieOptions }>): void {
           try {
             cookiesToSet.forEach(({ name, value, options }) => {
               // Next.js supports the object form:
@@ -31,9 +60,12 @@ export async function createClient() {
   );
 }
 
-export async function getUser() {
+export async function getUser(): Promise<User | null> {
   const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
 
   if (error) {
     console.error('[Server] Error getting user:', error);
@@ -43,62 +75,70 @@ export async function getUser() {
   return user;
 }
 
-export async function getUserProfile() {
+export async function getUserProfile(): Promise<ServerUserProfile | null> {
   const supabase = await createClient();
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
   if (authError || !user) {
     console.error('[Server] Error getting user for profile:', authError);
     return null;
   }
 
-  // Get profile data from profiles table
-  const { data: profile, error: profileError } = await supabase
+  type ProfileRecord = Pick<ProfileRow, 'id' | 'email' | 'role' | 'church_id' | 'full_name' | 'is_active'>;
+
+  const {
+    data: profileData,
+    error: profileError,
+  } = await supabase
     .from('profiles')
-    .select(`
+    .select(
+      `
       id,
       email,
       role,
       church_id,
       full_name,
-      phone,
       is_active
-    `)
+    `
+    )
     .eq('id', user.id)
-    .single();
+    .maybeSingle<ProfileRecord>();
 
   if (profileError) {
     console.error('[Server] Error getting user profile:', profileError);
-    // Create a basic profile if it doesn't exist
-    return {
-      ...user,
-      role: 'viewer',
-      churchId: null,
-      churchName: null,
-      isAuthenticated: true
-    };
+    return buildDefaultProfile(user);
   }
 
-  // Get church name if user has a church_id
-  let churchName = null;
-  if (profile?.church_id) {
+  if (!profileData) {
+    return buildDefaultProfile(user);
+  }
+
+  const profile: ProfileRecord = profileData;
+
+  let churchName: string | null = null;
+  if (profile.church_id) {
+    type ChurchNameRecord = { name: string | null };
     const { data: church } = await supabase
       .from('churches')
       .select('name')
       .eq('id', profile.church_id)
-      .single();
-    churchName = church?.name || null;
+      .maybeSingle<ChurchNameRecord>();
+    churchName = church?.name ?? null;
   }
 
-  // Combine auth user with profile data
+  const fullName = profile.full_name ?? null;
+
   return {
     ...user,
-    role: profile?.role || 'viewer',
-    churchId: profile?.church_id,
-    churchName: churchName,
-    fullName: profile?.full_name,
-    phone: profile?.phone,
+    role: profile.role,
+    churchId: profile.church_id ?? null,
+    churchName,
+    fullName,
+    phone: null,
     isAuthenticated: true,
-    isActive: profile?.is_active ?? true
+    isActive: profile.is_active,
   };
 }

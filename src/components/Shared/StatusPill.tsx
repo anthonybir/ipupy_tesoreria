@@ -32,7 +32,7 @@ export type StatusPillProps = {
   showIcon?: boolean;
 };
 
-export function StatusPill({ children, tone = "neutral", icon, showIcon = true }: StatusPillProps) {
+export function StatusPill({ children, tone = "neutral", icon, showIcon = true }: StatusPillProps): JSX.Element {
   const IconComponent = toneIcons[tone];
 
   return (
@@ -61,7 +61,7 @@ export type EventStatusPillProps = {
   status: EventStatus;
 };
 
-export function EventStatusPill({ status }: EventStatusPillProps) {
+export function EventStatusPill({ status }: EventStatusPillProps): JSX.Element {
   const config = eventStatusConfig[status];
   return (
     <StatusPill tone={config.tone}>

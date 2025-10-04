@@ -80,8 +80,8 @@ function log(level: LogLevel, message: string, context?: LogContext, error?: Err
   const formatted = formatLogEntry(entry);
 
   // Use process streams instead of console to avoid lint violations
-  if (typeof process !== 'undefined' && process.stdout && process.stderr) {
-    const output = formatted + '\n';
+  if (typeof process !== 'undefined') {
+    const output = `${formatted}\n`;
     if (level === 'error') {
       process.stderr.write(output);
     } else {

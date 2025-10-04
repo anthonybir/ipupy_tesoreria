@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, type JSX } from 'react';
 
 export type MiniLineChartProps = {
   data: number[];
@@ -20,7 +20,7 @@ export function MiniLineChart({
   strokeWidth = 2,
   showDots = false,
   className = '',
-}: MiniLineChartProps) {
+}: MiniLineChartProps): JSX.Element {
   const pathData = useMemo(() => {
     if (data.length < 2) return '';
 

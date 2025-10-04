@@ -9,7 +9,7 @@ import { ZodError } from 'zod';
 
 export const runtime = 'nodejs';
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await requireAuth(req);
     const { searchParams } = new URL(req.url);
@@ -154,16 +154,16 @@ export async function GET(req: NextRequest) {
       success: true,
       data: result.rows,
       pagination: {
-        total: parseInt(stats?.['total'] ?? '0'),
+        total: parseInt(stats['total'] ?? '0'),
         limit,
         offset,
       },
       stats: {
-        draft: parseInt(stats?.['draft'] ?? '0'),
-        submitted: parseInt(stats?.['submitted'] ?? '0'),
-        approved: parseInt(stats?.['approved'] ?? '0'),
-        rejected: parseInt(stats?.['rejected'] ?? '0'),
-        pending_revision: parseInt(stats?.['pending_revision'] ?? '0'),
+        draft: parseInt(stats['draft'] ?? '0'),
+        submitted: parseInt(stats['submitted'] ?? '0'),
+        approved: parseInt(stats['approved'] ?? '0'),
+        rejected: parseInt(stats['rejected'] ?? '0'),
+        pending_revision: parseInt(stats['pending_revision'] ?? '0'),
       }
     });
 
@@ -174,7 +174,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await requireAuth(req);
     const rawBody = await req.json();
@@ -268,7 +268,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 200 });
   setCORSHeaders(response);
   return response;

@@ -7,6 +7,6 @@ export const metadata: Metadata = {
   description: 'Descarga de informes y respaldos de la Tesorería Nacional',
 };
 
-export default function ExportPage() {
+export default function ExportPage(): JSX.Element {
   return <ExportView />;
 }

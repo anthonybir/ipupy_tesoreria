@@ -8,7 +8,7 @@ import { logger } from '@/lib/logger';
 const DEFAULT_STALE_TIME = 60 * 1000;
 const DEFAULT_GC_TIME = 15 * 60 * 1000;
 
-export function Providers({ children }: { children: ReactNode }) {
+export function Providers({ children }: { children: ReactNode }): JSX.Element {
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
@@ -30,7 +30,7 @@ export function Providers({ children }: { children: ReactNode }) {
       logger.info('[Cache] Build version changed, cleaning up...');
 
       // Clear service worker if present (defensive - we don't use PWA)
-      if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) {
+      if ('serviceWorker' in navigator) {
         void navigator.serviceWorker.getRegistrations().then(regs => {
           regs.forEach(r => void r.unregister());
         });

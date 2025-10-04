@@ -7,6 +7,6 @@ export const metadata: Metadata = {
   description: 'Administración de fondos nacionales y saldos operativos',
 };
 
-export default function FundsPage() {
+export default function FundsPage(): JSX.Element {
   return <FundsView />;
 }

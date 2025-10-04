@@ -9,7 +9,7 @@ interface RequireAuthProps {
   fallback?: ReactNode;
 }
 
-export function RequireAuth({ children, fallback }: RequireAuthProps) {
+export function RequireAuth({ children, fallback }: RequireAuthProps): React.ReactNode {
   const { user, loading } = useAuth();
 
   // Show loading state
@@ -61,7 +61,7 @@ export function RequireAuth({ children, fallback }: RequireAuthProps) {
 }
 
 // Export a simpler login prompt component that can be used elsewhere
-export function LoginPrompt() {
+export function LoginPrompt(): JSX.Element {
   return (
     <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
       <div className="mb-4 text-4xl">🔐</div>

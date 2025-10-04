@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/api-client';
 import type {
   EventFilters,
@@ -16,7 +16,7 @@ import {
   normalizeEventBudgetItem,
 } from '@/types/financial';
 
-export function useFundEvents(filters?: EventFilters) {
+export function useFundEvents(filters?: EventFilters): UseQueryResult<FundEventCollection, Error> {
   return useQuery<FundEventCollection>({
     queryKey: ['fund-events', filters ?? null],
     queryFn: async () => {
@@ -37,7 +37,7 @@ export function useFundEvents(filters?: EventFilters) {
   });
 }
 
-export function useFundEvent(eventId: string | null) {
+export function useFundEvent(eventId: string | null): UseQueryResult<FundEventDetail | null, Error> {
   return useQuery<FundEventDetail | null>({
     queryKey: ['fund-event', eventId],
     queryFn: async () => {
@@ -50,27 +50,27 @@ export function useFundEvent(eventId: string | null) {
   });
 }
 
-export function useFundEventBudgetItems(eventId: string | null) {
+export function useFundEventBudgetItems(eventId: string | null): UseQueryResult<EventBudgetItem[], Error> {
   return useQuery<EventBudgetItem[]>({
     queryKey: ['fund-event-budget', eventId],
     queryFn: async () => {
       if (!eventId) return [];
 
       const result = await fetchJson<{ data: RawEventBudgetItem[] }>(`/api/fund-events/${eventId}/budget`);
-      return (result.data || []).map(normalizeEventBudgetItem);
+      return result.data.map(normalizeEventBudgetItem);
     },
     enabled: !!eventId,
   });
 }
 
-export function useFundEventActuals(eventId: string | null) {
+export function useFundEventActuals(eventId: string | null): UseQueryResult<unknown[], Error> {
   return useQuery({
     queryKey: ['fund-event-actuals', eventId],
     queryFn: async () => {
       if (!eventId) return [];
 
       const result = await fetchJson<{ data: unknown[] }>(`/api/fund-events/${eventId}/actuals`);
-      return result.data || [];
+      return result.data;
     },
     enabled: !!eventId,
   });

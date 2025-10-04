@@ -23,7 +23,7 @@ const toneClassNames: Record<MetricTone, string> = {
   info: 'bg-[color-mix(in_oklab,var(--absd-info) 16%,white)] text-[var(--absd-info)]',
 };
 
-export function MetricCard({ label, value, description, icon, tone = 'neutral', className }: MetricCardProps) {
+export function MetricCard({ label, value, description, icon, tone = 'neutral', className }: MetricCardProps): JSX.Element {
   return (
     <article
       className={cn(

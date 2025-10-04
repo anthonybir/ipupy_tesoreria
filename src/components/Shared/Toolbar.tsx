@@ -16,7 +16,7 @@ const variantClassNames: Record<NonNullable<ToolbarProps['variant']>, string> = 
   filters: 'bg-[color-mix(in_oklab,var(--absd-authority) 4%,white)]',
 };
 
-export function Toolbar({ children, actions, className, variant = 'default' }: ToolbarProps) {
+export function Toolbar({ children, actions, className, variant = 'default' }: ToolbarProps): JSX.Element {
   return (
     <section
       className={cn(

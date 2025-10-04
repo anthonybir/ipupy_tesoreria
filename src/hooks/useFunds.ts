@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
+import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
 
 import { fetchJson } from '@/lib/api-client';
 import {
@@ -40,7 +40,7 @@ const fetchFunds = async (filters: FundsFilters): Promise<FundCollection> => {
 export const fundsQueryKey = (filters: FundsFilters) =>
   ['financial', 'funds', filters.includeInactive ?? false, filters.category ?? 'all'] as const;
 
-export function useFunds(filters: FundsFilters = {}, options?: UseFundsOptions) {
+export function useFunds(filters: FundsFilters = {}, options?: UseFundsOptions): UseQueryResult<FundCollection, Error> {
   const { enabled, staleTime } = options ?? {};
 
   return useQuery<FundCollection, Error>({

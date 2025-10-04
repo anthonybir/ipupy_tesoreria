@@ -126,8 +126,8 @@ async function handleGet(req: NextRequest) {
 
     const limitValue = Number.parseInt(limit, 10);
     const offsetValue = Number.parseInt(offset, 10);
-    const totalCount = Number.parseInt(totalsRow.total_count ?? '0', 10);
-    const totalAmount = Number.parseFloat(totalsRow.total_amount ?? '0');
+    const totalCount = Number.parseInt(totalsRow.total_count, 10);
+    const totalAmount = Number.parseFloat(totalsRow.total_amount);
 
     const response = NextResponse.json({
       success: true,
@@ -237,10 +237,6 @@ async function handlePost(req: NextRequest) {
         );
 
         const insertedMovement = expectOne(movementResult.rows);
-        if (!insertedMovement) {
-          errors.push({ movement, error: 'Failed to create movement record' });
-          continue;
-        }
 
         await createLedgerTransaction({
           date: new Date().toISOString().slice(0, 10),
@@ -352,9 +348,6 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
         [userEmail]
       );
       const inserted = expectOne(result.rows);
-      if (!inserted) {
-        throw new Error('Failed to ensure Fondo Nacional fund');
-      }
       fundMap["Fondo Nacional"] = inserted.id;
     }
 
@@ -366,9 +359,6 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
         [userEmail]
       );
       const inserted = expectOne(result.rows);
-      if (!inserted) {
-        throw new Error('Failed to ensure Diezmos fund');
-      }
       fundMap["Diezmos"] = inserted.id;
     }
 
@@ -380,9 +370,6 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
         [userEmail]
       );
       const inserted = expectOne(result.rows);
-      if (!inserted) {
-        throw new Error('Failed to ensure Ofrendas fund');
-      }
       fundMap["Ofrendas"] = inserted.id;
     }
 
@@ -420,13 +407,11 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
         concept: `Diezmos - ${report.church_name}`,
         amount_in: amount,
         amount_out: 0,
-        created_by: userEmail ?? 'system'
+        created_by: userEmail
       }, auth);
 
       const created = expectOne(diezmoMovement.rows);
-      if (created) {
-        movements.push(created);
-      }
+      movements.push(created);
     }
 
     // Process ofrendas
@@ -455,13 +440,11 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
         concept: `Ofrendas - ${report.church_name}`,
         amount_in: amount,
         amount_out: 0,
-        created_by: userEmail ?? 'system'
+        created_by: userEmail
       }, auth);
 
       const created = expectOne(ofrendaMovement.rows);
-      if (created) {
-        movements.push(created);
-      }
+      movements.push(created);
     }
 
     // Process fondo nacional (10% of total)
@@ -490,13 +473,11 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
         concept: `Fondo Nacional 10% - ${report.church_name}`,
         amount_in: amount,
         amount_out: 0,
-        created_by: userEmail ?? 'system'
+        created_by: userEmail
       }, auth);
 
       const created = expectOne(fondoMovement.rows);
-      if (created) {
-        movements.push(created);
-      }
+      movements.push(created);
     }
 
     const response = NextResponse.json({
@@ -584,20 +565,20 @@ async function handleDelete(req: NextRequest) {
 }
 
 // OPTIONS handler for CORS
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 200 });
   setCORSHeaders(response);
   return response;
 }
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   return handleGet(req);
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   return handlePost(req);
 }
 
-export async function DELETE(req: NextRequest) {
+export async function DELETE(req: NextRequest): Promise<NextResponse> {
   return handleDelete(req);
 }

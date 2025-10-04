@@ -61,7 +61,7 @@ export const validateAndTrimEnvVars = (): EnvIssues => {
 
   if (issues.length > 0) {
     // Use stderr for environment issues (server-side only)
-    if (typeof process !== 'undefined' && process.stderr) {
+    if (typeof process !== 'undefined') {
       process.stderr.write('Environment Variable Issues Detected:\n');
       issues.forEach((issue) => process.stderr.write(`  - ${issue}\n`));
     }

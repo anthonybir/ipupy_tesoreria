@@ -16,7 +16,7 @@ export type StatCardProps = {
   chart?: ReactNode;
 };
 
-export function StatCard({ label, value, description, badge, tone = "default", trend, chart }: StatCardProps) {
+export function StatCard({ label, value, description, badge, tone = "default", trend, chart }: StatCardProps): JSX.Element {
   return (
     <article
       className="absd-card absd-span-compact flex flex-col gap-3 rounded-3xl border border-[var(--absd-border)] bg-[var(--absd-surface)] px-5 py-4 shadow-sm transition-all hover:shadow-md"

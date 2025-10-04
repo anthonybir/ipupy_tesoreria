@@ -56,7 +56,7 @@ const defaultFormState: FundFormState = {
   currentBalance: '0',
   isActive: true,
 };
-export default function FundsView() {
+export default function FundsView(): JSX.Element {
   const [includeInactive, setIncludeInactive] = useState(false);
   const [selectedFund, setSelectedFund] = useState<FundRecord | null>(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -358,7 +358,7 @@ export default function FundsView() {
           <LoadingState description="Sincronizando datos financieros" fullHeight tone="info" />
         ) : isError ? (
           <ErrorState
-            description={(fundsQuery.error as Error)?.message ?? 'Ocurrió un error inesperado'}
+            description={(fundsQuery.error as Error).message}
             onRetry={refreshFunds}
           />
         ) : funds.length === 0 ? (

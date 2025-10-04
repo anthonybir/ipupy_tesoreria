@@ -49,7 +49,7 @@ const defaultState: ExportFormState = {
 const selectClasses =
   'rounded-xl border border-[var(--absd-border)] bg-white px-3 py-2 text-sm text-[var(--absd-ink)] shadow-sm focus:border-[var(--absd-authority)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_oklab,var(--absd-authority) 40%,white)]';
 
-export default function ExportView() {
+export default function ExportView(): JSX.Element {
   const [formState, setFormState] = useState<ExportFormState>(defaultState);
   const exportMutation = useExport();
 
@@ -90,7 +90,7 @@ export default function ExportView() {
       toast.success('Archivo exportado correctamente');
     } catch (error) {
       console.error('Error exporting data', error);
-      toast.error((error as Error)?.message ?? 'No se pudo generar la exportación.');
+      toast.error((error as Error).message);
     }
   };
 
@@ -185,7 +185,7 @@ export default function ExportView() {
           <ErrorState
             className="mt-6"
             title="No se pudo completar la exportación"
-            description={(exportMutation.error as Error)?.message ?? 'Inténtalo nuevamente en unos minutos.'}
+            description={(exportMutation.error as Error).message}
           />
         ) : null}
       </SectionCard>

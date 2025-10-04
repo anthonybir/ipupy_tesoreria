@@ -25,7 +25,7 @@ const jsonResponse = (data: unknown, origin: string | null, status = 200) =>
   NextResponse.json(data, { status, headers: buildCorsHeaders(origin) });
 
 const parseInteger = (value: string | null) => {
-  if (value === null || value === undefined) {
+  if (value === null) {
     return null;
   }
   const parsed = Number.parseInt(value, 10);
@@ -446,17 +446,17 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
 
   const designatedDbValues = DESIGNATED_FORM_KEYS.reduce<Record<string, number>>((acc, key) => {
     const column = DESIGNATED_FIELD_MAP[key];
-    acc[column] = breakdown[key] ?? 0;
+    acc[column] = breakdown[key];
     return acc;
   }, {});
 
   const designatedForTransactions = DESIGNATED_FORM_KEYS.reduce<Record<DesignatedKey, number>>((acc, key) => {
-    acc[key] = breakdown[key] ?? 0;
+    acc[key] = breakdown[key];
     return acc;
   }, {} as Record<DesignatedKey, number>);
 
   const expenseValues = EXPENSE_KEYS.reduce<Record<string, number>>((acc, key) => {
-    acc[key] = expenses[key] ?? 0;
+    acc[key] = expenses[key];
     return acc;
   }, {});
 
@@ -752,17 +752,17 @@ const handleUpdateReport = async (
 
   const designatedDbValues = DESIGNATED_FORM_KEYS.reduce<Record<string, number>>((acc, key) => {
     const column = DESIGNATED_FIELD_MAP[key];
-    acc[column] = breakdown[key] ?? 0;
+    acc[column] = breakdown[key];
     return acc;
   }, {});
 
   const designatedForTransactions = DESIGNATED_FORM_KEYS.reduce<Record<DesignatedKey, number>>((acc, key) => {
-    acc[key] = breakdown[key] ?? 0;
+    acc[key] = breakdown[key];
     return acc;
   }, {} as Record<DesignatedKey, number>);
 
   const expenseValues = EXPENSE_KEYS.reduce<Record<string, number>>((acc, key) => {
-    acc[key] = expenses[key] ?? 0;
+    acc[key] = expenses[key];
     return acc;
   }, {});
 
@@ -1068,7 +1068,7 @@ const handleDeleteReport = async (reportId: number, auth: AuthContext) => {
   return { message: 'Informe eliminado exitosamente' };
 };
 
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS(request: NextRequest): Promise<NextResponse> {
   const preflight = handleCorsPreflight(request);
   if (preflight) {
     return preflight;
@@ -1078,7 +1078,7 @@ export async function OPTIONS(request: NextRequest) {
 
 // Removed local handleError - now using centralized handleApiError from @/lib/api-errors
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const origin = request.headers.get('origin');
   const preflight = handleCorsPreflight(request);
   if (preflight) {
@@ -1131,7 +1131,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   const origin = request.headers.get('origin');
   const preflight = handleCorsPreflight(request);
   if (preflight) {
@@ -1164,7 +1164,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function PUT(request: NextRequest) {
+export async function PUT(request: NextRequest): Promise<NextResponse> {
   const origin = request.headers.get('origin');
   const preflight = handleCorsPreflight(request);
   if (preflight) {
@@ -1198,7 +1198,7 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest): Promise<NextResponse> {
   const origin = request.headers.get('origin');
   const preflight = handleCorsPreflight(request);
   if (preflight) {

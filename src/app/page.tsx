@@ -57,9 +57,9 @@ const loadDashboardSummary = async (auth: { userId?: string; role?: string; chur
 
   const row = summary.rows[0] ?? { total_reports: "0", total_churches: "0", processed: "0" };
   return {
-    totalReports: Number(row.total_reports ?? 0),
-    totalChurches: Number(row.total_churches ?? 0),
-    processedThisMonth: Number(row.processed ?? 0),
+    totalReports: Number(row.total_reports),
+    totalChurches: Number(row.total_churches),
+    processedThisMonth: Number(row.processed),
   };
 };
 
@@ -169,7 +169,7 @@ const loadRecentReports = async (auth: { userId?: string; role?: string; churchI
   );
   return result.rows.map((row) => ({
     ...row,
-    total_entradas: Number(row.total_entradas ?? 0),
+    total_entradas: Number(row.total_entradas),
   }));
 };
 
@@ -186,7 +186,7 @@ const withDashboardFallback = async <TReturn,>(
   }
 };
 
-export default async function DashboardLanding() {
+export default async function DashboardLanding(): Promise<JSX.Element> {
   const user = await getUserProfile().catch((error) => {
     logger.error('[Dashboard] Failed to resolve user profile', error instanceof Error ? error : undefined);
     return null;
@@ -445,7 +445,7 @@ export default async function DashboardLanding() {
             </div>
             <div className="rounded-2xl bg-[var(--absd-subtle)] px-4 py-3">
               <dt className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">Rol</dt>
-              <dd className="font-medium capitalize text-[var(--absd-ink)]">{user.role ?? "sin definir"}</dd>
+              <dd className="font-medium capitalize text-[var(--absd-ink)]">{user.role}</dd>
             </div>
             <div className="rounded-2xl bg-[var(--absd-subtle)] px-4 py-3">
               <dt className="text-xs font-semibold uppercase tracking-wide text-[rgba(15,23,42,0.55)]">Iglesia asignada</dt>

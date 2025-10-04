@@ -6,7 +6,7 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { createTransaction as createLedgerTransaction } from '@/app/api/reports/route-helpers';
 
 // Admin endpoint for full transaction management
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     // SECURITY: Rate limiting check
     const rateLimitResponse = withRateLimit(request, 'admin');
@@ -93,13 +93,14 @@ export async function GET(request: NextRequest) {
     `, params.slice(0, -2));
 
     const countRow = firstOrDefault(countResult.rows, { total: 0 });
+
     return NextResponse.json({
       success: true,
       data: result.rows,
       pagination: {
-        total: parseInt(String(countRow['total'] ?? '0')),
-        limit: parseInt(limit),
-        offset: parseInt(offset)
+        total: Number.parseInt(String(countRow['total'] ?? '0'), 10),
+        limit: Number.parseInt(limit, 10),
+        offset: Number.parseInt(offset, 10)
       }
     });
   } catch (error) {
@@ -112,7 +113,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST: Create external transaction
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     // SECURITY: Require admin authentication
     const auth = await requireAdmin(request);
@@ -157,7 +158,7 @@ export async function POST(request: NextRequest) {
 }
 
 // DELETE: Remove transaction (with balance adjustment)
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest): Promise<NextResponse> {
   try {
     // SECURITY: Require admin authentication
     const auth = await requireAdmin(request);

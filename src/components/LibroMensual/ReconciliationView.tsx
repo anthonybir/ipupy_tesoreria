@@ -49,7 +49,7 @@ const readNumber = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-export function ReconciliationView() {
+export function ReconciliationView(): JSX.Element {
   const [selectedFund, setSelectedFund] = useState<string>('all');
 
   const fundsQuery = useAdminFunds();
@@ -58,7 +58,7 @@ export function ReconciliationView() {
   );
 
   const funds = fundsQuery.data ?? [];
-  const rawReconciliation = (reconciliationQuery.data as { data?: Array<Record<string, unknown>> })?.data;
+  const rawReconciliation = (reconciliationQuery.data as { data?: Array<Record<string, unknown>> }).data;
   const reconciliation: ReconciliationRow[] = useMemo(() => {
     if (!rawReconciliation) {
       return [];
@@ -93,7 +93,7 @@ export function ReconciliationView() {
       return base;
     });
   }, [rawReconciliation]);
-  const summary = (reconciliationQuery.data as { summary?: Record<string, unknown> })?.summary ?? {};
+  const summary = (reconciliationQuery.data as { summary?: Record<string, unknown> }).summary ?? {};
 
   const discrepancyTotal = useMemo(() => {
     return reconciliation.reduce((sum, row) => sum + row.difference, 0);

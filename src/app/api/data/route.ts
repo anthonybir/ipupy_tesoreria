@@ -78,13 +78,13 @@ const buildBinaryResponse = (buffer: Buffer, filename: string) => {
   return response;
 };
 
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 200 });
   setCORSHeaders(response);
   return response;
 }
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
     if (!auth?.email) {
@@ -105,7 +105,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
     if (!auth?.email) {
@@ -307,7 +307,7 @@ function buildWorkbook(
   if (firstRow) {
     const columns = Object.keys(firstRow);
     const columnWidths = columns.map((key) => {
-      const values = data.map((row) => String(row?.[key] ?? ""));
+      const values = data.map((row) => String(row[key] ?? ""));
       const maxLength = Math.max(key.length, ...values.map((value) => value.length));
       const minWidth = 10;
       const maxWidth = 50;
@@ -375,7 +375,7 @@ async function handleImportRequest(auth: AuthContext | null, req: NextRequest) {
 
   const rows = XLSX.utils.sheet_to_json(worksheet) as ReportsImportRow[];
 
-  if (!rows || rows.length === 0) {
+  if (rows.length === 0) {
     return badRequest("El archivo Excel está vacío o no tiene datos válidos");
   }
 
@@ -448,7 +448,7 @@ async function importReports(
         [`%${churchName}%`]
       );
 
-      if (!churchResult.rows || churchResult.rows.length === 0) {
+      if (churchResult.rows.length === 0) {
         results.errors.push(`Fila ${index + 1}: Iglesia "${churchName}" no encontrada`);
         continue;
       }

@@ -25,7 +25,7 @@ export type PastorAccessDialogProps = {
 };
 
 // Grant Access Dialog
-export const GrantAccessDialog = ({ pastorId, pastor, onClose }: PastorAccessDialogProps) => {
+export const GrantAccessDialog = ({ pastorId, pastor, onClose }: PastorAccessDialogProps): JSX.Element => {
   const [mode, setMode] = useState<'existing' | 'new'>('existing');
   const [profileId, setProfileId] = useState('');
   const [email, setEmail] = useState(pastor?.pastorName ? `${pastor.pastorName.toLowerCase().replace(/\s+/g, '.')}@ipupy.org.py` : '');
@@ -170,7 +170,7 @@ export const GrantAccessDialog = ({ pastorId, pastor, onClose }: PastorAccessDia
 };
 
 // Change Role Dialog
-export const ChangeRoleDialog = ({ pastorId, pastor, onClose }: PastorAccessDialogProps) => {
+export const ChangeRoleDialog = ({ pastorId, pastor, onClose }: PastorAccessDialogProps): JSX.Element => {
   const [newRole, setNewRole] = useState(pastor?.platformRole || 'pastor');
 
   const linkMutation = useLinkPastorProfile();
@@ -251,7 +251,7 @@ export const ChangeRoleDialog = ({ pastorId, pastor, onClose }: PastorAccessDial
 };
 
 // Revoke Access Dialog
-export const RevokeAccessDialog = ({ pastorId, pastor, onClose }: PastorAccessDialogProps) => {
+export const RevokeAccessDialog = ({ pastorId, pastor, onClose }: PastorAccessDialogProps): JSX.Element => {
   const unlinkMutation = useUnlinkPastorProfile();
 
   const handleRevoke = async () => {

@@ -48,7 +48,7 @@ const INITIAL_FORM_STATE: BudgetFormState = {
 
 type DialogMode = 'create' | 'edit';
 
-export function BudgetManager({ eventId, canEdit }: BudgetManagerProps) {
+export function BudgetManager({ eventId, canEdit }: BudgetManagerProps): JSX.Element {
   const {
     data: items = [],
     isLoading,

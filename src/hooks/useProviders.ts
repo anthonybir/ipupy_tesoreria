@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type UseQueryResult, type UseMutationResult } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/api-client';
 
 export type Provider = {
@@ -50,7 +50,14 @@ type UpdateProviderInput = {
   es_activo?: boolean;
 };
 
-export function useProviders(options: UseProvidersOptions = {}) {
+type UseProvidersResult = UseQueryResult<{ data: Provider[]; count: number }, Error> & {
+  createProvider: UseMutationResult<{ data: Provider }, Error, CreateProviderInput, unknown>;
+  updateProvider: UseMutationResult<{ data: Provider }, Error, UpdateProviderInput, unknown>;
+  deleteProvider: UseMutationResult<{ success: boolean }, Error, number, unknown>;
+  reactivateProvider: UseMutationResult<{ data: Provider }, Error, number, unknown>;
+};
+
+export function useProviders(options: UseProvidersOptions = {}): UseProvidersResult {
   const queryClient = useQueryClient();
 
   const query = useQuery({
@@ -122,7 +129,7 @@ export function useProviders(options: UseProvidersOptions = {}) {
   };
 }
 
-export function useProviderSearch(searchQuery: string, categoria?: string) {
+export function useProviderSearch(searchQuery: string, categoria?: string): UseQueryResult<{ data: Provider[] }, Error> {
   return useQuery({
     queryKey: ['providers', 'search', searchQuery, categoria],
     queryFn: async () => {
@@ -135,7 +142,7 @@ export function useProviderSearch(searchQuery: string, categoria?: string) {
   });
 }
 
-export function useCheckRuc(ruc: string) {
+export function useCheckRuc(ruc: string): UseQueryResult<{ exists: boolean; provider: Provider | null }, Error> {
   return useQuery({
     queryKey: ['providers', 'check-ruc', ruc],
     queryFn: async () => {

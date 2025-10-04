@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery, type UseQueryOptions } from '@tanstack/react-query';
+import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
 
 import { fetchJson } from '@/lib/api-client';
 import {
@@ -76,7 +76,7 @@ export const transactionsQueryKey = (
 export function useTransactions(
   filters: TransactionFilters,
   options?: UseTransactionsOptions,
-) {
+): UseQueryResult<TransactionCollection, Error> {
   const { enabled = true, staleTime, placeholderData } = options ?? {};
 
   return useQuery<TransactionCollection, Error>({

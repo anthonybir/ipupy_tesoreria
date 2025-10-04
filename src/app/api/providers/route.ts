@@ -50,7 +50,7 @@ const buildProviderFilters = (searchParams: URLSearchParams) => {
   return { whereClause, params };
 };
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const auth = await requireAuth(request);
     const { searchParams } = new URL(request.url);
@@ -89,7 +89,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const auth = await requireAuth(request);
     const body = await request.json();
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
         email ?? null,
         categoria ?? null,
         notas ?? null,
-        auth.email ?? auth.userId ?? null
+        auth.userId
       ]
     );
 
@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function PUT(request: NextRequest) {
+export async function PUT(request: NextRequest): Promise<NextResponse> {
   try {
     const auth = await requireAuth(request);
     const body = await request.json();
@@ -210,7 +210,7 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest): Promise<NextResponse> {
   try {
     const auth = await requireAuth(request);
     const searchParams = request.nextUrl.searchParams;

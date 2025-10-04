@@ -29,7 +29,7 @@ const getEventMeta = (row: EventRow | null | undefined): EventMeta => ({
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
-) {
+): Promise<NextResponse> {
   try {
     const auth = await requireAuth(req);
     const params = await context.params;
@@ -138,7 +138,7 @@ export async function GET(
 export async function PATCH(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
-) {
+): Promise<NextResponse> {
   try {
     const auth = await requireAuth(req);
     const params = await context.params;
@@ -194,7 +194,7 @@ export async function PATCH(
         await client.query(`
           INSERT INTO fund_event_audit (event_id, previous_status, new_status, changed_by, comment)
           VALUES ($1, $2, 'submitted', $3, 'Enviado para aprobación')
-        `, [eventId, eventStatus ?? 'unknown', auth.userId]);
+        `, [eventId, eventStatus, auth.userId]);
       });
 
       const response = NextResponse.json({
@@ -326,7 +326,7 @@ export async function PATCH(
 export async function PUT(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
-) {
+): Promise<NextResponse> {
   try {
     const auth = await requireAuth(req);
     const params = await context.params;
@@ -413,7 +413,7 @@ export async function PUT(
 export async function DELETE(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
-) {
+): Promise<NextResponse> {
   try {
     const auth = await requireAuth(req);
     const params = await context.params;
@@ -480,7 +480,7 @@ export async function DELETE(
   }
 }
 
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 200 });
   setCORSHeaders(response);
   return response;

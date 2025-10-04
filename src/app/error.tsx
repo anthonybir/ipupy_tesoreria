@@ -10,7 +10,7 @@ type ErrorDetails = {
   buildId: string;
 };
 
-export default function GlobalError({ error, reset }: { error: Error; reset: () => void }) {
+export default function GlobalError({ error, reset }: { error: Error; reset: () => void }): JSX.Element {
   const [errorDetails, setErrorDetails] = useState<ErrorDetails | null>(null);
   const [showDetails, setShowDetails] = useState(false);
 

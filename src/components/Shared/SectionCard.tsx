@@ -22,7 +22,7 @@ export function SectionCard({
   actions,
   padding = "md",
   children,
-}: SectionCardProps) {
+}: SectionCardProps): JSX.Element {
   return (
     <section className={`absd-card ${paddingMap[padding]} space-y-4`}>
       {(title || description || leading || actions) && (

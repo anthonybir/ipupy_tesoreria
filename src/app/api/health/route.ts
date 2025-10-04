@@ -120,7 +120,7 @@ export async function GET(): Promise<NextResponse<HealthCheck>> {
       build_id: process.env['VERCEL_GIT_COMMIT_SHA'] ||
                 process.env['NEXT_PUBLIC_BUILD_ID'] ||
                 'dev',
-      node_env: process.env['NODE_ENV'] || 'development',
+      node_env: process.env['NODE_ENV'],
     },
   };
 

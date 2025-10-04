@@ -6,7 +6,7 @@ import { firstOrNull } from '@/lib/db-helpers';
 export async function PUT(
   req: NextRequest,
   context: { params: Promise<{ id: string; budgetItemId: string }> }
-) {
+): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 
@@ -99,7 +99,7 @@ export async function PUT(
 export async function DELETE(
   req: NextRequest,
   context: { params: Promise<{ id: string; budgetItemId: string }> }
-) {
+): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 

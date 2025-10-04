@@ -30,7 +30,7 @@ type EventDetailsDrawerProps = {
   onClose: () => void;
 };
 
-export function EventDetailsDrawer({ eventId, initialEvent, viewer, onClose }: EventDetailsDrawerProps) {
+export function EventDetailsDrawer({ eventId, initialEvent, viewer, onClose }: EventDetailsDrawerProps): JSX.Element {
   const { submitEvent, approveEvent, rejectEvent } = useEventMutations();
   const { data: detailedEvent, isLoading } = useFundEvent(eventId);
 

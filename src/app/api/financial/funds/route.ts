@@ -234,7 +234,7 @@ async function handleDelete(req: NextRequest) {
 
     if (txError) throw txError;
 
-    if (transactions && transactions.length > 0) {
+    if (transactions.length > 0) {
       // Soft delete - just deactivate
       const { error: updateError } = await supabase
         .from('funds')
@@ -271,24 +271,24 @@ async function handleDelete(req: NextRequest) {
 }
 
 // OPTIONS handler for CORS
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 200 });
   setCORSHeaders(response);
   return response;
 }
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   return handleGet(req);
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   return handlePost(req);
 }
 
-export async function PUT(req: NextRequest) {
+export async function PUT(req: NextRequest): Promise<NextResponse> {
   return handlePut(req);
 }
 
-export async function DELETE(req: NextRequest) {
+export async function DELETE(req: NextRequest): Promise<NextResponse> {
   return handleDelete(req);
 }

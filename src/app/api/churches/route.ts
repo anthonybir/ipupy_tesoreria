@@ -58,7 +58,7 @@ const DIRECTORY_BASE_QUERY = `
 const DIRECTORY_ACTIVE_QUERY = `${DIRECTORY_BASE_QUERY} WHERE c.active = TRUE ORDER BY c.name`;
 const DIRECTORY_BY_ID_QUERY = `${DIRECTORY_BASE_QUERY} WHERE c.id = $1`;
 
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS(request: NextRequest): Promise<NextResponse> {
   const preflight = handleCorsPreflight(request);
   if (preflight) {
     return preflight;
@@ -66,7 +66,7 @@ export async function OPTIONS(request: NextRequest) {
   return jsonResponse({ error: 'Method not allowed' }, request.headers.get('origin'), 405);
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const origin = request.headers.get('origin');
   const preflight = handleCorsPreflight(request);
   if (preflight) {
@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
 
   const result = await executeWithContext(auth, DIRECTORY_ACTIVE_QUERY);
 
-  return jsonResponse(result.rows ?? [], origin);
+  return jsonResponse(result.rows, origin);
 }
 
 type PastorPayload = {
@@ -117,7 +117,7 @@ const normalizePastorPayload = (
   nationalId: raw?.nationalId?.trim() || fallback.nationalId || null,
   taxId: raw?.taxId?.trim() || fallback.taxId || null,
   grado: raw?.grado?.trim() || fallback.grado || null,
-  roleTitle: raw?.roleTitle?.trim() || fallback.roleTitle || null,
+  roleTitle: (raw?.roleTitle && raw.roleTitle.trim()) || fallback.roleTitle || null,
   startDate: raw?.startDate || null,
   endDate: raw?.endDate || null,
   status: raw?.status?.trim() || null,
@@ -125,7 +125,7 @@ const normalizePastorPayload = (
   isPrimary: raw?.isPrimary ?? true
 });
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   const origin = request.headers.get('origin');
   const preflight = handleCorsPreflight(request);
   if (preflight) {
@@ -273,7 +273,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function PUT(request: NextRequest) {
+export async function PUT(request: NextRequest): Promise<NextResponse> {
   const origin = request.headers.get('origin');
   const preflight = handleCorsPreflight(request);
   if (preflight) {
@@ -471,7 +471,7 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest): Promise<NextResponse> {
   const origin = request.headers.get('origin');
   const preflight = handleCorsPreflight(request);
   if (preflight) {

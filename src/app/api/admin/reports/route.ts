@@ -141,7 +141,7 @@ const mapReportRow = (row: Record<string, unknown>) => {
   };
 };
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     // SECURITY: Require admin authentication
     const auth = await requireAdmin(request);
@@ -187,7 +187,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function PATCH(request: NextRequest) {
+export async function PATCH(request: NextRequest): Promise<NextResponse> {
   try {
     // SECURITY: Require admin authentication
     const auth = await requireAdmin(request);

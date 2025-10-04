@@ -40,7 +40,7 @@ const asNullable = (value: string) => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
-export function ChurchForm() {
+export function ChurchForm(): JSX.Element {
   const [form, setForm] = useState(initialState);
   const createChurch = useCreateChurch();
 

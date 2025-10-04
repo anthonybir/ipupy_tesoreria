@@ -24,7 +24,7 @@ type ReportsDashboardProps = {
 
 const formatPeriod = (report: ReportRecord) => `${monthLabels[report.month - 1] ?? report.month}/${report.year}`;
 
-export function ReportsDashboard({ reports, churches }: ReportsDashboardProps) {
+export function ReportsDashboard({ reports, churches }: ReportsDashboardProps): JSX.Element {
   const currentDate = new Date();
   const currentPeriod = {
     month: currentDate.getMonth() + 1,

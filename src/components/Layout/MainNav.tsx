@@ -69,15 +69,15 @@ const NAVIGATION: NavItem[] = [
   },
 ] as const;
 
-export default function MainNav() {
+export default function MainNav(): JSX.Element {
   const pathname = usePathname();
   const { user } = useAuth();
   const { profile } = useProfile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const authRole =
-    (user?.app_metadata?.['role'] as string | undefined) ??
-    (user?.user_metadata?.['role'] as string | undefined) ??
+    (user?.app_metadata['role'] as string | undefined) ??
+    (user?.user_metadata['role'] as string | undefined) ??
     (user ? (user as { role?: string }).role : undefined);
 
   const items = useMemo(() => {

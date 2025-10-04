@@ -151,7 +151,7 @@ const formatCurrency = (value: number): string => formatCurrencyDisplay(roundTwo
 const InputBaseClasses =
   'rounded-xl border border-[var(--absd-border)] bg-white px-4 py-3 text-sm text-[var(--absd-ink)] shadow-sm focus:border-[var(--absd-authority)] focus:outline-none focus:ring-2 focus:ring-[color-mix(in_oklab,var(--absd-authority) 40%,white)]';
 
-export function ReportForm() {
+export function ReportForm(): JSX.Element {
   const currentDate = new Date();
   const buildDefaultState = (): FormState => ({
     church_id: '',
@@ -511,7 +511,7 @@ export function ReportForm() {
         <FormField
           key={field}
           htmlFor={fieldId}
-          label={fieldLabels[field] ?? field.replace('_', ' ')}
+          label={fieldLabels[field]}
           {...(helperText ? { hint: helperText } : {})}
         >
           <input
@@ -530,7 +530,7 @@ export function ReportForm() {
       <FormField
         key={field}
         htmlFor={fieldId}
-        label={fieldLabels[field] ?? field.replace('_', ' ')}
+        label={fieldLabels[field]}
         {...(helperText ? { hint: helperText } : {})}
       >
         <CurrencyInput

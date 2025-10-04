@@ -9,7 +9,7 @@ import {
   Cog6ToothIcon,
 } from "@heroicons/react/24/outline";
 
-export default function UserMenu() {
+export default function UserMenu(): JSX.Element {
   const { user, loading, signOut } = useAuth();
 
   if (loading) {

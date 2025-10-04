@@ -84,7 +84,7 @@ type IntegrationConfigurationSectionProps = {
 };
 
 // Configuration sections
-const ConfigurationPage = () => {
+const ConfigurationPage = (): JSX.Element => {
   const [activeTab, setActiveTab] = useState('general');
 
   // Load all configurations using TanStack Query hooks
@@ -696,13 +696,13 @@ const ConfigurationPage = () => {
             <CardContent className="space-y-6">
               <div className="space-y-4">
                 {fundsConfig.defaultFunds.map((fund: DefaultFund, index) => {
-                  const fundId = fund?.fundId ?? `${fund?.name ?? 'fondo'}-${index}`;
-                  const fundName = fund?.name ?? 'Fondo sin nombre';
-                  const fundTypeLabel = fund?.fundType ? fund.fundType.replace(/_/g, ' ').toUpperCase() : '';
-                  const isActive = typeof fund?.isActive === 'boolean' ? fund.isActive : null;
-                  const percentageValue = Number.isFinite(fund?.percentage) ? fund.percentage : 0;
-                  const autoCalculate = Boolean(fund?.autoCalculate);
-                  const isRequired = Boolean(fund?.required);
+                  const fundId = fund.fundId ?? `${fund.name}-${index}`;
+                  const fundName = fund.name;
+                  const fundTypeLabel = fund.fundType ? fund.fundType.replace(/_/g, ' ').toUpperCase() : '';
+                  const isActive = typeof fund.isActive === 'boolean' ? fund.isActive : null;
+                  const percentageValue = Number.isFinite(fund.percentage) ? fund.percentage : 0;
+                  const autoCalculate = Boolean(fund.autoCalculate);
+                  const isRequired = Boolean(fund.required);
 
                   return (
                     <div key={fundId} className="grid grid-cols-4 gap-4 items-end">

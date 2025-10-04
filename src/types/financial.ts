@@ -627,10 +627,10 @@ export type FundEventDetail = FundEvent & {
 export const normalizeFundEventDetail = (raw: RawFundEventDetail): FundEventDetail => {
   const base = normalizeFundEvent(raw);
 
-  const budgetItems = (raw.budget_items ?? []).map(normalizeEventBudgetItem);
+  const budgetItems = raw.budget_items.map(normalizeEventBudgetItem);
   const totalBudget = budgetItems.reduce((sum, item) => sum + item.projectedAmount, 0);
 
-  const actualEntries = (raw.actuals ?? []).map(normalizeEventActual);
+  const actualEntries = raw.actuals.map(normalizeEventActual);
   const totalIncome = actualEntries
     .filter((entry) => entry.lineType === 'income')
     .reduce((sum, entry) => sum + entry.amount, 0);
@@ -640,7 +640,7 @@ export const normalizeFundEventDetail = (raw: RawFundEventDetail): FundEventDeta
   const netAmount = totalIncome - totalExpense;
   const variance = netAmount - totalBudget;
 
-  const auditHistory = (raw.audit_trail ?? []).map(normalizeEventAuditEntry);
+  const auditHistory = raw.audit_trail.map(normalizeEventAuditEntry);
 
   return {
     ...base,

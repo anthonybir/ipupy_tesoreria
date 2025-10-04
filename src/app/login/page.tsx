@@ -6,6 +6,6 @@ export const metadata: Metadata = {
   description: 'Sistema Nacional de Gestión Financiera'
 };
 
-export default function LoginPage() {
+export default function LoginPage(): JSX.Element {
   return <SupabaseAuth />;
 }

@@ -10,7 +10,7 @@ import { EditProviderDialog } from './EditProviderDialog';
 import { PageHeader } from '@/components/Shared';
 import { Button } from '@/components/ui/button';
 
-export function ProviderManagementView() {
+export function ProviderManagementView(): JSX.Element {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState<string>('');
   const [showInactive, setShowInactive] = useState(false);

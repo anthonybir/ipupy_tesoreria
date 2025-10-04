@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth-supabase';
 import { processReportApproval } from '@/lib/db-admin';
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     // SECURITY: Require admin authentication
     const auth = await requireAdmin(request);
@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const reportId = Number(body.reportId);
 
-    if (!reportId) {
+    if (!Number.isFinite(reportId) || reportId <= 0) {
       return NextResponse.json(
         { success: false, error: 'reportId is required' },
         { status: 400 }

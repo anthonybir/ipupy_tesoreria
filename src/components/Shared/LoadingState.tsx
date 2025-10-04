@@ -27,7 +27,7 @@ export function LoadingState({
   fullHeight = false,
   tone = 'primary',
   className,
-}: LoadingStateProps) {
+}: LoadingStateProps): JSX.Element {
   return (
     <div
       className={cn(

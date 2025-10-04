@@ -44,7 +44,7 @@ const readNumber = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-export function ExternalTransactionsTab({ funds }: ExternalTransactionsTabProps) {
+export function ExternalTransactionsTab({ funds }: ExternalTransactionsTabProps): JSX.Element {
   const queryClient = useQueryClient();
 
   const transactionsQuery = useAdminTransactions({ type: 'manual', limit: 100 });

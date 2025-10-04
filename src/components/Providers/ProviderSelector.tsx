@@ -20,7 +20,7 @@ export function ProviderSelector({
   categoria,
   placeholder = 'Buscar por nombre o RUC...',
   required = false,
-}: ProviderSelectorProps) {
+}: ProviderSelectorProps): JSX.Element {
   const [query, setQuery] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [rucToCheck, setRucToCheck] = useState('');

@@ -6,7 +6,7 @@ import { requireAdmin } from '@/lib/auth-supabase';
 
 // Admin-only fund management using direct pool access
 // GET: Fetch all funds with full ledger calculations
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     // SECURITY: Require admin authentication
     const auth = await requireAdmin(request);
@@ -25,8 +25,8 @@ export async function GET(request: NextRequest) {
       data: funds,
       summary: {
         total_funds: funds.length,
-        total_balance: funds.reduce((sum, f) =>
-          sum + parseFloat(f.calculated_balance), 0
+        total_balance: funds.reduce((sum, fund) =>
+          sum + parseFloat(fund.calculated_balance), 0
         )
       }
     });
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 }
 
 // POST: Create external transaction (treasurer manual entry)
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     // SECURITY: Require admin authentication
     const auth = await requireAdmin(request);
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
 }
 
 // PUT: Update fund settings or perform adjustments
-export async function PUT(request: NextRequest) {
+export async function PUT(request: NextRequest): Promise<NextResponse> {
   try {
     // SECURITY: Require admin authentication
     const auth = await requireAdmin(request);

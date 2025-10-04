@@ -7,6 +7,6 @@ export const metadata: Metadata = {
   description: 'Gestión de transacciones financieras del sistema nacional de tesorería',
 };
 
-export default function TransactionsPage() {
+export default function TransactionsPage(): JSX.Element {
   return <TransactionsView />;
 }

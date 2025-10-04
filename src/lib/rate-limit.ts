@@ -170,8 +170,8 @@ export function withRateLimit(
 /**
  * Create a custom rate limiter with specific configuration
  */
-export function createRateLimiter(config: RateLimitConfig) {
-  return (request: NextRequest) => {
+export function createRateLimiter(config: RateLimitConfig): (request: NextRequest) => Response | null {
+  return (request: NextRequest): Response | null => {
     const clientId = `custom:${getClientId(request)}`;
     const now = Date.now();
 

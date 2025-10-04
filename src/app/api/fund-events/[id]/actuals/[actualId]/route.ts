@@ -75,7 +75,7 @@ function canManageActual(
 export async function PATCH(
   req: NextRequest,
   context: { params: Promise<{ id: string; actualId: string }> }
-) {
+): Promise<NextResponse> {
   try {
     const auth = await requireAuth(req);
     const params = await context.params;
@@ -155,7 +155,7 @@ export async function PATCH(
 export async function DELETE(
   req: NextRequest,
   context: { params: Promise<{ id: string; actualId: string }> }
-) {
+): Promise<NextResponse> {
   try {
     const auth = await requireAuth(req);
     const params = await context.params;
@@ -201,7 +201,7 @@ export async function DELETE(
   }
 }
 
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 200 });
   setCORSHeaders(response);
   return response;

@@ -8,7 +8,7 @@ export const runtime = 'nodejs';
 // System configuration table is created via migration 024_fix_rls_uuid.sql
 
 // GET /api/admin/configuration - Get system configuration
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
       configuration[sectionKey] = sectionConfig;
     });
 
-    const shouldIncludeSection = (target: string) => !section || section === target;
+    const shouldIncludeSection = (target: string): boolean => !section || section === target;
 
     if (shouldIncludeSection('funds')) {
       try {
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
 
         const metaMap = new Map<string, Record<string, unknown>>();
         metaArray.forEach((item) => {
-          const metaName = typeof item?.['name'] === 'string' ? item['name'].toLowerCase() : undefined;
+          const metaName = typeof item['name'] === 'string' ? item['name'].toLowerCase() : undefined;
           if (metaName) {
             metaMap.set(metaName, item);
           }
@@ -73,9 +73,9 @@ export async function GET(req: NextRequest) {
 
         const derivedDefaults = fundsResult.rows.map((fund) => {
           const meta = metaMap.get(fund.name.toLowerCase());
-          const toBool = (value: unknown, fallback: boolean) =>
+          const toBool = (value: unknown, fallback: boolean): boolean =>
             typeof value === 'boolean' ? value : fallback;
-          const toNumber = (value: unknown, fallback: number) =>
+          const toNumber = (value: unknown, fallback: number): number =>
             typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 
           const isNational = fund.name.toLowerCase() === 'fondo nacional';
@@ -112,7 +112,7 @@ export async function GET(req: NextRequest) {
 
         const definitionMap = new Map<string, Record<string, unknown>>();
         definitionArray.forEach((definition) => {
-          const id = typeof definition?.['id'] === 'string' ? definition['id'] : undefined;
+          const id = typeof definition['id'] === 'string' ? definition['id'] : undefined;
           if (id) {
             definitionMap.set(id, definition);
           }
@@ -136,7 +136,7 @@ export async function GET(req: NextRequest) {
           }
         });
 
-        const titleCase = (value: string) =>
+        const titleCase = (value: string): string =>
           value
             .split('_')
             .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
@@ -202,7 +202,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/admin/configuration - Update system configuration
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 
@@ -277,7 +277,7 @@ export async function POST(req: NextRequest) {
 }
 
 // PUT /api/admin/configuration - Reset configuration to defaults
-export async function PUT(req: NextRequest) {
+export async function PUT(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 
@@ -363,7 +363,7 @@ export async function PUT(req: NextRequest) {
 }
 
 // OPTIONS handler for CORS
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 204 });
   setCORSHeaders(response);
   return response;

@@ -77,7 +77,7 @@ const buildDateRange = (filters: { year: string; month: string }) => {
   const end = `${filters.year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
   return { start, end };
 };
-export function LedgerTab({ filters, funds }: LedgerTabProps) {
+export function LedgerTab({ filters, funds }: LedgerTabProps): JSX.Element {
   const [selectedFund, setSelectedFund] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
 

@@ -5,11 +5,15 @@ import { setCORSHeaders } from '@/lib/cors';
 
 export const runtime = 'nodejs';
 
+type PastorAccessRow = {
+  access_status: 'active' | 'no_access' | 'revoked';
+};
+
 /**
  * GET /api/admin/pastors/access
  * Get all pastors with their platform access status
  */
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 
@@ -64,8 +68,8 @@ export async function GET(req: NextRequest) {
 
     query += ' ORDER BY church_name, pastor_name';
 
-    const result = await executeWithContext(auth, query, params);
-    const rows = result.rows as Array<{ access_status: string }>;
+    const result = await executeWithContext<PastorAccessRow>(auth, query, params);
+    const rows = result.rows;
 
     const response = NextResponse.json({
       success: true,
@@ -92,7 +96,7 @@ export async function GET(req: NextRequest) {
 }
 
 // OPTIONS handler for CORS
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 204 });
   setCORSHeaders(response);
   return response;

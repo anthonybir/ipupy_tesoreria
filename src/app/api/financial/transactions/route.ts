@@ -132,13 +132,13 @@ async function handleGet(req: NextRequest) {
       pagination: {
         limit: parseInt(limit),
         offset: parseInt(offset),
-        total: parseInt(totalsRow?.total_count ?? '0')
+        total: parseInt(totalsRow.total_count)
       },
       totals: {
-        count: parseInt(totalsRow?.total_count ?? '0'),
-        total_in: parseFloat(totalsRow?.total_in ?? '0'),
-        total_out: parseFloat(totalsRow?.total_out ?? '0'),
-        balance: parseFloat(totalsRow?.total_in ?? '0') - parseFloat(totalsRow?.total_out ?? '0')
+        count: parseInt(totalsRow.total_count),
+        total_in: parseFloat(totalsRow.total_in),
+        total_out: parseFloat(totalsRow.total_out),
+        balance: parseFloat(totalsRow.total_in) - parseFloat(totalsRow.total_out)
       }
     });
 
@@ -384,7 +384,7 @@ async function handleDelete(req: NextRequest) {
 
     let deletedFundId: number | null = null;
 
-    await executeTransaction(user ?? null, async (client) => {
+    await executeTransaction(user, async (client) => {
       const existing = await client.query<Transaction>(
         `SELECT * FROM transactions WHERE id = $1`,
         [transactionId]
@@ -395,9 +395,6 @@ async function handleDelete(req: NextRequest) {
       }
 
       const transaction = expectOne(existing.rows);
-      if (!transaction) {
-        throw new Error('Transaction not found');
-      }
 
       deletedFundId = transaction.fund_id;
 
@@ -431,24 +428,24 @@ async function handleDelete(req: NextRequest) {
 }
 
 // OPTIONS handler for CORS
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 200 });
   setCORSHeaders(response);
   return response;
 }
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   return handleGet(req);
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   return handlePost(req);
 }
 
-export async function PUT(req: NextRequest) {
+export async function PUT(req: NextRequest): Promise<NextResponse> {
   return handlePut(req);
 }
 
-export async function DELETE(req: NextRequest) {
+export async function DELETE(req: NextRequest): Promise<NextResponse> {
   return handleDelete(req);
 }

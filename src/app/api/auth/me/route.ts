@@ -5,7 +5,7 @@ import { setCORSHeaders } from '@/lib/cors';
 export const runtime = 'nodejs';
 
 // GET /api/auth/me - Get current user info
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 
@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
 }
 
 // OPTIONS handler for CORS
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 204 });
   setCORSHeaders(response);
   return response;

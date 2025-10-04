@@ -15,7 +15,7 @@ const roundedMap = {
   full: "rounded-full",
 };
 
-export function Skeleton({ className = "", width, height, rounded = "md" }: SkeletonProps) {
+export function Skeleton({ className = "", width, height, rounded = "md" }: SkeletonProps): JSX.Element {
   const style = {
     width: width || "100%",
     height: height || "1rem",
@@ -31,7 +31,7 @@ export function Skeleton({ className = "", width, height, rounded = "md" }: Skel
   );
 }
 
-export function SkeletonText({ lines = 3, className = "" }: { lines?: number; className?: string }) {
+export function SkeletonText({ lines = 3, className = "" }: { lines?: number; className?: string }): JSX.Element {
   return (
     <div className={`space-y-2 ${className}`}>
       {Array.from({ length: lines }).map((_, index) => (
@@ -45,7 +45,7 @@ export function SkeletonText({ lines = 3, className = "" }: { lines?: number; cl
   );
 }
 
-export function SkeletonCard({ children, className = "" }: { children?: ReactNode; className?: string }) {
+export function SkeletonCard({ children, className = "" }: { children?: ReactNode; className?: string }): JSX.Element {
   return (
     <div className={`absd-card p-6 space-y-4 ${className}`}>
       {children || (
@@ -61,7 +61,7 @@ export function SkeletonCard({ children, className = "" }: { children?: ReactNod
   );
 }
 
-export function SkeletonTable({ rows = 5, columns = 4 }: { rows?: number; columns?: number }) {
+export function SkeletonTable({ rows = 5, columns = 4 }: { rows?: number; columns?: number }): JSX.Element {
   return (
     <div className="overflow-x-auto rounded-lg border border-[var(--absd-border)]">
       <table className="absd-table">
@@ -90,7 +90,7 @@ export function SkeletonTable({ rows = 5, columns = 4 }: { rows?: number; column
   );
 }
 
-export function SkeletonStatCard() {
+export function SkeletonStatCard(): JSX.Element {
   return (
     <div className="absd-card absd-span-compact flex flex-col gap-3 rounded-3xl border border-[var(--absd-border)] bg-[var(--absd-surface)] px-5 py-4 shadow-sm">
       <Skeleton width="60%" height="0.75rem" />
@@ -100,7 +100,7 @@ export function SkeletonStatCard() {
   );
 }
 
-export function SkeletonPage() {
+export function SkeletonPage(): JSX.Element {
   return (
     <div className="space-y-8">
       {/* Header skeleton */}
@@ -124,7 +124,7 @@ export function SkeletonPage() {
   );
 }
 
-export function SkeletonForm({ fields = 4 }: { fields?: number }) {
+export function SkeletonForm({ fields = 4 }: { fields?: number }): JSX.Element {
   return (
     <div className="space-y-6">
       {Array.from({ length: fields }).map((_, index) => (

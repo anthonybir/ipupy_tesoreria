@@ -32,7 +32,7 @@ const reviewFilters: Array<{ value: EventStatus; label: string }> = [
   { value: 'pending_revision', label: 'Observados' },
 ];
 
-export default function FundEventsPage() {
+export default function FundEventsPage(): JSX.Element {
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [dashboardStatusFilter, setDashboardStatusFilter] = useState<'all' | EventStatus>('all');
   const [reviewStatus, setReviewStatus] = useState<EventStatus>('submitted');

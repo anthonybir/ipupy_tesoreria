@@ -14,6 +14,6 @@ const ReportsView = dynamic(() => import('@/components/Reports/ReportsView'), {
   )
 });
 
-export default function ReportsPage() {
+export default function ReportsPage(): JSX.Element {
   return <ReportsView />;
 }

@@ -17,7 +17,17 @@ export type UserProfile = {
   assigned_churches?: number[];
 };
 
-export function useProfile() {
+type UseProfileResult = {
+  profile: UserProfile | null;
+  loading: boolean;
+  error: Error | null;
+  isAdmin: boolean;
+  isTreasurer: boolean;
+  isFundDirector: boolean;
+  isReadOnly: boolean;
+};
+
+export function useProfile(): UseProfileResult {
   const { user, loading: authLoading } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);

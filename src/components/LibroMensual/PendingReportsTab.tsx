@@ -79,7 +79,7 @@ const readNumber = (value: unknown): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 };
-export function PendingReportsTab({ filters }: PendingReportsTabProps) {
+export function PendingReportsTab({ filters }: PendingReportsTabProps): JSX.Element {
   const [showManualForm, setShowManualForm] = useState(false);
   const [selectedReport, setSelectedReport] = useState<AdminReportRecord | null>(null);
   const [observations, setObservations] = useState('');
@@ -197,7 +197,7 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps) {
         align: 'right',
         render: (report) => (
           <span className="text-sm font-semibold text-[var(--absd-ink)]">
-            {formatCurrency(report.totals?.totalEntradas)}
+            {formatCurrency(report.totals.totalEntradas)}
           </span>
         ),
       },
@@ -207,7 +207,7 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps) {
         align: 'right',
         render: (report) => (
           <span className="text-sm text-[rgba(15,23,42,0.7)]">
-            {formatCurrency(report.totals?.totalDesignado)}
+            {formatCurrency(report.totals.totalDesignado)}
           </span>
         ),
       },
@@ -217,7 +217,7 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps) {
         align: 'right',
         render: (report) => (
           <span className="text-sm text-[rgba(15,23,42,0.7)]">
-            {formatCurrency(report.totals?.totalOperativo)}
+            {formatCurrency(report.totals.totalOperativo)}
           </span>
         ),
       },
@@ -225,8 +225,8 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps) {
         id: 'status',
         header: 'Estado',
         render: (report) => (
-          <StatusPill tone={report.status?.includes('rechazado') ? 'critical' : 'warning'}>
-            {friendlyLabel(report.status ?? 'pendiente')}
+          <StatusPill tone={report.status.includes('rechazado') ? 'critical' : 'warning'}>
+            {friendlyLabel(report.status)}
           </StatusPill>
         ),
       },
@@ -382,49 +382,49 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps) {
     );
   }
   const incomeEntries = selectedReport
-    ? (Object.entries(selectedReport.incomes ?? {}) as Array<[string, number]>)
+    ? (Object.entries(selectedReport.incomes) as Array<[string, number]>)
     : [];
   const expenseEntries = selectedReport
-    ? (Object.entries(selectedReport.expenses ?? {}) as Array<[string, number]>)
+    ? (Object.entries(selectedReport.expenses) as Array<[string, number]>)
     : [];
   const detailMetrics = selectedReport
     ? [
         {
           label: 'Total entradas',
-          value: formatCurrency(selectedReport.totals?.totalEntradas),
+          value: formatCurrency(selectedReport.totals.totalEntradas),
           description: 'Suma de ingresos congregacionales y designados',
           tone: 'info' as const,
         },
         {
           label: 'Fondo nacional (10%)',
-          value: formatCurrency(selectedReport.totals?.fondoNacional),
+          value: formatCurrency(selectedReport.totals.fondoNacional),
           description: 'Transferencia a tesorería nacional',
           tone: 'neutral' as const,
         },
         {
           label: 'Fondos designados',
-          value: formatCurrency(selectedReport.totals?.totalDesignado),
+          value: formatCurrency(selectedReport.totals.totalDesignado),
           description: 'Distribución 100% nacional',
           tone: 'info' as const,
         },
         {
           label: 'Gastos operativos',
-          value: formatCurrency(selectedReport.totals?.totalOperativo),
+          value: formatCurrency(selectedReport.totals.totalOperativo),
           description: 'Servicios y mantenimiento',
           tone: 'warning' as const,
         },
         {
           label: 'Honorario pastoral',
-          value: formatCurrency(selectedReport.expenses?.honorariosPastoral),
+          value: formatCurrency(selectedReport.expenses.honorariosPastoral),
           description: 'Monto sugerido según entradas',
           tone: 'success' as const,
         },
         {
           label: 'Saldo estimado',
-          value: formatCurrency(selectedReport.totals?.saldoCalculado),
+          value: formatCurrency(selectedReport.totals.saldoCalculado),
           description: 'Resultados tras designados y gastos',
           tone:
-            (selectedReport.totals?.saldoCalculado ?? 0) >= 0 ? ('success' as const) : ('danger' as const),
+            selectedReport.totals.saldoCalculado >= 0 ? ('success' as const) : ('danger' as const),
         },
       ]
     : [];
@@ -520,8 +520,8 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps) {
         {selectedReport ? (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <StatusPill tone={selectedReport.status?.includes('rechazado') ? 'critical' : 'warning'}>
-                {friendlyLabel(selectedReport.status ?? 'pendiente')}
+              <StatusPill tone={selectedReport.status.includes('rechazado') ? 'critical' : 'warning'}>
+                {friendlyLabel(selectedReport.status)}
               </StatusPill>
               <span className="text-xs text-[rgba(15,23,42,0.55)]">
                 Depósito: {readString(selectedReportRaw['numero_deposito']) ?? 'No registrado'}

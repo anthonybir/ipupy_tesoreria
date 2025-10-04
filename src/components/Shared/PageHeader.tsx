@@ -17,7 +17,7 @@ export function PageHeader({
   badge,
   actions,
   children,
-}: PageHeaderProps) {
+}: PageHeaderProps): JSX.Element {
   return (
     <header className="space-y-4">
       {breadcrumbs && breadcrumbs.length > 0 && (

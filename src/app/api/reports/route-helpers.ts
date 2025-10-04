@@ -63,10 +63,6 @@ const getOrCreateFund = async (
     row = expectOne(result.rows) as FundRecord;
   }
 
-  if (!row || typeof row.id !== 'number') {
-    throw new Error(`Unable to resolve fund ${name}`);
-  }
-
   return row;
 };
 
@@ -87,7 +83,7 @@ type CreateTransactionInput = GenericRecord & {
 export const createTransaction = async (
   data: CreateTransactionInput,
   auth?: AuthContext | null
-) => {
+): Promise<GenericRecord | null> => {
   let transaction: GenericRecord | null = null;
 
   await executeTransaction(auth ?? null, async (client) => {
@@ -156,10 +152,6 @@ export const createTransaction = async (
     );
   });
 
-  if (!transaction) {
-    throw new Error('Failed to create transaction');
-  }
-
   return transaction;
 };
 
@@ -174,7 +166,7 @@ export const createReportTransactions = async (
   },
   designated: Record<DesignatedKey, number>,
   auth?: AuthContext | null
-) => {
+): Promise<void> => {
   try {
     const churchFund = await getOrCreateFund('Fondo General', 'nacional', 'Fondo principal de la iglesia', auth);
     const nationalFund = await getOrCreateFund('Fondo Nacional', 'nacional', 'Fondo nacional IPU Paraguay (10%)', auth);
@@ -240,7 +232,7 @@ export const createReportTransactions = async (
     }
 
     for (const key of Object.keys(designated) as DesignatedKey[]) {
-      const amount = Number(designated[key] ?? 0);
+      const amount = Number(designated[key]);
       if (amount <= 0) {
         continue;
       }

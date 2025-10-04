@@ -26,7 +26,7 @@ export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
-}>) {
+}>): JSX.Element {
   return (
     <html lang="es">
       <body className={`${inter.variable} ${plusJakarta.variable} antialiased`}>

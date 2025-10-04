@@ -68,7 +68,7 @@ const asNullable = (value: string) => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
-export function ChurchEditDialog({ church, open, onClose }: Props) {
+export function ChurchEditDialog({ church, open, onClose }: Props): JSX.Element {
   const [form, setForm] = useState<FormState>(emptyState);
   const updateChurch = useUpdateChurch(church?.id ?? 0);
 

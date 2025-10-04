@@ -1,5 +1,7 @@
 'use client';
 
+import type { JSX } from 'react';
+
 export type ProgressBarProps = {
   value: number;
   max: number;
@@ -46,7 +48,7 @@ export function ProgressBar({
   color = 'primary',
   size = 'md',
   className = '',
-}: ProgressBarProps) {
+}: ProgressBarProps): JSX.Element {
   const displayValue = toPercentage(value, max);
 
   return (
@@ -93,7 +95,7 @@ export function MultiProgressBar({
   size = 'md',
   showLegend = true,
   className = '',
-}: MultiProgressBarProps) {
+}: MultiProgressBarProps): JSX.Element {
   return (
     <div className={`space-y-2 ${className}`}>
       <div className={`w-full rounded-full bg-[var(--absd-subtle)] overflow-hidden flex ${sizeMap[size]}`}>

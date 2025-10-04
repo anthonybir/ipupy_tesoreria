@@ -140,9 +140,10 @@ export const createConnection = (): Pool => {
         consecutiveErrors,
       });
 
-      if (client && !(client as PoolClient & { _released?: boolean })._released) {
+      const trackedClient = client as PoolClient & { _released?: boolean };
+      if (trackedClient._released !== true) {
         try {
-          client.release();
+          trackedClient.release();
         } catch (releaseError) {
           logger.warn('Client release error', {
             error: releaseError instanceof Error ? releaseError.message : String(releaseError),
@@ -183,7 +184,11 @@ export const createConnection = (): Pool => {
   return pool;
 };
 
-type StatementConfig = QueryConfig<unknown[]> & { sql?: string; values?: unknown[] };
+type StatementConfig = Omit<QueryConfig<unknown[]>, 'text' | 'values'> & {
+  text?: string;
+  sql?: string;
+  values?: unknown[];
+};
 
 type Statement = string | StatementConfig;
 
@@ -472,6 +477,18 @@ export const initDatabase = async (): Promise<void> => {
   logger.info('✅ Using Supabase Postgres - migrations managed via scripts');
 };
 
+type PoolStats = {
+  total: number;
+  idle: number;
+  waiting: number;
+  age_ms: number;
+  errors: number;
+  exists: boolean;
+  totalConnections: number;
+  totalErrors: number;
+  totalQueries: number;
+};
+
 if (process.env['VERCEL']) {
   setInterval(() => {
     if (pool && pool.totalCount === 0 && pool.idleCount === 0) {
@@ -488,7 +505,7 @@ process.on('SIGINT', () => {
   void destroyPool().then(() => process.exit(0));
 });
 
-export const getPoolStats = () => ({
+export const getPoolStats = (): PoolStats => ({
   total: pool?.totalCount ?? 0,
   idle: pool?.idleCount ?? 0,
   waiting: pool?.waitingCount ?? 0,

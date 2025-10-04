@@ -5,7 +5,7 @@ export const metadata = {
   description: 'Gestión de proveedores y beneficiarios',
 };
 
-export default function ProvidersPage() {
+export default function ProvidersPage(): JSX.Element {
   return (
     <div className="absd-container py-8">
       <ProviderManagementView />

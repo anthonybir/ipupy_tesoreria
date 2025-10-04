@@ -7,6 +7,6 @@ export const metadata: Metadata = {
   description: 'Directorio de iglesias activas registradas en el sistema nacional.'
 };
 
-export default function ChurchesPage() {
+export default function ChurchesPage(): JSX.Element {
   return <ChurchesView />;
 }

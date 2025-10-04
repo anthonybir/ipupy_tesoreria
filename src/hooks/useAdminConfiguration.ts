@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseQueryResult, type UseMutationResult } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/api-client';
 
 // ============================================================================
@@ -156,7 +156,7 @@ async function fetchConfigSection<T>(section: ConfigSection): Promise<T | null> 
 /**
  * Hook to fetch general/system configuration
  */
-export function useSystemConfig() {
+export function useSystemConfig(): UseQueryResult<Partial<SystemConfig> | null, Error> {
   return useQuery({
     queryKey: ['admin-config', 'general'],
     queryFn: () => fetchConfigSection<Partial<SystemConfig>>('general'),
@@ -167,7 +167,7 @@ export function useSystemConfig() {
 /**
  * Hook to fetch financial configuration
  */
-export function useFinancialConfig() {
+export function useFinancialConfig(): UseQueryResult<Partial<FinancialConfig> | null, Error> {
   return useQuery({
     queryKey: ['admin-config', 'financial'],
     queryFn: () => fetchConfigSection<Partial<FinancialConfig>>('financial'),
@@ -178,7 +178,7 @@ export function useFinancialConfig() {
 /**
  * Hook to fetch security configuration
  */
-export function useSecurityConfig() {
+export function useSecurityConfig(): UseQueryResult<Partial<SystemConfig> | null, Error> {
   return useQuery({
     queryKey: ['admin-config', 'security'],
     queryFn: () => fetchConfigSection<Partial<SystemConfig>>('security'),
@@ -189,7 +189,7 @@ export function useSecurityConfig() {
 /**
  * Hook to fetch integration configuration
  */
-export function useIntegrationConfig() {
+export function useIntegrationConfig(): UseQueryResult<Partial<IntegrationConfig> | null, Error> {
   return useQuery({
     queryKey: ['admin-config', 'integration'],
     queryFn: () => fetchConfigSection<Partial<IntegrationConfig>>('integration'),
@@ -200,7 +200,7 @@ export function useIntegrationConfig() {
 /**
  * Hook to fetch notification configuration
  */
-export function useNotificationConfig() {
+export function useNotificationConfig(): UseQueryResult<Partial<NotificationConfig> | null, Error> {
   return useQuery({
     queryKey: ['admin-config', 'notifications'],
     queryFn: () => fetchConfigSection<Partial<NotificationConfig>>('notifications'),
@@ -211,7 +211,7 @@ export function useNotificationConfig() {
 /**
  * Hook to fetch funds configuration
  */
-export function useFundsConfig() {
+export function useFundsConfig(): UseQueryResult<Partial<FundsConfig> | null, Error> {
   return useQuery({
     queryKey: ['admin-config', 'funds'],
     queryFn: () => fetchConfigSection<Partial<FundsConfig>>('funds'),
@@ -222,7 +222,7 @@ export function useFundsConfig() {
 /**
  * Hook to fetch roles configuration
  */
-export function useRolesConfig() {
+export function useRolesConfig(): UseQueryResult<Partial<RolesConfig> | null, Error> {
   return useQuery({
     queryKey: ['admin-config', 'roles'],
     queryFn: () => fetchConfigSection<Partial<RolesConfig>>('roles'),
@@ -233,7 +233,7 @@ export function useRolesConfig() {
 /**
  * Hook to save configuration for any section
  */
-export function useSaveConfig() {
+export function useSaveConfig(): UseMutationResult<unknown, Error, { section: ConfigSection; data: ConfigData }, unknown> {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -255,7 +255,17 @@ export function useSaveConfig() {
  * Composite hook to load all configurations in parallel
  * Use this when you need multiple sections at once
  */
-export function useAllConfigs() {
+export function useAllConfigs(): {
+  systemConfig: UseQueryResult<Partial<SystemConfig>, Error>;
+  financialConfig: UseQueryResult<Partial<FinancialConfig>, Error>;
+  securityConfig: UseQueryResult<Partial<SystemConfig>, Error>;
+  integrationConfig: UseQueryResult<Partial<IntegrationConfig>, Error>;
+  notificationConfig: UseQueryResult<Partial<NotificationConfig>, Error>;
+  fundsConfig: UseQueryResult<Partial<FundsConfig>, Error>;
+  rolesConfig: UseQueryResult<Partial<RolesConfig>, Error>;
+  isLoading: boolean;
+  isError: boolean;
+} {
   const systemConfig = useSystemConfig();
   const financialConfig = useFinancialConfig();
   const securityConfig = useSecurityConfig();

@@ -49,7 +49,7 @@ const defaultFilters: FilterState = {
 
 const formatCurrency = (value: number): string => formatCurrencyDisplay(value);
 
-export default function ChurchLedgerView() {
+export default function ChurchLedgerView(): JSX.Element {
   const [filters, setFilters] = useState<FilterState>(defaultFilters);
   const { data: churches = [], isLoading: churchesLoading } = useChurches();
   const supabase = createClient();
@@ -97,7 +97,7 @@ export default function ChurchLedgerView() {
 
       // Calculate running balance
       let runningBalance = 0;
-      const dataWithBalance = (data || []).reverse().map((txn) => {
+      const dataWithBalance = data.reverse().map((txn) => {
         runningBalance += (txn.amount_in || 0) - (txn.amount_out || 0);
         return {
           ...txn,
@@ -328,7 +328,7 @@ export default function ChurchLedgerView() {
           <LoadingState description="Cargando transacciones..." fullHeight />
         ) : transactionsQuery.isError ? (
           <ErrorState
-            description={transactionsQuery.error?.message || 'Error al cargar transacciones'}
+            description={transactionsQuery.error.message || 'Error al cargar transacciones'}
             onRetry={() => transactionsQuery.refetch()}
           />
         ) : transactions.length === 0 ? (

@@ -627,9 +627,7 @@ async function createAccountingEntry(auth: AuthContext | null, data: AccountingE
       ]
     );
     const row = expectOne(result.rows);
-    if (row) {
-      results.push(row);
-    }
+    results.push(row);
   }
 
   const response = NextResponse.json({
@@ -786,16 +784,16 @@ async function closeMonthlyLedger(auth: AuthContext | null, data: LedgerClosePay
 }
 
 // OPTIONS handler for CORS
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 200 });
   setCORSHeaders(response);
   return response;
 }
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   return handleGet(req);
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   return handlePost(req);
 }

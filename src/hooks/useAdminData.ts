@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, keepPreviousData, type UseQueryResult, type UseMutationResult } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/api-client';
 
 const numberOrZero = (value: unknown): number => {
@@ -44,12 +44,12 @@ export interface AdminFund {
   is_active: boolean;
 }
 
-export const useAdminFunds = () => {
+export const useAdminFunds = (): UseQueryResult<AdminFund[], Error> => {
   return useQuery({
     queryKey: ['admin-funds'],
     queryFn: async () => {
       const json = await fetchJson<{ data: Array<Record<string, unknown>> }>('/api/admin/funds');
-      const funds = (json.data || []) as Array<Record<string, unknown>>;
+      const funds = json.data as Array<Record<string, unknown>>;
 
       return funds.map<AdminFund>((fund) => {
         const idValue = Number(fund['id']);
@@ -119,7 +119,7 @@ export interface AdminReportsResponse {
   summary: AdminReportSummary;
 }
 
-export const useAdminReports = (filters: AdminReportFilters = {}) => {
+export const useAdminReports = (filters: AdminReportFilters = {}): UseQueryResult<AdminReportsResponse, Error> => {
   return useQuery<AdminReportsResponse>({
     queryKey: ['admin-reports', filters],
     queryFn: async () => {
@@ -133,10 +133,10 @@ export const useAdminReports = (filters: AdminReportFilters = {}) => {
       const json = await fetchJson<{ data: Array<Record<string, unknown>>; summary: Record<string, unknown> }>(
         `/api/admin/reports?${params.toString()}`
       );
-      const reports = (json.data || []).map((item: Record<string, unknown>) => {
-        const incomesSource = (item['incomes'] as Record<string, unknown>) ?? {};
-        const expensesSource = (item['expenses'] as Record<string, unknown>) ?? {};
-        const totalsSource = (item['totals'] as Record<string, unknown>) ?? {};
+      const reports = json.data.map((item: Record<string, unknown>) => {
+        const incomesSource = item['incomes'] as Record<string, unknown>;
+        const expensesSource = item['expenses'] as Record<string, unknown>;
+        const totalsSource = item['totals'] as Record<string, unknown>;
 
         const totals = {
           totalEntradas: numberOrZero(totalsSource['totalEntradas']),
@@ -162,7 +162,7 @@ export const useAdminReports = (filters: AdminReportFilters = {}) => {
         } as AdminReportRecord;
       });
 
-      const summarySource = json.summary ?? {};
+      const summarySource = json.summary;
       const summary: AdminReportSummary = {
         totalEntradas: numberOrZero(summarySource['totalEntradas']),
         totalDesignado: numberOrZero(summarySource['totalDesignado']),
@@ -181,7 +181,7 @@ export const useAdminReports = (filters: AdminReportFilters = {}) => {
   });
 };
 
-export const useApproveReport = () => {
+export const useApproveReport = (): UseMutationResult<unknown, Error, { reportId: number }, unknown> => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: { reportId: number }) => {
@@ -200,7 +200,7 @@ export const useApproveReport = () => {
   });
 };
 
-export const useUpdateReport = () => {
+export const useUpdateReport = (): UseMutationResult<unknown, Error, Record<string, unknown>, unknown> => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: Record<string, unknown>) => {
@@ -236,7 +236,7 @@ export interface AdminTransactionsResponse {
   };
 }
 
-export const useAdminTransactions = (filters: AdminTransactionsFilters = {}) => {
+export const useAdminTransactions = (filters: AdminTransactionsFilters = {}): UseQueryResult<AdminTransactionsResponse, Error> => {
   return useQuery<AdminTransactionsResponse>({
     queryKey: ['admin-transactions', filters],
     queryFn: async () => {
@@ -254,7 +254,7 @@ export const useAdminTransactions = (filters: AdminTransactionsFilters = {}) => 
   });
 };
 
-export const useAdminReconciliation = (fundId?: number) => {
+export const useAdminReconciliation = (fundId?: number): UseQueryResult<unknown, Error> => {
   return useQuery({
     queryKey: ['admin-reconciliation', fundId ?? 'all'],
     queryFn: async () => {
@@ -265,7 +265,7 @@ export const useAdminReconciliation = (fundId?: number) => {
   });
 };
 
-export const useAdminFundsSummary = () => {
+export const useAdminFundsSummary = (): { totalBalance: number; fundCount: number } => {
   const { data } = useAdminFunds();
   return useMemo(() => {
     if (!data) return { totalBalance: 0, fundCount: 0 };

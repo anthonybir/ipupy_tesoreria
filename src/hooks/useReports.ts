@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
 import { fetchJson } from '@/lib/api-client';
 import {
@@ -94,7 +94,7 @@ export const reportQueryKey = (
   filters.page ?? 1
 ];
 
-export function useReports(filters: ReportFilters) {
+export function useReports(filters: ReportFilters): UseQueryResult<ReportRecord[], Error> {
   const tuning = determineQueryTuning(filters);
 
   const pollInterval = tuning.refetchInterval;
@@ -122,7 +122,7 @@ type LastReportResponse = {
   lastReport: { year: number; month: number } | null;
 };
 
-export function useLastReport(churchId: number | null) {
+export function useLastReport(churchId: number | null): UseQueryResult<LastReportResponse, Error> {
   return useQuery<LastReportResponse, Error>({
     queryKey: ['last-report', churchId],
     queryFn: async () => {

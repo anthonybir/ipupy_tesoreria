@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseQueryResult, type UseMutationResult } from '@tanstack/react-query';
 import { fetchJson } from '@/lib/api-client';
 import type { PastorUserAccess, PastorAccessSummary, PastorLinkRequest } from '@/types/api';
 import toast from 'react-hot-toast';
@@ -47,7 +47,7 @@ type PastorLinkResponse = {
 /**
  * Fetch all pastors with their platform access status
  */
-export function usePastorAccess(filters?: { status?: string; church_id?: string }) {
+export function usePastorAccess(filters?: { status?: string; church_id?: string }): UseQueryResult<PastorAccessResponse, Error> {
   return useQuery({
     queryKey: pastorAccessKeys.list(filters),
     queryFn: async () => {
@@ -72,7 +72,7 @@ export function usePastorAccess(filters?: { status?: string; church_id?: string 
 /**
  * Link a pastor to a user profile (grant platform access)
  */
-export function useLinkPastorProfile() {
+export function useLinkPastorProfile(): UseMutationResult<PastorLinkResponse, Error, PastorLinkRequest, unknown> {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -102,7 +102,7 @@ export function useLinkPastorProfile() {
 /**
  * Unlink a pastor from their user profile (revoke platform access)
  */
-export function useUnlinkPastorProfile() {
+export function useUnlinkPastorProfile(): UseMutationResult<{ success: boolean; message: string }, Error, { pastor_id: number; delete_profile?: boolean }, unknown> {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -141,7 +141,7 @@ export function useUnlinkPastorProfile() {
 /**
  * Change a pastor's platform role (via profile update)
  */
-export function useChangePastorRole() {
+export function useChangePastorRole(): UseMutationResult<{ success: boolean; message: string }, Error, { profile_id: string; role: string }, unknown> {
   const queryClient = useQueryClient();
 
   return useMutation({

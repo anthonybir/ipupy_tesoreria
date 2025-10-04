@@ -9,7 +9,7 @@ export const runtime = 'nodejs';
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
-) {
+): Promise<NextResponse> {
   try {
     const auth = await requireAuth(req);
     const params = await context.params;
@@ -74,7 +74,7 @@ export async function GET(
 export async function POST(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
-) {
+): Promise<NextResponse> {
   try {
     const auth = await requireAuth(req);
     const params = await context.params;
@@ -174,7 +174,7 @@ export async function POST(
   }
 }
 
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 200 });
   setCORSHeaders(response);
   return response;

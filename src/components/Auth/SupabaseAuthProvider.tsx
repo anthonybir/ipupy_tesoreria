@@ -17,9 +17,9 @@ const SupabaseAuthContext = createContext<SupabaseAuthContextType>({
   signOut: async () => {},
 });
 
-export const useAuth = () => useContext(SupabaseAuthContext);
+export const useAuth = (): SupabaseAuthContextType => useContext(SupabaseAuthContext);
 
-export function SupabaseAuthProvider({ children }: { children: React.ReactNode }) {
+export function SupabaseAuthProvider({ children }: { children: React.ReactNode }): JSX.Element {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();

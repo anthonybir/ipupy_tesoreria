@@ -30,7 +30,7 @@ function GoogleIcon() {
   );
 }
 
-export default function SupabaseAuth() {
+export default function SupabaseAuth(): JSX.Element {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const supabase = createClient();

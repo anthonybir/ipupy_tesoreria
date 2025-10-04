@@ -7,7 +7,7 @@ export type FormSectionProps = {
   children: ReactNode;
 };
 
-export function FormSection({ title, description, badge, children }: FormSectionProps) {
+export function FormSection({ title, description, badge, children }: FormSectionProps): JSX.Element {
   return (
     <section className="space-y-4 rounded-2xl border border-[var(--absd-border)] bg-[var(--absd-surface)] p-6 shadow-sm">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

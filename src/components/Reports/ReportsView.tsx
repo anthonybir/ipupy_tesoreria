@@ -75,7 +75,7 @@ const buildFilters = (state: FilterState): ReportFilters => {
   return result;
 };
 
-export default function ReportsView() {
+export default function ReportsView(): JSX.Element {
   const [activeTab, setActiveTab] = useState<TabId>('dashboard');
   const [filters, setFilters] = useState<FilterState>(defaultFilterState);
   const [selectedReport, setSelectedReport] = useState<ReportRecord | null>(null);
@@ -118,9 +118,9 @@ export default function ReportsView() {
         if (storedFilters) {
           const parsed = JSON.parse(storedFilters) as FilterState;
           setFilters({
-            churchId: parsed.churchId ?? 'all',
-            year: parsed.year ?? 'all',
-            month: parsed.month ?? 'all',
+            churchId: parsed.churchId,
+            year: parsed.year,
+            month: parsed.month,
           });
         }
       } catch (error) {
@@ -369,7 +369,7 @@ export default function ReportsView() {
             {historyQuery.isError ? (
               <ErrorState
                 title="Error al cargar informes"
-                description={(historyQuery.error as Error)?.message || 'No se pudieron cargar los informes históricos'}
+                description={(historyQuery.error as Error).message || 'No se pudieron cargar los informes históricos'}
                 onRetry={() => historyQuery.refetch()}
                 retryLabel="Reintentar"
               />

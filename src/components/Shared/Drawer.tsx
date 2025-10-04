@@ -46,7 +46,7 @@ export function Drawer({
   children,
   className,
   initialFocus,
-}: DrawerProps) {
+}: DrawerProps): JSX.Element {
   const sidePanelClass = cn(
     'pointer-events-auto w-screen bg-[var(--absd-surface)] shadow-xl transition-all',
     sizeClassNames[size],

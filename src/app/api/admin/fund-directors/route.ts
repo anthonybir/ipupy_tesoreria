@@ -13,7 +13,7 @@ interface AssignmentInput {
 }
 
 // GET /api/admin/fund-directors - Get all fund director assignments
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 
@@ -67,9 +67,11 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
 
+    const assignmentList = Array.isArray(assignments) ? assignments : [];
+
     const response = NextResponse.json({
       success: true,
-      data: assignments || []
+      data: assignmentList
     });
 
     setCORSHeaders(response);
@@ -89,7 +91,7 @@ export async function GET(req: NextRequest) {
 }
 
 // POST /api/admin/fund-directors - Create assignment
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 
@@ -118,13 +120,15 @@ export async function POST(req: NextRequest) {
 
     const supabase = await createClient();
 
+    type ProfileRoleRecord = { role: string };
+
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', body.profile_id)
-      .single();
+      .maybeSingle<ProfileRoleRecord>();
 
-    if (profileError || !profile) {
+    if (profileError !== null || profile === null) {
       const response = NextResponse.json({ error: 'Profile not found' }, { status: 404 });
       setCORSHeaders(response);
       return response;
@@ -160,7 +164,9 @@ export async function POST(req: NextRequest) {
 
     if (checkError) throw checkError;
 
-    if (existing && existing.length > 0) {
+    const hasExistingAssignment = Array.isArray(existing) && existing.length > 0;
+
+    if (hasExistingAssignment) {
       const response = NextResponse.json(
         { error: 'Assignment already exists' },
         { status: 409 }
@@ -221,7 +227,7 @@ export async function POST(req: NextRequest) {
 }
 
 // DELETE /api/admin/fund-directors?id=X - Delete assignment
-export async function DELETE(req: NextRequest) {
+export async function DELETE(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 
@@ -270,7 +276,7 @@ export async function DELETE(req: NextRequest) {
   }
 }
 
-export async function OPTIONS() {
+export async function OPTIONS(): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 200 });
   setCORSHeaders(response);
   return response;

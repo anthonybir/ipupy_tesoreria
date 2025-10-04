@@ -13,7 +13,7 @@ import { DataTable, FilterBar, FormField, PageHeader, SectionCard, StatusPill } 
 import type { DataTableColumn } from '@/components/Shared/DataTable';
 import type { ChurchRecord } from '@/types/api';
 
-export default function ChurchesView() {
+export default function ChurchesView(): JSX.Element {
   const [search, setSearch] = useState('');
   const [editingChurch, setEditingChurch] = useState<ChurchRecord | null>(null);
   const { data: churches = [], isLoading, isError, error, refetch, isFetching } = useChurches();

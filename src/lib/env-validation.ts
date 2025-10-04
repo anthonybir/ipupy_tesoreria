@@ -260,14 +260,18 @@ export function isFeatureEnabled(feature: 'rateLimiting' | 'auditLogging'): bool
 /**
  * Get security configuration
  */
-export function getSecurityConfig() {
+export function getSecurityConfig(): {
+  allowedOrigins: string[];
+  maxLoginAttempts: number;
+  sessionTimeoutMinutes: number;
+} {
   const env = getEnv();
 
   return {
-    allowedOrigins: env.ALLOWED_ORIGINS?.split(',').map(s => s.trim()) ?? [],
-    maxLoginAttempts: env.MAX_LOGIN_ATTEMPTS ? parseInt(env.MAX_LOGIN_ATTEMPTS) : 5,
+    allowedOrigins: env.ALLOWED_ORIGINS?.split(',').map((origin) => origin.trim()) ?? [],
+    maxLoginAttempts: env.MAX_LOGIN_ATTEMPTS ? Number.parseInt(env.MAX_LOGIN_ATTEMPTS, 10) : 5,
     sessionTimeoutMinutes: env.SESSION_TIMEOUT_MINUTES
-      ? parseInt(env.SESSION_TIMEOUT_MINUTES)
+      ? Number.parseInt(env.SESSION_TIMEOUT_MINUTES, 10)
       : 30,
   };
 }
@@ -275,36 +279,69 @@ export function getSecurityConfig() {
 /**
  * Get email configuration
  */
-export function getEmailConfig() {
+export function getEmailConfig(): {
+  host: string;
+  port: number;
+  auth?: { user: string; pass: string };
+  from: string;
+  treasuryEmail?: string;
+} | null {
   const env = getEnv();
 
   if (!env.SMTP_HOST || !env.SMTP_PORT) {
     return null; // Email not configured
   }
 
-  return {
+  const config: {
+    host: string;
+    port: number;
+    auth?: { user: string; pass: string };
+    from: string;
+    treasuryEmail?: string;
+  } = {
     host: env.SMTP_HOST,
-    port: parseInt(env.SMTP_PORT),
-    auth: env.SMTP_USER && env.SMTP_PASSWORD ? {
+    port: Number.parseInt(env.SMTP_PORT, 10),
+    from: env.EMAIL_FROM ?? 'noreply@ipupy.org.py',
+  };
+
+  if (env.SMTP_USER && env.SMTP_PASSWORD) {
+    config.auth = {
       user: env.SMTP_USER,
       pass: env.SMTP_PASSWORD,
-    } : undefined,
-    from: env.EMAIL_FROM ?? 'noreply@ipupy.org.py',
-    treasuryEmail: env.TREASURY_NOTIFICATION_EMAIL,
-  };
+    };
+  }
+
+  if (env.TREASURY_NOTIFICATION_EMAIL) {
+    config.treasuryEmail = env.TREASURY_NOTIFICATION_EMAIL;
+  }
+
+  return config;
 }
 
 /**
  * Get Supabase configuration
  */
-export function getSupabaseConfig() {
+export function getSupabaseConfig(): {
+  url: string;
+  anonKey: string;
+  serviceRoleKey?: string;
+} {
   const env = getEnv();
 
-  return {
+  const config: {
+    url: string;
+    anonKey: string;
+    serviceRoleKey?: string;
+  } = {
     url: env.NEXT_PUBLIC_SUPABASE_URL,
     anonKey: env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
   };
+
+  if (env.SUPABASE_SERVICE_ROLE_KEY) {
+    config.serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+  }
+
+  return config;
 }
 
 // Validate on module load

@@ -17,7 +17,7 @@ export function EditProviderDialog({
   provider,
   onClose,
   onProviderUpdated,
-}: EditProviderDialogProps) {
+}: EditProviderDialogProps): JSX.Element {
   const [formData, setFormData] = useState({
     nombre: provider.nombre,
     razon_social: provider.razon_social || '',

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, type UseMutationResult } from '@tanstack/react-query';
 
 import type { DataExportParams } from '@/types/financial';
 
@@ -32,7 +32,7 @@ const extractFilename = (contentDisposition?: string | null): string | null => {
 };
 
 const requestExport = async (params: DataExportParams): Promise<ExportResult> => {
-  if (params.type === 'monthly' && (params.month === undefined || params.month === null)) {
+  if (params.type === 'monthly' && params.month === undefined) {
     throw new Error('Debe seleccionar un mes para la exportación mensual');
   }
 
@@ -42,7 +42,7 @@ const requestExport = async (params: DataExportParams): Promise<ExportResult> =>
     year: String(params.year),
   });
 
-  if (params.month !== undefined && params.month !== null) {
+  if (params.month !== undefined) {
     query.set('month', String(params.month));
   }
 
@@ -79,7 +79,7 @@ const requestExport = async (params: DataExportParams): Promise<ExportResult> =>
   return { blob, filename };
 };
 
-export function useExport() {
+export function useExport(): UseMutationResult<ExportResult, Error, DataExportParams, unknown> {
   return useMutation<ExportResult, Error, DataExportParams>({
     mutationFn: requestExport,
   });

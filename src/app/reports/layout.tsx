@@ -9,6 +9,6 @@ export default function ReportsLayout({
   children,
 }: {
   children: React.ReactNode;
-}) {
+}): React.ReactNode {
   return children;
 }

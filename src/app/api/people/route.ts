@@ -294,7 +294,7 @@ const handleError = (error: unknown, origin: string | null) => {
   return jsonResponse({ error: 'Error interno del servidor', details }, origin, 500);
 };
 
-export async function OPTIONS(request: NextRequest) {
+export async function OPTIONS(request: NextRequest): Promise<NextResponse> {
   const preflight = handleCorsPreflight(request);
   if (preflight) {
     return preflight;
@@ -302,7 +302,7 @@ export async function OPTIONS(request: NextRequest) {
   return jsonResponse({ error: 'Method not allowed' }, request.headers.get('origin'), 405);
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const origin = request.headers.get('origin');
   const preflight = handleCorsPreflight(request);
   if (preflight) {
@@ -318,7 +318,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   const origin = request.headers.get('origin');
   const preflight = handleCorsPreflight(request);
   if (preflight) {
@@ -334,7 +334,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function PUT(request: NextRequest) {
+export async function PUT(request: NextRequest): Promise<NextResponse> {
   const origin = request.headers.get('origin');
   const preflight = handleCorsPreflight(request);
   if (preflight) {
@@ -350,7 +350,7 @@ export async function PUT(request: NextRequest) {
   }
 }
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE(request: NextRequest): Promise<NextResponse> {
   const origin = request.headers.get('origin');
   const preflight = handleCorsPreflight(request);
   if (preflight) {

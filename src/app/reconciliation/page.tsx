@@ -7,6 +7,6 @@ export const metadata: Metadata = {
   description: 'Resumen de balances almacenados vs. calculados para cada fondo nacional',
 };
 
-export default function ReconciliationPage() {
+export default function ReconciliationPage(): JSX.Element {
   return <ReconciliationView />;
 }

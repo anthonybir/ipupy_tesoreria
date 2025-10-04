@@ -1,6 +1,6 @@
 'use client';
 
-import { type QueryClient, useMutation, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 
 import { fetchJson } from '@/lib/api-client';
@@ -43,7 +43,7 @@ export type CreateChurchPayload = {
 
 export type UpdateChurchPayload = Partial<CreateChurchPayload>;
 
-export function useCreateChurch() {
+export function useCreateChurch(): UseMutationResult<ChurchRecord, unknown, CreateChurchPayload, unknown> {
   const queryClient = useQueryClient();
 
   return useMutation<ChurchRecord, unknown, CreateChurchPayload>({
@@ -68,7 +68,7 @@ export function useCreateChurch() {
   });
 }
 
-export function useUpdateChurch(churchId: number) {
+export function useUpdateChurch(churchId: number): UseMutationResult<ChurchRecord, unknown, UpdateChurchPayload, unknown> {
   const queryClient = useQueryClient();
 
   return useMutation<ChurchRecord, unknown, UpdateChurchPayload>({
@@ -94,7 +94,7 @@ export function useUpdateChurch(churchId: number) {
   });
 }
 
-export function useDeactivateChurch() {
+export function useDeactivateChurch(): UseMutationResult<{ message: string }, unknown, { churchId: number }, unknown> {
   const queryClient = useQueryClient();
 
   return useMutation<{ message: string }, unknown, { churchId: number }>({

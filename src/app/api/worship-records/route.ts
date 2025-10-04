@@ -353,7 +353,7 @@ const saveWorshipRecord = async (
   const totals = summarizeContributionTotals(contributionRows);
   const totalRecaudado = (totals['total'] ?? 0) + payload.anonymousOffering;
 
-  const contextSubset = auth ? { userId: auth.userId, role: auth.role, churchId: auth.churchId } : null;
+  const contextSubset = { userId: auth.userId, role: auth.role, churchId: auth.churchId };
   return executeTransaction(contextSubset, async (client) => {
     const insertRecordResult = await client.query(
       `
@@ -520,13 +520,13 @@ const jsonResponse = (origin: string | null, body: Record<string, unknown>, stat
   return response;
 };
 
-export async function OPTIONS(req: NextRequest) {
+export async function OPTIONS(req: NextRequest): Promise<NextResponse> {
   const response = new NextResponse(null, { status: 200 });
   setCORSHeaders(response, req.headers.get('origin'));
   return response;
 }
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   const origin = req.headers.get('origin');
   try {
     const auth = await requireAuth(req);
@@ -557,7 +557,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(req: NextRequest): Promise<NextResponse> {
   const origin = req.headers.get('origin');
   try {
     const auth = await requireAuth(req);

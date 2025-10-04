@@ -26,7 +26,7 @@ type ReportRowProps = {
   onView: (report: ReportRecord) => void;
 };
 
-export function ReportRow({ report, onView }: ReportRowProps) {
+export function ReportRow({ report, onView }: ReportRowProps): JSX.Element {
   const updateReport = useUpdateReport(report.id);
   const deleteReport = useDeleteReport();
   const [isConfirming, setIsConfirming] = useState(false);

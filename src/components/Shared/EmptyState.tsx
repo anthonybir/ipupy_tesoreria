@@ -34,7 +34,7 @@ export function EmptyState({
   fullHeight = false,
   tone = 'neutral',
   className,
-}: EmptyStateProps) {
+}: EmptyStateProps): JSX.Element {
   return (
     <div
       className={cn(

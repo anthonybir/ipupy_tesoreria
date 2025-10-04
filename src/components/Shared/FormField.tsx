@@ -9,7 +9,7 @@ export type FormFieldProps = {
   children: ReactNode;
 };
 
-export function FormField({ label, htmlFor, required, hint, error, children }: FormFieldProps) {
+export function FormField({ label, htmlFor, required, hint, error, children }: FormFieldProps): JSX.Element {
   const hintId = hint ? `${htmlFor}-hint` : undefined;
   const errorId = error ? `${htmlFor}-error` : undefined;
   return (

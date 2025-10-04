@@ -5,7 +5,7 @@ import { executeWithContext } from '@/lib/db';
 import { firstOrNull } from '@/lib/db-helpers';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const auth = await requireAuth(request);
     const searchParams = request.nextUrl.searchParams;
