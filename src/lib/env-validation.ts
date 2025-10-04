@@ -320,34 +320,45 @@ export function getEmailConfig(): {
 
 /**
  * Get Supabase configuration
+ * Works on both client and server by accessing NEXT_PUBLIC_* variables statically
  */
 export function getSupabaseConfig(): {
   url: string;
   anonKey: string;
   serviceRoleKey?: string;
 } {
-  const env = getEnv();
+  // Access NEXT_PUBLIC_* variables statically for client-side compatibility
+  const url = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+  const anonKey = process.env['NEXT_PUBLIC_SUPABASE_ANON_KEY'];
+
+  if (!url || !anonKey) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY must be set');
+  }
 
   const config: {
     url: string;
     anonKey: string;
     serviceRoleKey?: string;
   } = {
-    url: env.NEXT_PUBLIC_SUPABASE_URL,
-    anonKey: env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    url,
+    anonKey,
   };
 
-  if (env.SUPABASE_SERVICE_ROLE_KEY) {
-    config.serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+  // Service role key is server-only
+  if (typeof window === 'undefined') {
+    const env = getEnv();
+    if (env.SUPABASE_SERVICE_ROLE_KEY) {
+      config.serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY;
+    }
   }
 
   return config;
 }
 
-// Validate on module load
-if (typeof window === 'undefined') { // Server-side only
+// Validate on module load (server-side only)
+if (typeof window === 'undefined') {
   getEnv();
 }
 
-// Export singleton instance
-export const env = getEnv();
+// Export singleton instance (server-side only to prevent client bundle issues)
+export const env = typeof window === 'undefined' ? getEnv() : ({} as Env);
