@@ -66,6 +66,34 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
 
     const formattedValue = React.useMemo(() => formatCurrencyInput(value), [value]);
 
+    const ensureCaretBeforeSuffix = React.useCallback((target: HTMLInputElement) => {
+      const suffixIndex = formattedValue.indexOf(CURRENCY_SUFFIX);
+
+      if (suffixIndex === -1) {
+        return;
+      }
+
+      const selectionStart = target.selectionStart ?? 0;
+      const selectionEnd = target.selectionEnd ?? 0;
+      const collapsedSelection = selectionStart === selectionEnd;
+      const selectionBeyondSuffix =
+        selectionStart > suffixIndex || selectionEnd > suffixIndex;
+
+      if (!selectionBeyondSuffix) {
+        return;
+      }
+
+      if (collapsedSelection) {
+        const desiredCaret = clampCaretToSuffix(formattedValue, selectionStart);
+        target.setSelectionRange(desiredCaret, desiredCaret);
+        return;
+      }
+
+      const clampedEnd = clampCaretToSuffix(formattedValue, selectionEnd);
+      const safeStart = Math.min(selectionStart, clampedEnd);
+      target.setSelectionRange(safeStart, clampedEnd);
+    }, [formattedValue]);
+
     const handleChange = React.useCallback(
       (event: React.ChangeEvent<HTMLInputElement>) => {
         const { value: inputValue } = event.target;
@@ -115,6 +143,22 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
       }
     }, [formattedValue]);
 
+    const handlePointerUp = React.useCallback((event: React.PointerEvent<HTMLInputElement>) => {
+      const target = event.currentTarget;
+
+      requestAnimationFrame(() => {
+        ensureCaretBeforeSuffix(target);
+      });
+    }, [ensureCaretBeforeSuffix]);
+
+    const handleFocus = React.useCallback((event: React.FocusEvent<HTMLInputElement>) => {
+      const target = event.currentTarget;
+
+      requestAnimationFrame(() => {
+        ensureCaretBeforeSuffix(target);
+      });
+    }, [ensureCaretBeforeSuffix]);
+
     React.useLayoutEffect(() => {
       if (!inputRef.current || pendingCaret.current === null) {
         return;
@@ -137,6 +181,8 @@ export const CurrencyInput = React.forwardRef<HTMLInputElement, CurrencyInputPro
         value={formattedValue}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
+        onFocus={handleFocus}
+        onPointerUp={handlePointerUp}
         inputMode="decimal"
         type="text"
         className={className}
