@@ -60,7 +60,7 @@ function formatLogEntry(entry: LogEntry): string {
 
 /**
  * Core logging function
- * Uses process.stdout/stderr to avoid no-console lint violations
+ * Uses process.stdout/stderr in Node.js, console in browser
  */
 function log(level: LogLevel, message: string, context?: LogContext, error?: Error): void {
   const entry: LogEntry = {
@@ -79,14 +79,19 @@ function log(level: LogLevel, message: string, context?: LogContext, error?: Err
 
   const formatted = formatLogEntry(entry);
 
-  // Use process streams instead of console to avoid lint violations
-  if (typeof process !== 'undefined') {
+  // Server-side: Use process streams (Node.js only)
+  // Client-side: Use console methods
+  if (typeof window === 'undefined' && typeof process !== 'undefined' && process.stdout && process.stderr) {
     const output = `${formatted}\n`;
     if (level === 'error') {
       process.stderr.write(output);
     } else {
       process.stdout.write(output);
     }
+  } else {
+    // Browser fallback
+    const consoleMethod = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
+    consoleMethod(formatted);
   }
 
   // In production, you might want to send to external service
