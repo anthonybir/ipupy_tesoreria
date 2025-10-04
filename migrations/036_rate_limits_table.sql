@@ -32,7 +32,15 @@ CREATE POLICY "service_role_only" ON public.rate_limits
 -- Enable pg_cron extension for automatic cleanup
 CREATE EXTENSION IF NOT EXISTS pg_cron;
 
--- Schedule cleanup job (runs every 15 minutes)
+-- Schedule cleanup job (runs every 15 minutes) - idempotent
+DO $$
+BEGIN
+  -- Remove existing job if it exists (idempotent re-application)
+  PERFORM cron.unschedule('rate_limits_cleanup');
+EXCEPTION
+  WHEN undefined_object THEN NULL;  -- Ignore if job doesn't exist
+END $$;
+
 SELECT cron.schedule(
   'rate_limits_cleanup',
   '*/15 * * * *',
