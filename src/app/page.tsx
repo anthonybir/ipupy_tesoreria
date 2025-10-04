@@ -12,6 +12,8 @@ import {
   StatusPill,
 } from "@/components/Shared";
 
+export const dynamic = 'force-dynamic';
+
 type DashboardSummary = {
   totalReports: number;
   totalChurches: number;

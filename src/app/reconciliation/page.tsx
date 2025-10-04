@@ -8,6 +8,8 @@ export const metadata: Metadata = {
   description: 'Resumen de balances almacenados vs. calculados para cada fondo nacional',
 };
 
+export const dynamic = 'force-dynamic';
+
 export default function ReconciliationPage(): JSX.Element {
   return <ReconciliationView />;
 }
