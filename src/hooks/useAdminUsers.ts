@@ -4,10 +4,8 @@ import toast from 'react-hot-toast';
 import type { ProfileRole } from '@/lib/authz';
 
 /**
- * Admin user record with authentication status
+ * Admin user record
  *
- * @property is_authenticated - false for pending profiles (awaiting first Google login)
- *                             true after user authenticates with Google OAuth
  * @property is_active - Admin can deactivate users to revoke system access
  */
 export type AdminUserRecord = {
@@ -20,7 +18,6 @@ export type AdminUserRecord = {
   church_city?: string | null;
   phone?: string | null;
   is_active: boolean;
-  is_authenticated?: boolean | null;
   last_seen_at?: string | null;
   created_at?: string | null;
 };

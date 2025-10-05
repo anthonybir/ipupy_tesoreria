@@ -118,15 +118,9 @@ export function AdminUserDialog({ open, mode, onClose, user, churches }: AdminUs
               id="admin-user-email"
               type="email"
               value={email}
-              disabled={mode === 'edit' && user?.is_authenticated === true}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="usuario@ipupy.org.py"
             />
-            {mode === 'edit' && user?.is_authenticated && (
-              <p className="text-xs text-muted-foreground">
-                El email no puede cambiarse después de que el usuario se autentica con Google
-              </p>
-            )}
             {email && !/^[^\s@]+@ipupy\.org\.py$/i.test(email.trim()) && (
               <p className="text-xs text-destructive">
                 El email debe ser del dominio @ipupy.org.py

@@ -121,7 +121,6 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         p.role,
         p.church_id,
         p.is_active,
-        p.is_authenticated,
         p.last_seen_at,
         p.created_at,
         p.permissions,
@@ -175,26 +174,24 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 }
 
 /**
- * POST /api/admin/users - Create pending user profile
+ * POST /api/admin/users - Create user profile
  *
- * Implements Google-first provisioning where admin pre-registers users
- * who then activate their accounts via Google OAuth on first login.
+ * Implements admin provisioning where admin creates users
+ * who then authenticate via Google OAuth.
  *
  * **Workflow**:
- * 1. Admin creates profile with email + role (is_authenticated=false)
+ * 1. Admin creates profile with email + role + is_active=true
  * 2. Profile UUID pre-generated for matching with Supabase Auth
  * 3. User receives notification to sign in with Google Workspace
- * 4. On first Google login, Supabase trigger updates profile
- * 5. Profile transitions to is_authenticated=true, account activated
+ * 4. On first Google login, Supabase trigger links auth.users to profile
  *
  * **Security**:
  * - Email must be @ipupy.org.py domain
  * - No password set (Google OAuth only)
- * - Profile inactive until first login
+ * - Profile is active immediately upon creation
  * - Rate limited to 20 operations/minute
  *
  * @see docs/database/BUSINESS_LOGIC.md#user-management
- * @see migration 016_create_profiles_and_auth_sync.sql
  */
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
@@ -267,7 +264,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const phoneNumber = typeof phone === 'string' ? phone.trim() || null : null;
 
     const existing = await executeWithContext(auth, `
-      SELECT id, is_authenticated, is_active
+      SELECT id, is_active
       FROM profiles
       WHERE lower(email) = lower($1)
       LIMIT 1
@@ -276,11 +273,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     let profileId: string = randomUUID();
     let reusedPlaceholder = false;
 
-    // Reuse placeholder profiles from previous failed registrations
+    // Reuse inactive profiles from previous failed registrations
     // Prevents UUID conflicts and reduces orphaned records
     if (existing.rowCount && existing.rows[0]) {
-      const existingProfile = existing.rows[0] as { id: string; is_authenticated: boolean | null; is_active: boolean | null };
-      if (existingProfile.is_authenticated) {
+      const existingProfile = existing.rows[0] as { id: string; is_active: boolean | null };
+      if (existingProfile.is_active) {
         const response = NextResponse.json(
           { error: 'Ya existe un usuario activo con este email' },
           { status: 409 }
@@ -301,7 +298,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           phone = $6,
           permissions = COALESCE($7::jsonb, '{}'::jsonb),
           is_active = true,
-          is_authenticated = false,
           role_assigned_by = $8,
           role_assigned_at = NOW(),
           updated_at = NOW()
@@ -327,7 +323,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           phone,
           permissions,
           is_active,
-          is_authenticated,
           role_assigned_by,
           role_assigned_at,
           created_at,
@@ -341,7 +336,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           $6,
           COALESCE($7::jsonb, '{}'::jsonb),
           true,
-          false,
           $8,
           NOW(),
           NOW(),
@@ -384,8 +378,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         role,
         church_id: churchId,
         phone: phoneNumber,
-        is_active: true,
-        is_authenticated: false
+        is_active: true
       },
       message: 'Usuario registrado. Solicite que inicie sesión con Google para activar el acceso.'
     });
@@ -443,7 +436,7 @@ export async function PUT(req: NextRequest): Promise<NextResponse> {
     }
 
     const existing = await executeWithContext(auth, `
-      SELECT id, is_authenticated
+      SELECT id
       FROM profiles
       WHERE id = $1
     `, [id]);
@@ -456,8 +449,6 @@ export async function PUT(req: NextRequest): Promise<NextResponse> {
       setCORSHeaders(response);
       return response;
     }
-
-    const existingProfile = existing.rows[0] as { id: string; is_authenticated: boolean | null };
 
     const updates: string[] = [];
     const values: unknown[] = [];
@@ -613,8 +604,8 @@ export async function PUT(req: NextRequest): Promise<NextResponse> {
       supabasePayload.user_metadata = metadataUpdates;
     }
 
-    // Sync changes to Supabase Auth if user is authenticated
-    if (existingProfile.is_authenticated && (supabasePayload.email || supabasePayload.user_metadata)) {
+    // Sync changes to Supabase Auth if email or metadata changed
+    if (supabasePayload.email || supabasePayload.user_metadata) {
       const supabase = getSupabaseAdminClient();
       const { error: supabaseError } = await supabase.auth.admin.updateUserById(id, supabasePayload);
 
