@@ -60,6 +60,7 @@ DO $$
 DECLARE
   final_count INTEGER;
   expected_count CONSTANT INTEGER := 9; -- Per ROLES_AND_PERMISSIONS.md v3.0
+  r RECORD; -- Required for FOR loop iteration
 BEGIN
   SELECT COUNT(*) INTO final_count
   FROM role_permissions
