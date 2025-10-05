@@ -80,7 +80,7 @@ export function AdminUserDialog({ open, mode, onClose, user, churches }: AdminUs
       email,
       full_name: fullName || null,
       role,
-      church_id: churchId ? Number(churchId) : null,
+      church_id: churchId && churchId !== 'none' ? Number(churchId) : null,
       phone: phone || null,
     } satisfies Omit<CreateAdminUserPayload, 'permissions'>;
 
@@ -161,7 +161,7 @@ export function AdminUserDialog({ open, mode, onClose, user, churches }: AdminUs
                   <SelectValue placeholder="Seleccione una iglesia" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem key="none" value="">
+                  <SelectItem key="none" value="none">
                     Sin asignar
                   </SelectItem>
                   {churches.map((church) => (
