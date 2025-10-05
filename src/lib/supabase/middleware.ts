@@ -50,11 +50,8 @@ export async function updateSession(request: NextRequest): Promise<UpdateSession
       hasCookies: request.cookies.getAll().length > 0
     });
   } else {
-    console.log('[Middleware] User authenticated:', {
-      userId: user.id,
-      email: user.email,
-      path: request.nextUrl.pathname
-    });
+    // User authenticated - session valid
+    // (no logging needed for successful auth flow)
   }
 
   return {

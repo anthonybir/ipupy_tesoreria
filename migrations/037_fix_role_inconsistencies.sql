@@ -69,8 +69,7 @@ COMMENT ON TABLE role_permissions IS 'Permission matrix for all assignable roles
 -- but have permissions defined - clean up
 
 DELETE FROM role_permissions
-WHERE role IN ('district_supervisor', 'member')
-RETURNING role, permission INTO STRICT;
+WHERE role IN ('district_supervisor', 'member');
 
 -- ============================================================================
 -- PHASE 4: UPDATE get_role_level() FUNCTION

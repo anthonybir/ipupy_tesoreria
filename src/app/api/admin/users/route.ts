@@ -605,28 +605,40 @@ export async function PUT(req: NextRequest): Promise<NextResponse> {
     }
 
     // Sync changes to Supabase Auth if email or metadata changed
+    // Only attempt sync if the user has authenticated at least once
     if (supabasePayload.email || supabasePayload.user_metadata) {
       const supabase = getSupabaseAdminClient();
-      const { error: supabaseError } = await supabase.auth.admin.updateUserById(id, supabasePayload);
 
-      if (supabaseError) {
-        console.error('Error updating Supabase user metadata:', supabaseError.message);
+      // Check if auth record exists before attempting update
+      const { data: authUser } = await supabase.auth.admin.getUserById(id);
 
-        // Log sync failure to audit trail
-        await executeWithContext(auth, `
-          INSERT INTO user_activity (user_id, action, details, ip_address, user_agent, created_at)
-          VALUES ($1, $2, $3, $4, $5, NOW())
-        `, [
-          auth.userId,
-          'admin.user.update.supabase_sync_failed',
-          JSON.stringify({
-            updated_profile_id: id,
-            error: supabaseError.message,
-            attempted_changes: supabasePayload
-          }),
-          req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
-          req.headers.get('user-agent') || 'unknown'
-        ]);
+      if (authUser.user) {
+        // User exists in Supabase Auth - safe to update
+        const { error: supabaseError } = await supabase.auth.admin.updateUserById(id, supabasePayload);
+
+        if (supabaseError) {
+          console.error('Error updating Supabase user metadata:', supabaseError.message);
+
+          // Log sync failure to audit trail
+          await executeWithContext(auth, `
+            INSERT INTO user_activity (user_id, action, details, ip_address, user_agent, created_at)
+            VALUES ($1, $2, $3, $4, $5, NOW())
+          `, [
+            auth.userId,
+            'admin.user.update.supabase_sync_failed',
+            JSON.stringify({
+              updated_profile_id: id,
+              error: supabaseError.message,
+              attempted_changes: supabasePayload
+            }),
+            req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+            req.headers.get('user-agent') || 'unknown'
+          ]);
+        }
+      } else {
+        // User hasn't authenticated yet - profile is pending
+        // Skip sync to avoid "user not found" errors in logs
+        console.warn(`[Admin] Skipping Supabase Auth sync for pending profile: ${id}`);
       }
     }
 

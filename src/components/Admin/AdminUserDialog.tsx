@@ -36,7 +36,7 @@ export function AdminUserDialog({ open, mode, onClose, user, churches }: AdminUs
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState<ProfileRole>(DEFAULT_ASSIGNABLE_ROLE);
-  const [churchId, setChurchId] = useState<string>('');
+  const [churchId, setChurchId] = useState<string>('none');
   const [phone, setPhone] = useState('');
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending;
@@ -50,14 +50,14 @@ export function AdminUserDialog({ open, mode, onClose, user, churches }: AdminUs
       setEmail(user.email);
       setFullName(user.full_name ?? '');
       setRole(user.role); // user.role is already ProfileRole type
-      const churchValue = typeof user.church_id === 'number' ? String(user.church_id) : '';
+      const churchValue = typeof user.church_id === 'number' ? String(user.church_id) : 'none';
       setChurchId(churchValue);
       setPhone(user.phone ?? '');
     } else {
       setEmail('');
       setFullName('');
       setRole(DEFAULT_ASSIGNABLE_ROLE);
-      setChurchId('');
+      setChurchId('none');
       setPhone('');
     }
   }, [mode, open, user]);
