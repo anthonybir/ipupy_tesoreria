@@ -1,7 +1,7 @@
 # Sistema de Roles y Permisos - IPU PY Tesorería
 
 **Última actualización**: 2025-10-05
-**Versión**: 2.2 (Post-corrección migration 037)
+**Versión**: 3.0 (Post-corrección migration 038 - Permisos Corregidos Completamente)
 
 ---
 
@@ -20,30 +20,53 @@ El sistema utiliza **6 roles jerárquicos** para controlar el acceso y las capac
 
 ---
 
-## ✅ CORRECCIONES APLICADAS (Migration 037)
+## ✅ MODELO DE NEGOCIO IMPLEMENTADO (Migration 038)
 
 **Fecha**: 2025-10-05
-**Estado**: ✅ Todos los problemas resueltos
+**Estado**: ✅ Sistema completamente alineado con modelo de negocio real
 
-### Problemas Corregidos
+### Descubrimiento Crítico
 
-1. ✅ **`church_manager`**: Ahora tiene 5 permisos definidos (view-only access)
-2. ✅ **`get_role_level()`**: Actualizada para incluir `fund_director` (5) y `church_manager` (2)
-3. ✅ **Roles obsoletos eliminados**: `district_supervisor` y `member` removidos de `role_permissions`
-4. ✅ **`fund_director`**: Permisos adicionales agregados (dashboard, churches, reports)
+**El sistema es DUAL-SCOPE**:
+- **NIVEL NACIONAL**: Gestión centralizada de 9 fondos nacionales (Fondo Nacional, Misiones, APY, etc.)
+- **NIVEL IGLESIA**: Reportes financieros para 38 iglesias (0 usuarios actualmente, admin completa formularios)
+
+**Hallazgos clave**:
+- 38 iglesias existen, pero **CERO tienen usuarios** excepto admin
+- Los **eventos son NACIONALES**: Creados por fund_director, aprobados por admin
+- Los **reportes son LOCALES**: Enviados por pastor/tesorero de iglesia, aprobados por admin
+- Los **directores de fondo gestionan FONDOS**, no iglesias
+
+### Correcciones Aplicadas en Migration 038
+
+#### Permisos ELIMINADOS (9 total):
+1. ❌ `treasurer.events.approve` - Los eventos son aprobados por admin, no tesorero de iglesia
+2. ❌ `treasurer.events.create` - Los eventos son creados por fund_director para fondos nacionales
+3. ❌ `treasurer.events.manage` - Los eventos son nivel NACIONAL, no iglesia
+4. ❌ `fund_director.churches.view` - Los directores de fondo gestionan FONDOS, no iglesias
+5. ❌ `fund_director.reports.view` - No necesitan ver reportes de iglesias
+6. ❌ `fund_director.dashboard.view` (general) - Reemplazado con scope assigned_funds
+7. ❌ `secretary.events.manage` - El secretario es nivel iglesia, eventos son nacionales
+
+#### Permisos AGREGADOS (3 total):
+1. ✅ `fund_director.events.submit` (assigned_funds) - Enviar eventos para aprobación de admin
+2. ✅ `fund_director.dashboard.view` (assigned_funds) - Ver panel de fondos asignados
+3. ✅ `treasurer.transactions.create` (own) - Registrar transacciones de iglesia local
 
 ### Tabla de Consistencia Final
 
-| Rol | DB Constraint | UI (authz.ts) | role_permissions | get_role_level() |
-|-----|---------------|---------------|------------------|------------------|
-| `admin` | ✅ | ✅ | ✅ (6 perms) | ✅ (6) |
-| `fund_director` | ✅ | ✅ | ✅ (13 perms) | ✅ (5) |
-| `pastor` | ✅ | ✅ | ✅ (5 perms) | ✅ (4) |
-| `treasurer` | ✅ | ✅ | ✅ (7 perms) | ✅ (3) |
-| `church_manager` | ✅ | ✅ | ✅ (5 perms) | ✅ (2) |
-| `secretary` | ✅ | ✅ | ✅ (3 perms) | ✅ (1) |
+| Rol | DB Constraint | UI (authz.ts) | role_permissions | get_role_level() | Scope |
+|-----|---------------|---------------|------------------|------------------|-------|
+| `admin` | ✅ | ✅ | ✅ (6 perms) | ✅ (6) | ALL - Nacional |
+| `fund_director` | ✅ | ✅ | ✅ (8 perms) | ✅ (5) | assigned_funds - Nacional |
+| `pastor` | ✅ | ✅ | ✅ (5 perms) | ✅ (4) | own - Iglesia |
+| `treasurer` | ✅ | ✅ | ✅ (5 perms) | ✅ (3) | own - Iglesia |
+| `church_manager` | ✅ | ✅ | ✅ (5 perms) | ✅ (2) | own - Iglesia |
+| `secretary` | ✅ | ✅ | ✅ (2 perms) | ✅ (1) | own - Iglesia |
 
-**Nota**: `district_supervisor` y `member` fueron eliminados del sistema (no asignables ni en permisos)
+**Total**: 31 permisos (reducido desde 37)
+
+**Documentación completa**: Ver [`CORRECT_PERMISSIONS_MODEL.md`](./CORRECT_PERMISSIONS_MODEL.md) y [`MIGRATION_038_VERIFICATION.md`](./MIGRATION_038_VERIFICATION.md)
 
 ---
 
