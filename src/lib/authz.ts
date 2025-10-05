@@ -59,6 +59,35 @@ export const adminRoles = (): string[] => Array.from(ADMIN_ROLES);
 
 export const profileRoles = (): readonly string[] => PROFILE_ROLE_ORDER;
 
+/**
+ * Spanish labels for profile roles (for UI display)
+ */
+const ROLE_LABELS: Record<ProfileRole, string> = {
+  admin: 'Administrador',
+  fund_director: 'Director de Fondos',
+  pastor: 'Pastor',
+  treasurer: 'Tesorero',
+  church_manager: 'Gerente de Iglesia',
+  secretary: 'Secretario'
+};
+
+/**
+ * Get Spanish label for a role
+ */
+export const getRoleLabel = (role: ProfileRole): string => {
+  return ROLE_LABELS[role];
+};
+
+/**
+ * Get all roles with their Spanish labels
+ */
+export const getRolesWithLabels = (): Array<{ value: ProfileRole; label: string }> => {
+  return PROFILE_ROLE_ORDER.map((role) => ({
+    value: role,
+    label: ROLE_LABELS[role]
+  }));
+};
+
 export const isValidProfileRole = (role: MaybeRole): role is typeof PROFILE_ROLE_ORDER[number] => {
   if (!role) {
     return false;

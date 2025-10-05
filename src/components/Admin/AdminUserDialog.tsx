@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useCreateAdminUser, useUpdateAdminUser, type AdminUserRecord, type CreateAdminUserPayload, type UpdateAdminUserPayload } from '@/hooks/useAdminUsers';
-import { profileRoles, type ProfileRole } from '@/lib/authz';
+import { getRolesWithLabels, type ProfileRole } from '@/lib/authz';
 
 export type AdminUserDialogProps = {
   open: boolean;
@@ -26,8 +26,8 @@ export type AdminUserDialogProps = {
 };
 
 // All roles are now assignable (migration 023 removed super_admin)
-const assignableRoles = profileRoles();
-const DEFAULT_ASSIGNABLE_ROLE: ProfileRole = (assignableRoles[0] ?? 'admin') as ProfileRole;
+const rolesWithLabels = getRolesWithLabels();
+const DEFAULT_ASSIGNABLE_ROLE: ProfileRole = 'admin';
 
 export function AdminUserDialog({ open, mode, onClose, user, churches }: AdminUserDialogProps): JSX.Element {
   const createMutation = useCreateAdminUser();
@@ -146,9 +146,9 @@ export function AdminUserDialog({ open, mode, onClose, user, churches }: AdminUs
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {assignableRoles.map((roleOption) => (
-                    <SelectItem key={roleOption} value={roleOption}>
-                      {roleOption.replace(/_/g, ' ')}
+                  {rolesWithLabels.map(({ value, label }) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
                     </SelectItem>
                   ))}
                 </SelectContent>
