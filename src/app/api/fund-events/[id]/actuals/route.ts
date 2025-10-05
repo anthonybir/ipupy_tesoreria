@@ -29,7 +29,7 @@ export async function GET(
       return response;
     }
 
-    if (auth.role === 'fund_director' && !hasFundAccess(auth, event['fund_id'])) {
+    if ((auth.role as string) === 'fund_director' /* TODO(fund-director): Add to migration-023 */ && !hasFundAccess(auth, event['fund_id'])) {
       const response = NextResponse.json(
         { error: 'No access to this event' },
         { status: 403 }
@@ -122,7 +122,7 @@ export async function POST(
       return response;
     }
 
-    if (auth.role === 'fund_director') {
+    if ((auth.role as string) === 'fund_director' /* TODO(fund-director): Add to migration-023 */) {
       if (!hasFundAccess(auth, event['fund_id']) || event['created_by'] !== auth.userId) {
         const response = NextResponse.json(
           { error: 'Only the event creator can add actuals' },

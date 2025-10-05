@@ -297,7 +297,7 @@ const handleGetReports = async (request: NextRequest, auth: AuthContext) => {
   const params: unknown[] = [];
 
   // Church-level roles can only see their own church's reports
-  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer' || auth.role === 'church' || auth.role === 'secretary' || auth.role === 'member';
+  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer'  /* TODO(role-cleanup): removed 'church' is not a valid role */ || auth.role === 'secretary';
 
   if (isChurchRole) {
     const scopedChurchId = parseRequiredChurchId(auth.churchId);
@@ -406,10 +406,10 @@ const extractReportPayload = (data: GenericRecord) => {
 
 const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
   // Check if user has admin privileges
-  const isAdminRole = auth.role === 'admin' || auth.role === 'super_admin' || auth.role === 'district_supervisor';
+  const isAdminRole = auth.role === 'admin';
 
   // Church-level roles that can create reports: pastor, treasurer, and legacy 'church' role
-  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer' || auth.role === 'church';
+  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer'  /* TODO(role-cleanup): removed 'church' is not a valid role */;
 
   // Determine which church this report is for
   const payloadChurchIdRaw = getRecordValue(data, 'church_id');
@@ -491,7 +491,7 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
   const fotoInforme = await saveBase64Attachment(attachments?.summary, `${attachmentPrefix}-resumen`);
   const fotoDeposito = await saveBase64Attachment(attachments?.deposit, `${attachmentPrefix}-deposito`);
 
-  const isChurchSubmission = auth.role === 'church' || auth.role === 'pastor' || auth.role === 'treasurer';
+  const isChurchSubmission = false /* TODO(role-cleanup): 'church' is not a valid role */ || auth.role === 'pastor' || auth.role === 'treasurer';
   const isAdminSubmission = isAdminRole;
 
   // Determine submission source based on role and data
@@ -736,8 +736,8 @@ const handleUpdateReport = async (
   const existingMonth = getRecordNumber(existing, 'month', 0);
 
   // Check if user has permission to modify this report
-  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer' || auth.role === 'church';
-  const isAdminRole = auth.role === 'admin' || auth.role === 'super_admin' || auth.role === 'district_supervisor';
+  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer'  /* TODO(role-cleanup): removed 'church' is not a valid role */;
+  const isAdminRole = auth.role === 'admin';
 
 
   if (isChurchRole && parseRequiredChurchId(auth.churchId) !== existingChurchId) {
@@ -857,7 +857,7 @@ const handleUpdateReport = async (
   const hasObservaciones = Object.prototype.hasOwnProperty.call(data, 'observaciones');
   const observacionesUpdate = hasObservaciones ? observacionesPayload : existingObservaciones;
 
-  const isChurchUpdate = auth.role === 'church' || auth.role === 'pastor' || auth.role === 'treasurer';
+  const isChurchUpdate = false /* TODO(role-cleanup): 'church' is not a valid role */ || auth.role === 'pastor' || auth.role === 'treasurer';
   const submissionTypePayload = getRecordString(data, 'submission_type', '');
   const existingSubmissionType = getRecordString(existing, 'submission_type', '');
   const submissionType = submissionTypePayload || existingSubmissionType || (isChurchUpdate ? 'online' : 'manual');
@@ -1044,8 +1044,8 @@ const handleDeleteReport = async (reportId: number, auth: AuthContext) => {
   const existingChurchId = getRecordNumber(existing, 'church_id', 0);
   const existingEstado = getRecordString(existing, 'estado', '');
   // Check if user has permission to delete this report
-  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer' || auth.role === 'church';
-  const isAdminRole = auth.role === 'admin' || auth.role === 'super_admin' || auth.role === 'district_supervisor';
+  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer'  /* TODO(role-cleanup): removed 'church' is not a valid role */;
+  const isAdminRole = auth.role === 'admin';
 
   if (isChurchRole && parseRequiredChurchId(auth.churchId) !== existingChurchId) {
     throw new BadRequestError('No tiene permisos para eliminar este informe');

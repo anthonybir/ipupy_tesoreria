@@ -52,6 +52,12 @@ const configs: Record<string, RateLimitConfig> = {
     windowMs: 60 * 60 * 1000, // 1 hour
     maxRequests: 10,  // 10 reports per hour
     message: 'Report submission rate limit exceeded.'
+  },
+  // User management - prevent account enumeration
+  user_management: {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 20,  // 20 user operations per minute
+    message: 'User management rate limit exceeded. Please slow down.'
   }
 };
 

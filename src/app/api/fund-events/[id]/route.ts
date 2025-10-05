@@ -105,7 +105,7 @@ export async function GET(
     }
 
     const { fundId: eventFundId } = getEventMeta(event as EventRow);
-    if (auth.role === 'fund_director' && (!eventFundId || !hasFundAccess(auth, eventFundId))) {
+    if ((auth.role as string) === 'fund_director' /* TODO(fund-director): Add to migration-023 */ && (!eventFundId || !hasFundAccess(auth, eventFundId))) {
       const response = NextResponse.json(
         { error: 'No access to this event' },
         { status: 403 }
@@ -163,7 +163,7 @@ export async function PATCH(
     const { status: eventStatus, fundId: eventFundId, createdBy: eventCreatedBy } = getEventMeta(eventRow);
 
     if (action === 'submit') {
-      if (auth.role === 'fund_director') {
+      if ((auth.role as string) === 'fund_director' /* TODO(fund-director): Add to migration-023 */) {
         if (!eventFundId || !hasFundAccess(auth, eventFundId) || !eventCreatedBy || eventCreatedBy !== auth.userId) {
           const response = NextResponse.json(
             { error: 'Only the event creator can submit' },
@@ -358,7 +358,7 @@ export async function PUT(
       return response;
     }
 
-    if (auth.role === 'fund_director') {
+    if ((auth.role as string) === 'fund_director' /* TODO(fund-director): Add to migration-023 */) {
       if (!eventFundId || !hasFundAccess(auth, eventFundId) || !eventCreatedBy || eventCreatedBy !== auth.userId) {
         const response = NextResponse.json(
           { error: 'No access to edit this event' },
@@ -444,7 +444,7 @@ export async function DELETE(
       return response;
     }
 
-    if (auth.role === 'fund_director') {
+    if ((auth.role as string) === 'fund_director' /* TODO(fund-director): Add to migration-023 */) {
       if (!eventFundId || !hasFundAccess(auth, eventFundId) || !eventCreatedBy || eventCreatedBy !== auth.userId) {
         const response = NextResponse.json(
           { error: 'No access to delete this event' },

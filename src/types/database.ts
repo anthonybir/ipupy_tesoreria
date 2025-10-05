@@ -10,6 +10,8 @@
  * - All optional fields explicitly marked with `| undefined` (exactOptionalPropertyTypes)
  */
 
+import type { ProfileRole } from '@/lib/authz';
+
 /**
  * Churches table - 22 IPU Paraguay churches
  */
@@ -60,7 +62,7 @@ export type ProfileRow = {
   id: string;
   email: string;
   full_name: string | null | undefined;
-  role: string;
+  role: ProfileRole;
   church_id: number | null | undefined;
   is_active: boolean;
   role_assigned_at: string | null | undefined;

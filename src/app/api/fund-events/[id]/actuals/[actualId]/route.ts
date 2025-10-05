@@ -57,7 +57,7 @@ function canManageActual(
 ) {
   const isAdmin = auth.role === 'admin';
   const isTreasurer = auth.role === 'treasurer';
-  const isFundDirector = auth.role === 'fund_director';
+  const isFundDirector = (auth.role as string) === 'fund_director' /* TODO(fund-director): Add to migration-023 */;
   const isOwner = event.created_by === auth.userId;
   const statusAllowsDirectorEdit = ['draft', 'pending_revision', 'submitted'].includes(event.status);
 

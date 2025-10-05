@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { requireAuth, hasFundAccess } from '@/lib/auth-supabase';
+import { requireAuth } from '@/lib/auth-supabase';
 import { executeWithContext, executeTransaction } from '@/lib/db';
 import { expectOne, firstOrDefault } from '@/lib/db-helpers';
 import { handleApiError } from '@/lib/api-errors';
@@ -17,20 +17,21 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const filters: string[] = [];
     const params: unknown[] = [];
 
-    if (auth.role === 'fund_director') {
-      if (!auth.assignedFunds || auth.assignedFunds.length === 0) {
-        const response = NextResponse.json({
-          success: true,
-          data: [],
-          stats: { draft: 0, submitted: 0, approved: 0, rejected: 0, pending_revision: 0 }
-        });
-        setCORSHeaders(response);
-        return response;
-      }
-
-      filters.push(`fe.fund_id = ANY($${params.length + 1})`);
-      params.push(auth.assignedFunds);
-    }
+    // TODO(fund-director): Restore when fund_director role is added to migration-023
+    // if ((auth.role as string) === 'fund_director') {
+    //   if (!auth.assignedFunds || auth.assignedFunds.length === 0) {
+    //     const response = NextResponse.json({
+    //       success: true,
+    //       data: [],
+    //       stats: { draft: 0, submitted: 0, approved: 0, rejected: 0, pending_revision: 0 }
+    //     });
+    //     setCORSHeaders(response);
+    //     return response;
+    //   }
+    //
+    //   filters.push(`fe.fund_id = ANY($${params.length + 1})`);
+    //   params.push(auth.assignedFunds);
+    // }
 
     const status = searchParams.get('status');
     if (status) {
@@ -198,14 +199,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       throw error;
     }
 
-    if (auth.role === 'fund_director' && !hasFundAccess(auth, body.fund_id)) {
-      const response = NextResponse.json(
-        { error: 'No access to this fund' },
-        { status: 403 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
+    // TODO(fund-director): Restore when fund_director role is added to migration-023
+    // if ((auth.role as string) === 'fund_director' && !hasFundAccess(auth, body.fund_id)) {
+    //   const response = NextResponse.json(
+    //     { error: 'No access to this fund' },
+    //     { status: 403 }
+    //   );
+    //   setCORSHeaders(response);
+    //   return response;
+    // }
 
     // Use executeTransaction for atomic multi-insert operation
     const event = await executeTransaction(auth, async (client) => {

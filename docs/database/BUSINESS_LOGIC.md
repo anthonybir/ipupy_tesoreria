@@ -364,12 +364,13 @@ WHERE id = $1;
 ```
 
 **Business Rules**:
-- ✅ Profile created automatically when user signs up (Supabase trigger)
-- ✅ Default role: `member` (read-only access)
-- ✅ Admin assigns role + church
-- ✅ Fund directors require additional assignment record
-- ✅ Soft delete preserves audit trail
-- ✅ Email must be unique across organization
+- ✅ Admin pre-registra el perfil desde el panel sin generar contraseña (solo email + rol)
+- ✅ Perfil creado automáticamente cuando el usuario inicia sesión con Google (trigger Supabase actualiza el UUID)
+- ✅ Rol por defecto: `member` (acceso de solo lectura)
+- ✅ El administrador asigna rol + iglesia
+- ✅ Los directores de fondo requieren registro adicional
+- ✅ La baja lógica preserva el historial de auditoría
+- ✅ El email debe ser único en toda la organización
 
 ---
 

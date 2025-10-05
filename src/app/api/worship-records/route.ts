@@ -32,7 +32,7 @@ const parseNumber = (value: unknown): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const getDecodedChurchId = (auth: AuthContext | null): number | null => {
+const _getDecodedChurchId = (auth: AuthContext | null): number | null => {
   if (!auth) {
     return null;
   }
@@ -47,16 +47,18 @@ const enforceChurchAccess = (auth: AuthContext | null, churchId: unknown): numbe
     throw new BadRequestError('church_id es requerido y debe ser válido');
   }
 
-  if (auth?.role === 'church') {
-    const decodedChurchId = getDecodedChurchId(auth);
-    if (!decodedChurchId) {
-      throw new ForbiddenError('La cuenta no tiene una iglesia asociada.');
-    }
-    if (decodedChurchId !== parsed) {
-      throw new ForbiddenError('No tienes permiso para registrar cultos para otra iglesia.');
-    }
-    return decodedChurchId;
-  }
+  // TODO(role-cleanup): 'church' is not a valid role - removed in migration-023
+  // This check is disabled until the correct role (pastor/treasurer) is clarified
+  // if (auth?.role === 'church') {
+  //   const decodedChurchId = getDecodedChurchId(auth);
+  //   if (!decodedChurchId) {
+  //     throw new ForbiddenError('La cuenta no tiene una iglesia asociada.');
+  //   }
+  //   if (decodedChurchId !== parsed) {
+  //     throw new ForbiddenError('No tienes permiso para registrar cultos para otra iglesia.');
+  //   }
+  //   return decodedChurchId;
+  // }
 
   return parsed;
 };

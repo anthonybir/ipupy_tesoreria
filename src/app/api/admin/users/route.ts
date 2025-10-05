@@ -1,9 +1,12 @@
+import { randomUUID } from 'crypto';
 import { type NextRequest, NextResponse } from 'next/server';
-import { getAuthContext } from '@/lib/auth-context';
+import { getAuthContext, type AuthContext } from '@/lib/auth-context';
 import { executeWithContext } from '@/lib/db';
 import { setCORSHeaders } from '@/lib/cors';
 import { createClient } from '@supabase/supabase-js';
 import { getSupabaseConfig } from '@/lib/env-validation';
+import { hasAdminPrivileges, isValidProfileRole, profileRoles } from '@/lib/authz';
+import { withRateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 
@@ -15,13 +18,90 @@ function getSupabaseAdminClient() {
   return createClient(url, serviceRoleKey);
 }
 
+async function getAuthorizedContext(req: NextRequest): Promise<AuthContext> {
+  const auth = await getAuthContext(req);
+  if (!auth || !hasAdminPrivileges(auth.role)) {
+    throw new Error('Unauthorized');
+  }
+  return auth;
+}
+
+const ALLOWED_EMAIL_DOMAINS = ['ipupy.org.py'];
+
+const normalizeEmail = (value: unknown): string => {
+  if (typeof value !== 'string') {
+    throw new Error('Email must be a string');
+  }
+  const trimmed = value.trim().toLowerCase();
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailPattern.test(trimmed)) {
+    throw new Error('Email is not valid');
+  }
+
+  // Enforce organizational domain restriction
+  const domain = trimmed.split('@')[1];
+  if (!domain || !ALLOWED_EMAIL_DOMAINS.includes(domain)) {
+    throw new Error(`Email must be from @${ALLOWED_EMAIL_DOMAINS.join(' or @')} domain`);
+  }
+
+  return trimmed;
+};
+
+const parseChurchId = (value: unknown): number | null => {
+  if (value === undefined || value === null || value === '') {
+    return null;
+  }
+  const parsed = Number(value);
+  if (Number.isNaN(parsed)) {
+    throw new Error('Iglesia inválida');
+  }
+  return parsed;
+};
+
+const validateChurchExists = async (
+  auth: AuthContext,
+  churchId: number
+): Promise<boolean> => {
+  const result = await executeWithContext(auth, `
+    SELECT id FROM churches
+    WHERE id = $1 AND active = true
+    LIMIT 1
+  `, [churchId]);
+  return (result.rowCount ?? 0) > 0;
+};
+
+const normalizePermissionsPayload = (permissions: unknown): string => {
+  if (permissions === undefined || permissions === null || permissions === '') {
+    return '{}';
+  }
+
+  if (typeof permissions === 'string') {
+    const trimmed = permissions.trim();
+    if (!trimmed) {
+      return '{}';
+    }
+    JSON.parse(trimmed);
+    return trimmed;
+  }
+
+  if (typeof permissions === 'object') {
+    return JSON.stringify(permissions);
+  }
+
+  throw new Error('Permissions must be a JSON object');
+};
+
 // GET /api/admin/users - Get all users
 export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
-    const auth = await getAuthContext(req);
+    // Rate limiting - prevent account enumeration
+    const rateLimit = await withRateLimit(req, 'user_management');
+    if (rateLimit) return rateLimit;
 
-    // Check if user is admin
-    if (!auth || auth.role !== 'admin') {
+    let auth: AuthContext;
+    try {
+      auth = await getAuthorizedContext(req);
+    } catch {
       const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       setCORSHeaders(response);
       return response;
@@ -41,6 +121,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         p.role,
         p.church_id,
         p.is_active,
+        p.is_authenticated,
         p.last_seen_at,
         p.created_at,
         p.permissions,
@@ -93,87 +174,203 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 }
 
-// POST /api/admin/users - Create new user
+/**
+ * POST /api/admin/users - Create pending user profile
+ *
+ * Implements Google-first provisioning where admin pre-registers users
+ * who then activate their accounts via Google OAuth on first login.
+ *
+ * **Workflow**:
+ * 1. Admin creates profile with email + role (is_authenticated=false)
+ * 2. Profile UUID pre-generated for matching with Supabase Auth
+ * 3. User receives notification to sign in with Google Workspace
+ * 4. On first Google login, Supabase trigger updates profile
+ * 5. Profile transitions to is_authenticated=true, account activated
+ *
+ * **Security**:
+ * - Email must be @ipupy.org.py domain
+ * - No password set (Google OAuth only)
+ * - Profile inactive until first login
+ * - Rate limited to 20 operations/minute
+ *
+ * @see docs/database/BUSINESS_LOGIC.md#user-management
+ * @see migration 016_create_profiles_and_auth_sync.sql
+ */
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    const auth = await getAuthContext(req);
+    // Rate limiting - prevent abuse
+    const rateLimit = await withRateLimit(req, 'user_management');
+    if (rateLimit) return rateLimit;
 
-    // Check if user is admin
-    if (!auth || auth.role !== 'admin') {
+    let auth: AuthContext;
+    try {
+      auth = await getAuthorizedContext(req);
+    } catch {
       const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       setCORSHeaders(response);
       return response;
     }
 
-    const body = await req.json();
-    const { email, password, full_name, role, church_id, phone, permissions } = body;
-
-    // Validate required fields
-    if (!email || !role) {
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
       const response = NextResponse.json(
-        { error: 'Email and role are required' },
+        { error: 'Invalid JSON payload' },
         { status: 400 }
       );
       setCORSHeaders(response);
       return response;
     }
 
-    // Create auth user in Supabase
-    const supabase = getSupabaseAdminClient();
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        full_name,
-        role,
-        church_id
+    const { email, full_name, role, church_id, phone, permissions } = (body ?? {}) as Record<string, unknown>;
+
+    if (!role || typeof role !== 'string' || !isValidProfileRole(role)) {
+      const response = NextResponse.json(
+        { error: `Rol inválido. Utilice uno de: ${profileRoles().join(', ')}` },
+        { status: 400 }
+      );
+      setCORSHeaders(response);
+      return response;
+    }
+
+    let normalizedEmail: string;
+    let permissionsJson: string;
+    let churchId: number | null;
+    try {
+      normalizedEmail = normalizeEmail(email);
+      permissionsJson = normalizePermissionsPayload(permissions);
+      churchId = parseChurchId(church_id);
+    } catch (validationError) {
+      const response = NextResponse.json(
+        { error: validationError instanceof Error ? validationError.message : 'Datos inválidos' },
+        { status: 400 }
+      );
+      setCORSHeaders(response);
+      return response;
+    }
+
+    // Validate church exists if specified
+    if (churchId !== null) {
+      const churchExists = await validateChurchExists(auth, churchId);
+      if (!churchExists) {
+        const response = NextResponse.json(
+          { error: 'Iglesia no encontrada o inactiva' },
+          { status: 400 }
+        );
+        setCORSHeaders(response);
+        return response;
       }
-    });
-
-    if (authError) {
-      const response = NextResponse.json(
-        { error: `Error creating user: ${authError.message}` },
-        { status: 400 }
-      );
-      setCORSHeaders(response);
-      return response;
     }
 
-    // Create or update profile
-    await executeWithContext(auth, `
-      INSERT INTO profiles (
-        id, email, full_name, role, church_id, phone, permissions,
-        is_active, role_assigned_by, role_assigned_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-      ON CONFLICT (id) DO UPDATE SET
-        email = $2,
-        full_name = $3,
-        role = $4,
-        church_id = $5,
-        phone = $6,
-        permissions = $7,
-        updated_at = NOW()
-    `, [
-      authData.user.id,
-      email,
-      full_name,
-      role,
-      church_id,
-      phone,
-      permissions ? JSON.stringify(permissions) : '{}',
-      true,
-      auth.userId
-    ]);
+    const fullName = typeof full_name === 'string' ? full_name.trim() || null : null;
+    const phoneNumber = typeof phone === 'string' ? phone.trim() || null : null;
 
-    // Log user creation with security context
+    const existing = await executeWithContext(auth, `
+      SELECT id, is_authenticated, is_active
+      FROM profiles
+      WHERE lower(email) = lower($1)
+      LIMIT 1
+    `, [normalizedEmail]);
+
+    let profileId: string = randomUUID();
+    let reusedPlaceholder = false;
+
+    // Reuse placeholder profiles from previous failed registrations
+    // Prevents UUID conflicts and reduces orphaned records
+    if (existing.rowCount && existing.rows[0]) {
+      const existingProfile = existing.rows[0] as { id: string; is_authenticated: boolean | null; is_active: boolean | null };
+      if (existingProfile.is_authenticated) {
+        const response = NextResponse.json(
+          { error: 'Ya existe un usuario activo con este email' },
+          { status: 409 }
+        );
+        setCORSHeaders(response);
+        return response;
+      }
+
+      profileId = existingProfile.id;
+      reusedPlaceholder = true;
+
+      await executeWithContext(auth, `
+        UPDATE profiles SET
+          email = $2,
+          full_name = $3,
+          role = $4,
+          church_id = $5,
+          phone = $6,
+          permissions = COALESCE($7::jsonb, '{}'::jsonb),
+          is_active = true,
+          is_authenticated = false,
+          role_assigned_by = $8,
+          role_assigned_at = NOW(),
+          updated_at = NOW()
+        WHERE id = $1
+      `, [
+        profileId,
+        normalizedEmail,
+        fullName,
+        role,
+        churchId,
+        phoneNumber,
+        permissionsJson,
+        auth.userId
+      ]);
+    } else {
+      await executeWithContext(auth, `
+        INSERT INTO profiles (
+          id,
+          email,
+          full_name,
+          role,
+          church_id,
+          phone,
+          permissions,
+          is_active,
+          is_authenticated,
+          role_assigned_by,
+          role_assigned_at,
+          created_at,
+          updated_at
+        ) VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          COALESCE($7::jsonb, '{}'::jsonb),
+          true,
+          false,
+          $8,
+          NOW(),
+          NOW(),
+          NOW()
+        )
+      `, [
+        profileId,
+        normalizedEmail,
+        fullName,
+        role,
+        churchId,
+        phoneNumber,
+        permissionsJson,
+        auth.userId
+      ]);
+    }
+
     await executeWithContext(auth, `
       INSERT INTO user_activity (user_id, action, details, ip_address, user_agent, created_at)
       VALUES ($1, $2, $3, $4, $5, NOW())
     `, [
       auth.userId,
       'admin.user.create',
-      JSON.stringify({ created_user_id: authData.user.id, email, role }),
+      JSON.stringify({
+        created_profile_id: profileId,
+        email: normalizedEmail,
+        role,
+        reused_placeholder: reusedPlaceholder
+      }),
       req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
       req.headers.get('user-agent') || 'unknown'
     ]);
@@ -181,13 +378,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const response = NextResponse.json({
       success: true,
       data: {
-        id: authData.user.id,
-        email,
-        full_name,
+        id: profileId,
+        email: normalizedEmail,
+        full_name: fullName,
         role,
-        church_id
+        church_id: churchId,
+        phone: phoneNumber,
+        is_active: true,
+        is_authenticated: false
       },
-      message: 'User created successfully'
+      message: 'Usuario registrado. Solicite que inicie sesión con Google para activar el acceso.'
     });
 
     setCORSHeaders(response);
@@ -206,19 +406,34 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 // PUT /api/admin/users - Update user
 export async function PUT(req: NextRequest): Promise<NextResponse> {
   try {
-    const auth = await getAuthContext(req);
+    // Rate limiting - prevent abuse
+    const rateLimit = await withRateLimit(req, 'user_management');
+    if (rateLimit) return rateLimit;
 
-    // Check if user is admin
-    if (!auth || auth.role !== 'admin') {
+    let auth: AuthContext;
+    try {
+      auth = await getAuthorizedContext(req);
+    } catch {
       const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       setCORSHeaders(response);
       return response;
     }
 
-    const body = await req.json();
-    const { id, email, full_name, role, church_id, phone, permissions, is_active } = body;
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      const response = NextResponse.json(
+        { error: 'Invalid JSON payload' },
+        { status: 400 }
+      );
+      setCORSHeaders(response);
+      return response;
+    }
 
-    if (!id) {
+    const { id, email, full_name, role, church_id, phone, permissions, is_active } = (body ?? {}) as Record<string, unknown>;
+
+    if (!id || typeof id !== 'string') {
       const response = NextResponse.json(
         { error: 'User ID is required' },
         { status: 400 }
@@ -227,48 +442,157 @@ export async function PUT(req: NextRequest): Promise<NextResponse> {
       return response;
     }
 
-    // Update profile
-    const updates: string[] = ['updated_at = NOW()'];
-    const values: Array<string | number | boolean | null> = [];
+    const existing = await executeWithContext(auth, `
+      SELECT id, is_authenticated
+      FROM profiles
+      WHERE id = $1
+    `, [id]);
+
+    if (!existing.rowCount) {
+      const response = NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+      setCORSHeaders(response);
+      return response;
+    }
+
+    const existingProfile = existing.rows[0] as { id: string; is_authenticated: boolean | null };
+
+    const updates: string[] = [];
+    const values: unknown[] = [];
+    let paramIndex = 1;
+
+    const changeSummary: Record<string, unknown> = {};
+    const metadataUpdates: Record<string, unknown> = {};
+    const supabasePayload: { email?: string; user_metadata?: Record<string, unknown> } = {};
 
     if (email !== undefined) {
-      updates.push(`email = $${values.length + 1}`);
-      values.push(email);
+      let normalizedEmail: string;
+      try {
+        normalizedEmail = normalizeEmail(email);
+      } catch (validationError) {
+        const response = NextResponse.json(
+          { error: validationError instanceof Error ? validationError.message : 'Email inválido' },
+          { status: 400 }
+        );
+        setCORSHeaders(response);
+        return response;
+      }
+      updates.push(`email = $${paramIndex}`);
+      values.push(normalizedEmail);
+      changeSummary['email'] = normalizedEmail;
+      supabasePayload.email = normalizedEmail;
+      paramIndex += 1;
     }
 
     if (full_name !== undefined) {
-      updates.push(`full_name = $${values.length + 1}`);
-      values.push(full_name);
+      const normalizedName = typeof full_name === 'string' ? full_name.trim() || null : null;
+      updates.push(`full_name = $${paramIndex}`);
+      values.push(normalizedName);
+      changeSummary['full_name'] = normalizedName;
+      metadataUpdates['full_name'] = normalizedName;
+      paramIndex += 1;
     }
 
     if (role !== undefined) {
-      updates.push(`role = $${values.length + 1}`);
+      if (typeof role !== 'string' || !isValidProfileRole(role)) {
+        const response = NextResponse.json(
+          { error: `Rol inválido. Utilice uno de: ${profileRoles().join(', ')}` },
+          { status: 400 }
+        );
+        setCORSHeaders(response);
+        return response;
+      }
+      updates.push(`role = $${paramIndex}`);
       values.push(role);
+      changeSummary['role'] = role;
+      metadataUpdates['role'] = role;
+      paramIndex += 1;
+
       updates.push('role_assigned_at = NOW()');
-      updates.push(`role_assigned_by = '${auth.userId}'`);
+      updates.push(`role_assigned_by = $${paramIndex}`);
+      values.push(auth.userId);
+      paramIndex += 1;
+      changeSummary['role_assigned_by'] = auth.userId;
     }
 
     if (church_id !== undefined) {
-      updates.push(`church_id = $${values.length + 1}`);
-      values.push(church_id);
+      let parsedChurchId: number | null;
+      try {
+        parsedChurchId = parseChurchId(church_id);
+      } catch (validationError) {
+        const response = NextResponse.json(
+          { error: validationError instanceof Error ? validationError.message : 'Iglesia inválida' },
+          { status: 400 }
+        );
+        setCORSHeaders(response);
+        return response;
+      }
+
+      // Validate church exists if specified
+      if (parsedChurchId !== null) {
+        const churchExists = await validateChurchExists(auth, parsedChurchId);
+        if (!churchExists) {
+          const response = NextResponse.json(
+            { error: 'Iglesia no encontrada o inactiva' },
+            { status: 400 }
+          );
+          setCORSHeaders(response);
+          return response;
+        }
+      }
+
+      updates.push(`church_id = $${paramIndex}`);
+      values.push(parsedChurchId);
+      changeSummary['church_id'] = parsedChurchId;
+      metadataUpdates['church_id'] = parsedChurchId;
+      paramIndex += 1;
     }
 
     if (phone !== undefined) {
-      updates.push(`phone = $${values.length + 1}`);
-      values.push(phone);
+      const normalizedPhone = typeof phone === 'string' ? phone.trim() || null : null;
+      updates.push(`phone = $${paramIndex}`);
+      values.push(normalizedPhone);
+      changeSummary['phone'] = normalizedPhone;
+      metadataUpdates['phone'] = normalizedPhone;
+      paramIndex += 1;
     }
 
     if (permissions !== undefined) {
-      updates.push(`permissions = $${values.length + 1}`);
-      values.push(JSON.stringify(permissions));
+      let permissionsJson: string;
+      try {
+        permissionsJson = normalizePermissionsPayload(permissions);
+      } catch (validationError) {
+        const response = NextResponse.json(
+          { error: validationError instanceof Error ? validationError.message : 'Permisos inválidos' },
+          { status: 400 }
+        );
+        setCORSHeaders(response);
+        return response;
+      }
+      updates.push(`permissions = $${paramIndex}::jsonb`);
+      values.push(permissionsJson);
+      changeSummary['permissions'] = JSON.parse(permissionsJson);
+      paramIndex += 1;
     }
 
     if (is_active !== undefined) {
-      updates.push(`is_active = $${values.length + 1}`);
+      if (typeof is_active !== 'boolean') {
+        const response = NextResponse.json(
+          { error: 'El estado activo debe ser booleano' },
+          { status: 400 }
+        );
+        setCORSHeaders(response);
+        return response;
+      }
+      updates.push(`is_active = $${paramIndex}`);
       values.push(is_active);
+      changeSummary['is_active'] = is_active;
+      paramIndex += 1;
     }
 
-    if (values.length === 0) {
+    if (!updates.length) {
       const response = NextResponse.json(
         { error: 'No fields to update' },
         { status: 400 }
@@ -277,29 +601,51 @@ export async function PUT(req: NextRequest): Promise<NextResponse> {
       return response;
     }
 
+    updates.push('updated_at = NOW()');
+
     await executeWithContext(auth, `
       UPDATE profiles SET
         ${updates.join(', ')}
-      WHERE id = $${values.length + 1}
+      WHERE id = $${paramIndex}
     `, [...values, id]);
 
-    // Update Supabase auth metadata if email changed
-    if (email) {
-      const supabase = getSupabaseAdminClient();
-      await supabase.auth.admin.updateUserById(id, {
-        email,
-        user_metadata: { full_name, role, church_id }
-      });
+    if (Object.keys(metadataUpdates).length) {
+      supabasePayload.user_metadata = metadataUpdates;
     }
 
-    // Log user update with security context
+    // Sync changes to Supabase Auth if user is authenticated
+    if (existingProfile.is_authenticated && (supabasePayload.email || supabasePayload.user_metadata)) {
+      const supabase = getSupabaseAdminClient();
+      const { error: supabaseError } = await supabase.auth.admin.updateUserById(id, supabasePayload);
+
+      if (supabaseError) {
+        console.error('Error updating Supabase user metadata:', supabaseError.message);
+
+        // Log sync failure to audit trail
+        await executeWithContext(auth, `
+          INSERT INTO user_activity (user_id, action, details, ip_address, user_agent, created_at)
+          VALUES ($1, $2, $3, $4, $5, NOW())
+        `, [
+          auth.userId,
+          'admin.user.update.supabase_sync_failed',
+          JSON.stringify({
+            updated_profile_id: id,
+            error: supabaseError.message,
+            attempted_changes: supabasePayload
+          }),
+          req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+          req.headers.get('user-agent') || 'unknown'
+        ]);
+      }
+    }
+
     await executeWithContext(auth, `
       INSERT INTO user_activity (user_id, action, details, ip_address, user_agent, created_at)
       VALUES ($1, $2, $3, $4, $5, NOW())
     `, [
       auth.userId,
       'admin.user.update',
-      JSON.stringify({ updated_user_id: id, changes: body }),
+      JSON.stringify({ updated_profile_id: id, changes: changeSummary }),
       req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
       req.headers.get('user-agent') || 'unknown'
     ]);
@@ -325,10 +671,14 @@ export async function PUT(req: NextRequest): Promise<NextResponse> {
 // DELETE /api/admin/users - Delete or deactivate user
 export async function DELETE(req: NextRequest): Promise<NextResponse> {
   try {
-    const auth = await getAuthContext(req);
+    // Rate limiting - prevent abuse
+    const rateLimit = await withRateLimit(req, 'user_management');
+    if (rateLimit) return rateLimit;
 
-    // Only admin can delete users
-    if (!auth || auth.role !== 'admin') {
+    let auth: AuthContext;
+    try {
+      auth = await getAuthorizedContext(req);
+    } catch {
       const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       setCORSHeaders(response);
       return response;
@@ -348,9 +698,12 @@ export async function DELETE(req: NextRequest): Promise<NextResponse> {
     }
 
     if (hardDelete) {
-      // Delete from Supabase auth
+      // Delete from Supabase auth if it exists (user may not have logged in yet)
       const supabase = getSupabaseAdminClient();
-      await supabase.auth.admin.deleteUser(userId);
+      const { error: deleteError } = await supabase.auth.admin.deleteUser(userId);
+      if (deleteError && !deleteError.message.includes('User not found')) {
+        console.error('Error deleting Supabase user:', deleteError.message);
+      }
 
       // Profile will be deleted via cascade or trigger
       await executeWithContext(auth, 'DELETE FROM profiles WHERE id = $1', [userId]);

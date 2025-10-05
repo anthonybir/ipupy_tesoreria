@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, type JSX } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,7 @@ import {
 } from 'lucide-react';
 import { BanknotesIcon } from '@heroicons/react/24/outline';
 import { PageHeader } from '@/components/Shared';
+import { AdminUserDialog } from '@/components/Admin/AdminUserDialog';
 import {
   useSystemConfig,
   useFinancialConfig,
@@ -47,20 +49,15 @@ import { usePastorAccess } from '@/hooks/usePastorAccess';
 import { GrantAccessDialog, ChangeRoleDialog, RevokeAccessDialog } from '@/components/Admin/PastorAccessDialogs';
 import type { DefaultFund } from '@/hooks/useAdminConfiguration';
 import type { ChurchRecord } from '@/types/api';
+import {
+  useAdminUsers,
+  useDeactivateAdminUser,
+  useUpdateAdminUser,
+  type AdminUserRecord,
+} from '@/hooks/useAdminUsers';
+import { useAdminChurches } from '@/hooks/useAdminChurches';
+import { fetchJson } from '@/lib/api-client';
 import toast from 'react-hot-toast';
-
-type AdminUser = {
-  id: number | string;
-  full_name?: string | null;
-  email: string;
-  role: string;
-  church_name?: string | null;
-  is_active?: boolean;
-};
-
-type AdminChurch = ChurchRecord & {
-  last_report?: string | null;
-};
 
 type ApiResponse<T> = {
   data?: T;
@@ -81,6 +78,26 @@ type IntegrationConfigurationSectionProps = {
   setConfig: SetConfig<IntegrationConfig>;
   onSave: () => void;
   loading: boolean;
+};
+
+/**
+ * Safe number input handler that prevents NaN and clamps values
+ */
+const createNumberInputHandler = <T,>(
+  config: T,
+  setConfig: (config: T) => void,
+  key: keyof T,
+  min?: number,
+  max?: number
+) => (e: React.ChangeEvent<HTMLInputElement>) => {
+  const value = parseInt(e.target.value, 10);
+  if (Number.isNaN(value)) return; // Ignore invalid input
+
+  let final = value;
+  if (min !== undefined && final < min) final = min;
+  if (max !== undefined && final > max) final = max;
+
+  setConfig({ ...config, [key]: final });
 };
 
 // Configuration sections
@@ -507,7 +524,13 @@ const ConfigurationPage = (): JSX.Element => {
                     min="0"
                     max="100"
                     value={financialConfig.fondoNacionalPercentage}
-                    onChange={(e) => setFinancialConfig({...financialConfig, fondoNacionalPercentage: parseInt(e.target.value)})}
+                    onChange={createNumberInputHandler(
+                      financialConfig,
+                      setFinancialConfig,
+                      'fondoNacionalPercentage',
+                      0,
+                      100
+                    )}
                   />
                   <p className="text-xs text-muted-foreground">Porcentaje automático del fondo nacional</p>
                 </div>
@@ -519,7 +542,13 @@ const ConfigurationPage = (): JSX.Element => {
                     min="1"
                     max="31"
                     value={financialConfig.reportDeadlineDay}
-                    onChange={(e) => setFinancialConfig({...financialConfig, reportDeadlineDay: parseInt(e.target.value)})}
+                    onChange={createNumberInputHandler(
+                      financialConfig,
+                      setFinancialConfig,
+                      'reportDeadlineDay',
+                      1,
+                      31
+                    )}
                   />
                   <p className="text-xs text-muted-foreground">Día del mes para entregar informes</p>
                 </div>
@@ -844,29 +873,63 @@ const ConfigurationPage = (): JSX.Element => {
 
 // User Management Component
 const UserManagementSection = () => {
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [showAddUser, setShowAddUser] = useState(false);
+  const usersQuery = useAdminUsers();
+  const deactivateMutation = useDeactivateAdminUser();
+  const reactivateMutation = useUpdateAdminUser();
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  const [dialogMode, setDialogMode] = useState<'create' | 'edit'>('create');
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<AdminUserRecord | null>(null);
+  const [actionUserId, setActionUserId] = useState<string | null>(null);
 
-  const fetchUsers = async (): Promise<void> => {
+  const churchOptionsQuery = useQuery({
+    queryKey: ['admin-users', 'church-options'],
+    queryFn: async () => {
+      const response = await fetchJson<ApiResponse<ChurchRecord[]>>('/api/churches');
+      const churches = response.data ?? [];
+      return churches.map((church) => ({ id: church.id, name: church.name || null }));
+    },
+    staleTime: 60_000,
+  });
+
+  const users = usersQuery.data ?? [];
+  const isLoading = usersQuery.isLoading;
+  const isError = usersQuery.isError;
+  const errorMessage = usersQuery.error?.message || 'Error al cargar usuarios';
+
+  const handleOpenCreate = () => {
+    setDialogMode('create');
+    setSelectedUser(null);
+    setDialogOpen(true);
+  };
+
+  const handleOpenEdit = (user: AdminUserRecord) => {
+    setDialogMode('edit');
+    setSelectedUser(user);
+    setDialogOpen(true);
+  };
+
+  const handleCloseDialog = () => {
+    setDialogOpen(false);
+  };
+
+  const handleToggleActive = async (user: AdminUserRecord) => {
+    setActionUserId(user.id);
     try {
-      const response = await fetch('/api/admin/users');
-      if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`);
+      if (user.is_active) {
+        await deactivateMutation.mutateAsync({ id: user.id });
+      } else {
+        await reactivateMutation.mutateAsync({ id: user.id, is_active: true });
       }
-      const data = (await response.json()) as ApiResponse<AdminUser[]>;
-      setUsers(data.data ?? []);
     } catch (error) {
-      console.error('Error fetching users:', error);
-      setUsers([]);
+      console.error('Error updating user state:', error);
     } finally {
-      setLoading(false);
+      setActionUserId(null);
     }
   };
+
+  const isActionInFlight = (userId: string): boolean =>
+    (deactivateMutation.isPending || reactivateMutation.isPending) && actionUserId === userId;
 
   return (
     <div className="space-y-6">
@@ -879,7 +942,7 @@ const UserManagementSection = () => {
                 Administre los usuarios del sistema y sus permisos
               </CardDescription>
             </div>
-            <Button onClick={() => setShowAddUser(true)}>
+            <Button onClick={handleOpenCreate}>
               <UserPlus className="h-4 w-4 mr-2" />
               Nuevo Usuario
             </Button>
@@ -887,11 +950,15 @@ const UserManagementSection = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {loading ? (
+            {isLoading ? (
               <div className="text-center py-8">
                 <RefreshCw className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
                 <p className="text-muted-foreground mt-2">Cargando usuarios...</p>
               </div>
+            ) : isError ? (
+              <Alert className="bg-muted/40">
+                <AlertDescription>{errorMessage}</AlertDescription>
+              </Alert>
             ) : (
               <div className="border rounded-lg">
                 <table className="w-full">
@@ -906,26 +973,44 @@ const UserManagementSection = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {users.map((user) => (
-                      <tr key={user.id} className="border-b">
-                        <td className="p-3">
-                          <div className="font-medium">{user.full_name || 'Sin nombre'}</div>
-                        </td>
-                        <td className="p-3 text-sm">{user.email}</td>
-                        <td className="p-3">
-                          <Badge variant="outline">{user.role}</Badge>
-                        </td>
-                        <td className="p-3 text-sm">{user.church_name || '-'}</td>
-                        <td className="p-3">
-                          <Badge variant={user.is_active ? 'success' : 'secondary'}>
-                            {user.is_active ? 'Activo' : 'Inactivo'}
-                          </Badge>
-                        </td>
-                        <td className="p-3">
-                          <Button variant="ghost" size="sm">Editar</Button>
+                    {users.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-6 text-center text-muted-foreground">
+                          No hay usuarios registrados todavía.
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      users.map((user) => (
+                        <tr key={user.id} className="border-b">
+                          <td className="p-3">
+                            <div className="font-medium">{user.full_name || 'Sin nombre'}</div>
+                          </td>
+                          <td className="p-3 text-sm">{user.email}</td>
+                          <td className="p-3">
+                            <Badge variant="outline">{user.role}</Badge>
+                          </td>
+                          <td className="p-3 text-sm">{user.church_name || '-'}</td>
+                          <td className="p-3">
+                            <Badge variant={user.is_active ? 'success' : 'secondary'}>
+                              {user.is_active ? 'Activo' : 'Inactivo'}
+                            </Badge>
+                          </td>
+                          <td className="p-3 space-x-2">
+                            <Button variant="ghost" size="sm" onClick={() => handleOpenEdit(user)}>
+                              Editar
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleToggleActive(user)}
+                              loading={isActionInFlight(user.id)}
+                            >
+                              {user.is_active ? 'Desactivar' : 'Activar'}
+                            </Button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -934,44 +1019,24 @@ const UserManagementSection = () => {
         </CardContent>
       </Card>
 
-      {showAddUser && (
-        <Alert className="bg-muted/40">
-          <AlertDescription className="flex items-center justify-between gap-4">
-            <span>La creación de usuarios estará disponible próximamente.</span>
-            <Button variant="outline" size="sm" onClick={() => setShowAddUser(false)}>
-              Cerrar
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
+      <AdminUserDialog
+        open={dialogOpen}
+        mode={dialogMode}
+        onClose={handleCloseDialog}
+        user={selectedUser}
+        churches={churchOptionsQuery.data ?? []}
+      />
     </div>
   );
 };
 
 // Church Management Component
 const ChurchManagementSection = () => {
-  const [churches, setChurches] = useState<AdminChurch[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-
-  useEffect(() => {
-    fetchChurches();
-  }, []);
-
-  const fetchChurches = async (): Promise<void> => {
-    try {
-      const response = await fetch('/api/churches');
-      if (!response.ok) {
-        throw new Error(`Request failed with status ${response.status}`);
-      }
-      const data = (await response.json()) as ApiResponse<AdminChurch[]>;
-      setChurches(data.data ?? []);
-    } catch (error) {
-      console.error('Error fetching churches:', error);
-      setChurches([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const churchesQuery = useAdminChurches();
+  const churches = churchesQuery.data ?? [];
+  const loading = churchesQuery.isLoading;
+  const isError = churchesQuery.isError;
+  const errorMessage = churchesQuery.error?.message || 'Error al cargar iglesias';
 
   return (
     <div className="space-y-6">
@@ -997,6 +1062,10 @@ const ChurchManagementSection = () => {
                 <RefreshCw className="h-8 w-8 animate-spin mx-auto text-muted-foreground" />
                 <p className="text-muted-foreground mt-2">Cargando iglesias...</p>
               </div>
+            ) : isError ? (
+              <Alert className="bg-muted/40">
+                <AlertDescription>{errorMessage}</AlertDescription>
+              </Alert>
             ) : (
               <div className="border rounded-lg">
                 <table className="w-full">
@@ -1088,16 +1157,30 @@ const SecurityConfigurationSection = ({ config, setConfig, onSave, loading }: Se
             <Label>Tiempo de Sesión (minutos)</Label>
             <Input
               type="number"
+              min="1"
               value={config.sessionTimeout}
-              onChange={(e) => setConfig({ ...config, sessionTimeout: Number(e.target.value) })}
+              onChange={createNumberInputHandler(
+                config,
+                setConfig,
+                'sessionTimeout',
+                1
+              )}
             />
           </div>
           <div className="space-y-2">
             <Label>Intentos Máximos de Login</Label>
             <Input
               type="number"
+              min="1"
+              max="10"
               value={config.maxLoginAttempts}
-              onChange={(e) => setConfig({ ...config, maxLoginAttempts: Number(e.target.value) })}
+              onChange={createNumberInputHandler(
+                config,
+                setConfig,
+                'maxLoginAttempts',
+                1,
+                10
+              )}
             />
           </div>
         </div>

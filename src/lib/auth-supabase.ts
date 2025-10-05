@@ -1,10 +1,11 @@
 import { type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import type { ProfileRole } from '@/lib/authz';
 
 export type AuthContext = {
   userId: string;  // Now UUID instead of number
   email: string;
-  role: string;
+  role: ProfileRole;
   churchId?: number | null;
   fullName?: string;
   phone?: string;
@@ -78,7 +79,7 @@ export const getAuthContext = async (_request?: NextRequest): Promise<AuthContex
   const authContext: AuthContext = {
     userId: profile.id,
     email: profile.email,
-    role: profile.role || 'viewer',
+    role: profile.role || 'secretary', // Default to 'member' (was 'viewer' pre-migration-023)
     churchId: profile.church_id,
     fullName: profile.full_name || undefined,
     phone: profile.phone || undefined,
@@ -150,7 +151,7 @@ export const isFundDirector = (context: AuthContext): boolean => {
 };
 
 /**
- * Check if fund director has access to specific fund
+ * Check if user has access to specific fund
  */
 export const hasFundAccess = (context: AuthContext, fundId: number): boolean => {
   if (context.role === 'admin' || context.role === 'treasurer') return true;
@@ -161,7 +162,7 @@ export const hasFundAccess = (context: AuthContext, fundId: number): boolean => 
 };
 
 /**
- * Check if fund director has access to specific church
+ * Check if user has access to specific church
  */
 export const hasChurchAccess = (context: AuthContext, churchId: number): boolean => {
   if (context.role === 'admin' || context.role === 'treasurer') return true;
@@ -182,7 +183,7 @@ export const isSystemOwner = (email: string): boolean =>
  */
 export const canAccessChurch = (context: AuthContext, churchId: number): boolean => {
   // Tier 1: Unrestricted cross-church access
-  if (['admin', 'district_supervisor'].includes(context.role)) {
+  if (['admin'].includes(context.role)) {
     return true;
   }
 
@@ -192,7 +193,7 @@ export const canAccessChurch = (context: AuthContext, churchId: number): boolean
   }
 
   // Tier 3: Church-scoped roles (own church only)
-  if (['pastor', 'treasurer', 'secretary'].includes(context.role)) {
+  if (['pastor', 'church_manager', 'treasurer', 'secretary'].includes(context.role)) {
     return context.churchId === churchId;
   }
 

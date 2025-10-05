@@ -38,7 +38,7 @@ export async function GET(
       return response;
     }
 
-    if (auth.role === 'fund_director' && !hasFundAccess(auth, event.fund_id)) {
+    if ((auth.role as string) === 'fund_director' /* TODO(fund-director): Add to migration-023 */ && !hasFundAccess(auth, event.fund_id)) {
       const response = NextResponse.json({ error: 'No access to this event' }, { status: 403 });
       setCORSHeaders(response);
       return response;
@@ -93,11 +93,11 @@ export async function POST(
     }
 
     const isDraftStatus = ['draft', 'pending_revision'].includes(event.status);
-    const isFundDirectorOwner = auth.role === 'fund_director' && event.created_by === auth.userId;
+    const isFundDirectorOwner = (auth.role as string) === 'fund_director' /* TODO(fund-director): Add to migration-023 */ && event.created_by === auth.userId;
     const isTreasurer = auth.role === 'treasurer';
     const isAdmin = auth.role === 'admin';
 
-    if (auth.role === 'fund_director') {
+    if ((auth.role as string) === 'fund_director' /* TODO(fund-director): Add to migration-023 */) {
       if (!hasFundAccess(auth, event.fund_id) || !isDraftStatus || !isFundDirectorOwner) {
         const response = NextResponse.json(
           { error: 'Fund directors can only add items to their own draft events' },

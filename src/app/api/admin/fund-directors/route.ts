@@ -135,10 +135,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       return response;
     }
 
-    if (profile.role !== 'fund_director') {
+    // TODO(fund-director): Add fund_director role to migration-023's 6-role system
+    if ((profile.role as string) !== 'fund_director') {
       const response = NextResponse.json(
-        { error: 'User must have fund_director role' },
-        { status: 400 }
+        { error: 'User must have fund_director role (currently disabled - pending migration)' },
+        { status: 501 } // Not Implemented
       );
       setCORSHeaders(response);
       return response;

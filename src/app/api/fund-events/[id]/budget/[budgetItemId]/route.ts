@@ -51,7 +51,7 @@ export async function PUT(
       );
     }
 
-    const isFundDirector = auth.role === 'fund_director';
+    const isFundDirector = (auth.role as string) === 'fund_director' /* TODO(fund-director): Add to migration-023 */;
     const isAdmin = auth.role === 'admin';
     const isTreasurer = auth.role === 'treasurer';
 
@@ -134,7 +134,7 @@ export async function DELETE(
       );
     }
 
-    const isFundDirector = auth.role === 'fund_director';
+    const isFundDirector = (auth.role as string) === 'fund_director' /* TODO(fund-director): Add to migration-023 */;
     const isAdmin = auth.role === 'admin';
     const isTreasurer = auth.role === 'treasurer';
 

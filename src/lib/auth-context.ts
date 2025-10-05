@@ -1,10 +1,11 @@
 import { type NextRequest } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import type { ProfileRole } from '@/lib/authz';
 
 export type AuthContext = {
   userId?: string | undefined;  // Changed to string (UUID) from number
   email?: string | undefined;
-  role?: string | undefined;
+  role?: ProfileRole | undefined;
   churchId?: number | null | undefined;
   fullName?: string | undefined;
   phone?: string | undefined;
@@ -48,7 +49,7 @@ export const getAuthContext = async (_request?: NextRequest): Promise<AuthContex
     return {
       userId: profile.id,
       email: profile.email,
-      role: profile.role || 'viewer',
+      role: profile.role || 'secretary', // Default to lowest privilege role
       churchId: profile.church_id || null,
       fullName: profile.full_name || undefined,
       phone: profile.phone || undefined,
@@ -61,7 +62,7 @@ export const getAuthContext = async (_request?: NextRequest): Promise<AuthContex
   return {
     userId: user.id,
     email: user.email || undefined,
-    role: 'viewer',
+    role: 'secretary', // Default to lowest privilege role
     churchId: null
   };
 };
