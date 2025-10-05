@@ -107,7 +107,68 @@ INSERT INTO role_permissions (role, permission, scope, description) VALUES
 ON CONFLICT (role, permission) DO NOTHING;
 
 -- ============================================================================
--- PHASE 6: VERIFICATION
+-- PHASE 6: UPDATE SYSTEM CONFIGURATION (UI)
+-- ============================================================================
+
+-- Update role definitions in system_configuration table
+-- This fixes the UI to show only the 6 active roles
+UPDATE system_configuration
+SET value = jsonb_build_array(
+  jsonb_build_object(
+    'id', 'admin',
+    'name', 'Administrador',
+    'description', 'Acceso completo al sistema',
+    'editable', false
+  ),
+  jsonb_build_object(
+    'id', 'fund_director',
+    'name', 'Director de Fondos',
+    'description', 'Gestiona eventos y presupuestos de fondos asignados',
+    'editable', true
+  ),
+  jsonb_build_object(
+    'id', 'pastor',
+    'name', 'Pastor',
+    'description', 'Gestiona su iglesia local',
+    'editable', true
+  ),
+  jsonb_build_object(
+    'id', 'treasurer',
+    'name', 'Tesorero de Iglesia',
+    'description', 'Gestiona finanzas de su iglesia local',
+    'editable', true
+  ),
+  jsonb_build_object(
+    'id', 'church_manager',
+    'name', 'Gerente de Iglesia',
+    'description', 'Acceso de solo lectura a información de la iglesia',
+    'editable', true
+  ),
+  jsonb_build_object(
+    'id', 'secretary',
+    'name', 'Secretario',
+    'description', 'Apoya tareas administrativas de la iglesia',
+    'editable', true
+  )
+)
+WHERE section = 'roles'
+AND key = 'definitions';
+
+-- Update fund_director metadata configuration
+UPDATE system_configuration
+SET value = jsonb_build_object(
+  'name', 'Director de Fondos',
+  'level', 5,
+  'can_assign', true,
+  'description', 'Gestiona eventos y presupuestos de fondos específicos asignados'
+)
+WHERE section = 'roles'
+AND key = 'fund_director';
+
+COMMENT ON TABLE system_configuration IS 'System configuration with corrected role definitions (updated in migration 037)';
+
+-- ============================================================================
+-- PHASE 7: VERIFICATION
 -- ============================================================================
 
 DO $$
