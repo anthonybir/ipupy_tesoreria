@@ -16,29 +16,66 @@ The IPU PY Treasury system implements a comprehensive security model featuring R
 
 ## Role-Based Access Control (RBAC)
 
-### Role Simplification (Migration 023)
+### Current Role System (7 Roles)
 
-The system was simplified from 8 roles to 6 hierarchical roles for better clarity:
-
-#### Previous Roles (Deprecated)
-- `super_admin` → **Consolidated into `admin`**
-- `admin` → **Remains `admin`**
-- `church_admin` → **Renamed to `pastor`**
-- `viewer` → **Converted to `member`**
-
-#### Current Role System (6 Roles)
+The system uses **7 hierarchical roles** for access control (see migrations 023, 026, 037, 040):
 
 ```sql
 -- Role hierarchy (highest to lowest permissions)
-1. admin              -- Full system administration
-2. district_supervisor -- Multi-church oversight
-3. pastor             -- Church management (renamed from church_admin)
-4. treasurer          -- Financial management
-5. secretary          -- Administrative support
-6. member             -- Basic read-only access (converted from viewer)
+1. admin              -- Full system administration (level 7)
+2. national_treasurer -- National fund supervision (level 6) - Added in migration 040
+3. fund_director      -- Fund-specific management (level 5) - Added in migration 026
+4. pastor             -- Church leadership (level 4)
+5. treasurer          -- Financial operations (level 3)
+6. church_manager     -- Church administration view-only (level 2)
+7. secretary          -- Administrative support (level 1)
 ```
 
+#### Migration History
+
+**Migration 023** (Role Simplification):
+- Simplified from 8 roles to 6 roles
+- `super_admin` → **Consolidated into `admin`**
+- `church_admin` → **Renamed to `pastor`**
+- `viewer` → **Removed**
+
+**Migration 026** (Fund Director):
+- Added `fund_director` role for fund-specific management
+- Introduced fund director assignments system
+
+**Migration 037** (Role Cleanup):
+- Removed obsolete roles: `district_supervisor`, `member`
+- Fixed role hierarchy and permissions
+- Added `get_role_level()` database function
+
+**Migration 040** (National Treasurer):
+- Added `national_treasurer` role for national fund oversight
+- Highest privilege after admin
+- Supervises all fund directors
+
+#### Obsolete Roles (Removed)
+
+The following roles are **no longer valid** and were removed in migration 037:
+- `district_supervisor` - Removed (no longer needed)
+- `member` - Removed (consolidated into secretary)
+- `super_admin` - Consolidated into `admin` (migration 023)
+- `church_admin` - Renamed to `pastor` (migration 023)
+- `viewer` - Removed (migration 023)
+
 ### Role Permissions Matrix
+
+> **⚠️ DEPRECATED SECTION**
+>
+> The detailed permissions below describe the **old role system** (pre-migration 037).
+>
+> **For current permissions**, see:
+> - `docs/ROLES_AND_PERMISSIONS.md` - Complete current permissions matrix
+> - `docs/CORRECT_PERMISSIONS_MODEL.md` - Business model documentation
+> - `docs/MIGRATION_038_VERIFICATION.md` - Permissions verification
+>
+> **Current roles** (7 total): admin, national_treasurer, fund_director, pastor, treasurer, church_manager, secretary
+>
+> **Obsolete roles** (removed): district_supervisor, member
 
 #### 1. Admin Role (`admin`)
 

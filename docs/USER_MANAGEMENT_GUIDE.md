@@ -1,7 +1,7 @@
 # Guía de Gestión de Usuarios - IPU PY Tesorería
 
 **Última actualización**: 2025-10-05
-**Versión**: 1.0
+**Versión**: 2.0 (Migration 040 - Tesorero Nacional Agregado)
 
 ---
 
@@ -13,7 +13,7 @@ Esta guía explica cómo crear y gestionar usuarios en el sistema IPU PY Tesorer
 
 ## 🔑 Roles Disponibles
 
-El sistema tiene **6 roles jerárquicos** (de mayor a menor privilegio):
+El sistema tiene **7 roles jerárquicos** (de mayor a menor privilegio):
 
 ### 1. 👑 Administrador
 - **Alcance**: NACIONAL (todo el sistema)
@@ -26,7 +26,22 @@ El sistema tiene **6 roles jerárquicos** (de mayor a menor privilegio):
   - ✅ Llenar formularios para iglesias sin usuarios
 - **Cuándo usar**: Para personal administrativo nacional
 
-### 2. 💼 Director de Fondos
+### 2. 🏛️ Tesorero Nacional
+- **Alcance**: NACIONAL (TODOS los fondos nacionales)
+- **Asignación de iglesia**: OPCIONAL (no requerida)
+- **Capacidades**:
+  - ✅ Aprobar eventos de TODOS los fondos nacionales
+  - ✅ Ver y gestionar TODOS los 9 fondos nacionales
+  - ✅ Crear y editar eventos de cualquier fondo
+  - ✅ Supervisar trabajo de todos los directores de fondos
+  - ✅ Ver todas las transacciones de fondos
+  - ✅ Dashboard consolidado de tesorería nacional
+  - ❌ NO puede gestionar usuarios (solo admin)
+  - ❌ NO puede aprobar reportes de iglesias (solo admin)
+- **Cuándo usar**: Para el Tesorero Nacional electo que supervisa todos los fondos
+- **⚠️ IMPORTANTE**: Solo debe haber UN tesorero nacional (posición única electa)
+
+### 3. 💼 Director de Fondos
 - **Alcance**: NACIONAL (fondos asignados)
 - **Asignación de iglesia**: NO REQUERIDA
 - **Capacidades**:
@@ -36,7 +51,7 @@ El sistema tiene **6 roles jerárquicos** (de mayor a menor privilegio):
   - ✅ Registrar gastos reales post-evento
 - **Cuándo usar**: Para directores de fondos específicos (Misiones, APY, etc.)
 
-### 3. ⛪ Pastor
+### 4. ⛪ Pastor
 - **Alcance**: IGLESIA LOCAL (solo su iglesia)
 - **Asignación de iglesia**: **REQUERIDA**
 - **Capacidades**:
@@ -45,7 +60,7 @@ El sistema tiene **6 roles jerárquicos** (de mayor a menor privilegio):
   - ✅ Gestionar miembros de su iglesia
 - **Cuándo usar**: Para pastores de iglesias locales
 
-### 4. 💰 Tesorero
+### 5. 💰 Tesorero
 - **Alcance**: IGLESIA LOCAL (solo su iglesia)
 - **Asignación de iglesia**: **REQUERIDA**
 - **Capacidades**:
@@ -54,7 +69,7 @@ El sistema tiene **6 roles jerárquicos** (de mayor a menor privilegio):
   - ✅ Ver balance de fondos de su iglesia
 - **Cuándo usar**: Para tesoreros de iglesias locales
 
-### 5. 📊 Gerente de Iglesia
+### 6. 📊 Gerente de Iglesia
 - **Alcance**: IGLESIA LOCAL (solo su iglesia)
 - **Asignación de iglesia**: **REQUERIDA**
 - **Capacidades**:
@@ -63,7 +78,7 @@ El sistema tiene **6 roles jerárquicos** (de mayor a menor privilegio):
   - ✅ Ver iglesias (lectura)
 - **Cuándo usar**: Para personal administrativo de iglesia
 
-### 6. 📝 Secretario
+### 7. 📝 Secretario
 - **Alcance**: IGLESIA LOCAL (solo su iglesia)
 - **Asignación de iglesia**: **REQUERIDA**
 - **Capacidades**:
@@ -91,8 +106,9 @@ El sistema tiene **6 roles jerárquicos** (de mayor a menor privilegio):
 - **Ejemplo**: `Anthony Bir`
 
 #### Rol (Requerido)
-Seleccionar uno de los 6 roles:
+Seleccionar uno de los 7 roles:
 - **Administrador** - Gestión nacional completa
+- **Tesorero Nacional** - Supervisión de todos los fondos (posición electa)
 - **Director de Fondos** - Gestión de fondos nacionales
 - **Pastor** - Liderazgo de iglesia local
 - **Tesorero** - Finanzas de iglesia local
@@ -101,7 +117,7 @@ Seleccionar uno de los 6 roles:
 
 #### Iglesia (Condicional)
 - **REQUERIDA para**: Pastor, Tesorero, Gerente de Iglesia, Secretario
-- **OPCIONAL para**: Administrador, Director de Fondos
+- **OPCIONAL para**: Administrador, Tesorero Nacional, Director de Fondos
 - **Opciones**:
   - "Sin asignar" (para roles nacionales)
   - Lista de 38 iglesias disponibles
@@ -153,6 +169,17 @@ Seleccionar uno de los 6 roles:
 ```
 **Resultado**: Pedro gestiona eventos del Fondo de Misiones (nivel nacional)
 
+### Caso 4: Crear Tesorero Nacional (Posición Electa)
+```
+✅ Email: tesoreria.nacional@ipupy.org.py
+✅ Nombre: Roberto Sánchez
+✅ Rol: Tesorero Nacional
+✅ Iglesia: Sin asignar ← No necesita iglesia
+✅ Teléfono: (+595) 971 456789
+```
+**Resultado**: Roberto supervisa TODOS los 9 fondos nacionales y aprueba eventos de todos los directores de fondos
+**⚠️ IMPORTANTE**: Esta es una posición única electa - solo debe haber UN tesorero nacional en el sistema
+
 ---
 
 ## ⚠️ Errores Comunes y Soluciones
@@ -188,14 +215,15 @@ Seleccionar uno de los 6 roles:
 - ❌ Emails de Gmail, Outlook, etc. son rechazados automáticamente
 
 ### Control de Acceso por Rol
-| Rol | Puede crear usuarios | Puede aprobar reportes | Alcance de datos |
-|-----|---------------------|------------------------|------------------|
-| Administrador | ✅ | ✅ | TODAS las iglesias |
-| Director de Fondos | ❌ | ❌ | Fondos asignados |
-| Pastor | ❌ | ❌ | Solo su iglesia |
-| Tesorero | ❌ | ❌ | Solo su iglesia |
-| Gerente de Iglesia | ❌ | ❌ | Solo su iglesia |
-| Secretario | ❌ | ❌ | Solo su iglesia |
+| Rol | Puede crear usuarios | Puede aprobar reportes | Puede aprobar eventos | Alcance de datos |
+|-----|---------------------|------------------------|----------------------|------------------|
+| Administrador | ✅ | ✅ | ✅ | TODAS las iglesias y fondos |
+| Tesorero Nacional | ❌ | ❌ | ✅ | TODOS los fondos nacionales |
+| Director de Fondos | ❌ | ❌ | ❌ | Fondos asignados |
+| Pastor | ❌ | ❌ | ❌ | Solo su iglesia |
+| Tesorero | ❌ | ❌ | ❌ | Solo su iglesia |
+| Gerente de Iglesia | ❌ | ❌ | ❌ | Solo su iglesia |
+| Secretario | ❌ | ❌ | ❌ | Solo su iglesia |
 
 ### Auditoría
 Todas las acciones de usuarios son registradas en `user_activity`:

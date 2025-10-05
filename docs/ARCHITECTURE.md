@@ -171,7 +171,7 @@ CREATE TABLE profiles (
   id UUID PRIMARY KEY,              -- Linked to auth.users
   email TEXT NOT NULL,
   full_name TEXT,
-  role TEXT CHECK (role IN ('admin', 'district_supervisor', 'pastor', 'treasurer', 'secretary', 'member')),  -- 6 simplified roles
+  role TEXT CHECK (role IN ('admin', 'national_treasurer', 'fund_director', 'pastor', 'treasurer', 'church_manager', 'secretary')),  -- 7 roles (migrations 023, 026, 037, 040)
   church_id INTEGER,
   is_active BOOLEAN DEFAULT true,
   is_authenticated BOOLEAN DEFAULT false,
@@ -408,7 +408,7 @@ export async function POST(request: NextRequest) {
 ### Capas de Seguridad
 
 1. **Autenticación**: Google OAuth + Magic Link via Supabase
-2. **Autorización**: Sistema de 6 roles simplificado (admin, district_supervisor, pastor, treasurer, secretary, member)
+2. **Autorización**: Sistema de 7 roles jerárquicos (admin, national_treasurer, fund_director, pastor, treasurer, church_manager, secretary)
 3. **Database**: Row Level Security con contexto de usuario mejorado
 4. **API**: executeWithContext para RLS + CORS estricto
 5. **Frontend**: Protected routes + role-based UI
@@ -542,10 +542,15 @@ await logActivity('report_created', {
 - **Connection Pooling**: Pool de conexiones con monitoreo de salud
 - **Error Resilience**: Retry logic con backoff exponencial
 
-### Simplificación de Roles (Migration 023)
-- **De 8 a 6 roles**: Simplificación de `super_admin`, `church_admin`, `viewer`
-- **Role Hierarchy**: Sistema jerárquico claro con niveles de permisos
-- **Permission Matrix**: Tabla `role_permissions` para documentar permisos
+### Sistema de Roles (Migrations 023, 026, 037, 040)
+- **7 roles jerárquicos**: admin, national_treasurer, fund_director, pastor, treasurer, church_manager, secretary
+- **Migration 023**: Simplificación inicial de 8 a 6 roles
+- **Migration 026**: Agregado fund_director para gestión de fondos
+- **Migration 037**: Eliminados roles obsoletos (district_supervisor, member)
+- **Migration 040**: Agregado national_treasurer para supervisión nacional
+- **Role Hierarchy**: Sistema jerárquico con niveles 1-7 (get_role_level())
+- **Permission Matrix**: Tabla `role_permissions` con 44 permisos totales
+- **Branded Types**: ProfileRole type en TypeScript para type safety
 
 ### Seguridad Mejorada
 - **RLS Context Fix**: Corrección crítica del fallback de roles

@@ -207,7 +207,7 @@ export async function PATCH(
     }
 
     if (action === 'approve') {
-      if (!['admin', 'treasurer'].includes(auth.role)) {
+      if (!['admin', 'national_treasurer', 'treasurer'].includes(auth.role)) {
         const response = NextResponse.json(
           { error: 'Insufficient permissions to approve events' },
           { status: 403 }
@@ -253,7 +253,7 @@ export async function PATCH(
     }
 
     if (action === 'reject') {
-      if (!['admin', 'treasurer'].includes(auth.role)) {
+      if (!['admin', 'national_treasurer', 'treasurer'].includes(auth.role)) {
         const response = NextResponse.json(
           { error: 'Insufficient permissions to reject events' },
           { status: 403 }

@@ -1,22 +1,23 @@
 # Sistema de Roles y Permisos - IPU PY Tesorería
 
 **Última actualización**: 2025-10-05
-**Versión**: 3.0 (Post-corrección migration 038 - Permisos Corregidos Completamente)
+**Versión**: 4.0 (Migration 040 - Tesorero Nacional Agregado)
 
 ---
 
 ## 📋 Resumen Ejecutivo
 
-El sistema utiliza **6 roles jerárquicos** para controlar el acceso y las capacidades de los usuarios en la plataforma de tesorería.
+El sistema utiliza **7 roles jerárquicos** para controlar el acceso y las capacidades de los usuarios en la plataforma de tesorería.
 
 ### Roles Actuales (en orden jerárquico)
 
-1. **👑 admin** - Administrador del Sistema (nivel 6)
-2. **💼 fund_director** - Director de Fondos (nivel 5)
-3. **⛪ pastor** - Pastor de Iglesia (nivel 4)
-4. **💰 treasurer** - Tesorero de Iglesia (nivel 3)
-5. **📊 church_manager** - Gerente de Iglesia (nivel 2)
-6. **📝 secretary** - Secretario de Iglesia (nivel 1)
+1. **👑 admin** - Administrador del Sistema (nivel 7)
+2. **🏛️ national_treasurer** - Tesorero Nacional (nivel 6) - **NUEVO en v4.0**
+3. **💼 fund_director** - Director de Fondos (nivel 5)
+4. **⛪ pastor** - Pastor de Iglesia (nivel 4)
+5. **💰 treasurer** - Tesorero de Iglesia (nivel 3)
+6. **📊 church_manager** - Gerente de Iglesia (nivel 2)
+7. **📝 secretary** - Secretario de Iglesia (nivel 1)
 
 ---
 
@@ -57,14 +58,15 @@ El sistema utiliza **6 roles jerárquicos** para controlar el acceso y las capac
 
 | Rol | DB Constraint | UI (authz.ts) | role_permissions | get_role_level() | Scope |
 |-----|---------------|---------------|------------------|------------------|-------|
-| `admin` | ✅ | ✅ | ✅ (6 perms) | ✅ (6) | ALL - Nacional |
-| `fund_director` | ✅ | ✅ | ✅ (8 perms) | ✅ (5) | assigned_funds - Nacional |
+| `admin` | ✅ | ✅ | ✅ (6 perms) | ✅ (7) | ALL - Nacional |
+| `national_treasurer` | ✅ | ✅ | ✅ (11 perms) | ✅ (6) | ALL - Nacional |
+| `fund_director` | ✅ | ✅ | ✅ (10 perms) | ✅ (5) | assigned_funds - Nacional |
 | `pastor` | ✅ | ✅ | ✅ (5 perms) | ✅ (4) | own - Iglesia |
 | `treasurer` | ✅ | ✅ | ✅ (5 perms) | ✅ (3) | own - Iglesia |
 | `church_manager` | ✅ | ✅ | ✅ (5 perms) | ✅ (2) | own - Iglesia |
 | `secretary` | ✅ | ✅ | ✅ (2 perms) | ✅ (1) | own - Iglesia |
 
-**Total**: 31 permisos (reducido desde 37)
+**Total**: 44 permisos (desde migration 040)
 
 **Documentación completa**: Ver [`CORRECT_PERMISSIONS_MODEL.md`](./CORRECT_PERMISSIONS_MODEL.md) y [`MIGRATION_038_VERIFICATION.md`](./MIGRATION_038_VERIFICATION.md)
 
@@ -107,7 +109,81 @@ Todos los usuarios con email `@ipupy.org.py` reciben rol `admin` automáticament
 
 ---
 
-## 💼 2. Fund Director (Director de Fondos)
+## 🏛️ 2. National Treasurer (Tesorero Nacional)
+
+### Descripción
+Posición electa que supervisa TODOS los fondos nacionales y dirige a todos los fund_directors. Tiene acceso total a los 9 fondos nacionales (vs. fund_director que solo accede 1 fondo).
+
+### Alcance
+- **Nacional** - Acceso a TODOS los fondos nacionales
+- **Multi-fondo** - Supervisa los 9 fondos nacionales simultáneamente
+- **Supervisión** - Dirige y aprueba trabajo de fund_directors
+
+### Permisos
+
+| Permiso | Descripción | Ejemplos de Uso |
+|---------|-------------|-----------------|
+| `events.approve` | Aprobar eventos de cualquier fondo | Aprobar evento propuesto por fund_director |
+| `events.view` | Ver todos los eventos de fondos | Consultar eventos planificados |
+| `events.edit` | Editar cualquier evento de fondo | Modificar presupuesto de evento |
+| `events.create` | Crear eventos de fondos nacionales | Planificar nuevo evento nacional |
+| `funds.view` | Ver todos los fondos nacionales | Consultar balances de los 9 fondos |
+| `funds.manage` | Gestionar balances de fondos | Ajustar balances, crear fondos |
+| `transactions.view` | Ver todas las transacciones de fondos | Revisar movimientos de todos los fondos |
+| `transactions.create` | Crear transacciones de fondos | Registrar movimientos nacionales |
+| `dashboard.view` | Ver dashboard de tesorería nacional | Panel de control de fondos |
+| `churches.view` | Ver iglesias para contexto | Consultar iglesias relacionadas a eventos |
+| `reports.view` | Ver reportes mensuales | Consultar reportes (solo lectura) |
+
+### Capacidades Clave
+- ✅ Aprobar eventos propuestos por CUALQUIER fund_director
+- ✅ Ver y gestionar TODOS los 9 fondos nacionales
+- ✅ Crear y editar eventos de cualquier fondo
+- ✅ Supervisar trabajo de todos los fund_directors
+- ✅ Ver todas las transacciones de fondos
+- ✅ Dashboard consolidado de tesorería nacional
+- ❌ NO puede gestionar usuarios (solo admin)
+- ❌ NO puede aprobar reportes de iglesias (solo admin)
+- ❌ NO puede modificar configuración del sistema (solo admin)
+
+### Diferencia con Admin
+| Capacidad | national_treasurer | admin |
+|-----------|:------------------:|:-----:|
+| Gestionar usuarios | ❌ | ✅ |
+| Configurar sistema | ❌ | ✅ |
+| Aprobar reportes de iglesias | ❌ | ✅ |
+| Gestionar iglesias | ❌ | ✅ |
+| **Aprobar eventos de fondos** | ✅ | ✅ |
+| **Gestionar todos los fondos** | ✅ | ✅ |
+| **Supervisar fund_directors** | ✅ | ✅ |
+
+### Diferencia con Fund Director
+| Capacidad | national_treasurer | fund_director |
+|-----------|:------------------:|:-------------:|
+| Fondos accesibles | **TODOS (9)** | Solo 1 asignado |
+| Aprobar eventos | ✅ | ❌ |
+| Ver eventos de otros fondos | ✅ | ❌ |
+| Crear eventos | ✅ | ✅ |
+| Editar eventos de otros | ✅ | ❌ |
+
+### Usuarios Típicos
+- Tesorero Nacional electo (posición única)
+- Supervisor de todos los fondos nacionales
+
+### Flujo de Trabajo Típico
+1. **Fund_director crea evento**: Propone evento con presupuesto
+2. **Fund_director envía para aprobación**: Status cambia a "submitted"
+3. **National_treasurer revisa**: Evalúa presupuesto y justificación
+4. **National_treasurer aprueba/rechaza**: Cambia status a "approved" o "rejected"
+5. **Post-evento**: Fund_director registra gastos reales
+6. **National_treasurer supervisa**: Revisa variaciones presupuesto vs. real
+
+### Nota Importante
+**Migration 040 (2025-10-05)**: Rol creado como posición electa para supervisar fondos nacionales. Nivel 6 en jerarquía, entre admin (7) y fund_director (5).
+
+---
+
+## 💼 3. Fund Director (Director de Fondos)
 
 ### Descripción
 Gestiona eventos y presupuestos para fondos específicos. Requiere aprobación del tesorero.
@@ -158,7 +234,7 @@ VALUES ('user-uuid', 123);
 
 ---
 
-## ⛪ 3. Pastor (Pastor de Iglesia)
+## ⛪ 4. Pastor (Pastor de Iglesia)
 
 ### Descripción
 Líder de la iglesia local. Gestiona la congregación y supervisalas finanzas.
@@ -189,7 +265,7 @@ Líder de la iglesia local. Gestiona la congregación y supervisalas finanzas.
 
 ---
 
-## 💰 4. Treasurer (Tesorero de Iglesia)
+## 💰 5. Treasurer (Tesorero de Iglesia)
 
 ### Descripción
 Responsable de las finanzas de la iglesia local. Crea reportes y aprueba eventos.
@@ -226,7 +302,7 @@ Responsable de las finanzas de la iglesia local. Crea reportes y aprueba eventos
 
 ---
 
-## 📊 5. Church Manager (Gerente de Iglesia)
+## 📊 6. Church Manager (Gerente de Iglesia)
 
 ### Descripción
 Asistente administrativo con acceso de solo lectura a información de la iglesia. Rol de supervisión sin permisos de modificación.
@@ -263,7 +339,7 @@ Asistente administrativo con acceso de solo lectura a información de la iglesia
 
 ---
 
-## 📝 6. Secretary (Secretario de Iglesia)
+## 📝 7. Secretary (Secretario de Iglesia)
 
 ### Descripción
 Asistente administrativo de la iglesia. Gestiona miembros y eventos.
@@ -371,61 +447,77 @@ can_manage_role(manager_role TEXT, target_role TEXT) → BOOLEAN
 
 ### Jerarquía de Roles (Función `get_role_level`)
 
-**Actualizada en Migration 037 (2025-10-05)**
+**Actualizada en Migration 040 (2025-10-05)**
 
 ```
-admin            → 6 (máximo privilegio)
-fund_director    → 5 (fondos específicos)
-pastor           → 4 (liderazgo de iglesia)
-treasurer        → 3 (finanzas)
-church_manager   → 2 (administración view-only)
-secretary        → 1 (asistente administrativo)
+admin               → 7 (máximo privilegio)
+national_treasurer  → 6 (supervisa todos los fondos) - NUEVO
+fund_director       → 5 (fondos específicos)
+pastor              → 4 (liderazgo de iglesia)
+treasurer           → 3 (finanzas)
+church_manager      → 2 (administración view-only)
+secretary           → 1 (asistente administrativo)
 ```
 
-**Nota**: `district_supervisor` (5) y `member` (1) fueron eliminados del sistema en migration 037.
+**Nota**: `district_supervisor` y `member` fueron eliminados en migration 037. `national_treasurer` agregado en migration 040.
 
 ---
 
 ## 📊 Matriz de Permisos Completa
 
+### ⚠️ FUENTE DE VERDAD (Source of Truth)
+
+Esta matriz se mantiene sincronizada con:
+1. **`src/app/admin/configuration/page.tsx`** - `defaultRolesConfig` (UI)
+2. **`migrations/038_fix_permissions_correctly.sql`** - Eliminaciones explícitas
+3. **`migrations/039_add_fund_director_view_permissions.sql`** - fund_director permisos
+4. **`migrations/040_add_national_treasurer_role.sql`** - national_treasurer permisos
+
+**CRÍTICO**: Si hay discrepancias entre esta matriz y el código, el CÓDIGO es la fuente de verdad. Esta matriz se actualiza para reflejar el estado real del sistema.
+
+**Última verificación de sincronización**: 2025-10-05 (post-migration 040)
+
 ### Leyenda de Alcance
 - **all**: Todas las iglesias/datos del sistema
-- **district**: Iglesias del distrito asignado (no implementado)
+- **assigned**: Solo fondos/iglesias asignados al usuario
 - **own**: Solo su iglesia/datos propios
 
 ### Tabla de Permisos
 
-| Permiso | admin | fund_director | pastor | treasurer | church_manager | secretary | Alcance |
-|---------|:-----:|:-------------:|:------:|:---------:|:--------------:|:---------:|---------|
+**IMPORTANTE**: Esta tabla refleja los permisos REALES del sistema según `admin/configuration/page.tsx` y migrations 038-040.
+
+| Permiso | admin | national_treasurer | fund_director | pastor | treasurer | church_manager | secretary | Alcance |
+|---------|:-----:|:------------------:|:-------------:|:------:|:---------:|:--------------:|:---------:|---------|
 | **Sistema** |
-| `system.manage` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | all |
-| `users.manage` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | all |
-| `dashboard.view` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | varies |
+| `system.manage` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | all |
+| `users.manage` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | all |
+| `dashboard.view` | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | all/assigned |
 | **Iglesias** |
-| `churches.manage` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | all |
-| `churches.view` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | all/assigned |
-| `church.manage` | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | own |
+| `churches.manage` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | all |
+| `churches.view` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | all |
+| `church.manage` | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | own |
+| `church.view` | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | own |
 | **Reportes** |
-| `reports.approve` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | all |
-| `reports.create` | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | own |
-| `reports.edit` | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | own |
-| `reports.view` | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | varies |
+| `reports.approve` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | all |
+| `reports.create` | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | own |
+| `reports.edit` | ✅ | ❌ | ❌ | ✅ | ✅ | ❌ | ❌ | own |
+| `reports.view` | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ | all/assigned |
 | **Fondos** |
-| `funds.manage` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | all |
-| `funds.view` | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | varies |
+| `funds.manage` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | all |
+| `funds.view` | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | all/assigned/own |
 | **Transacciones** |
-| `transactions.view` | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | varies |
-| **Eventos** |
-| `events.manage` | ✅ | ❌ | ❌ | ✅ | ❌ | ✅ | varies |
-| `events.create` | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | varies |
-| `events.edit` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | own |
-| `events.submit` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | own |
-| `events.approve` | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | own |
-| `events.actuals` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | own |
-| `events.view` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | varies |
+| `transactions.view` | ✅ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | all/assigned/own |
+| `transactions.create` | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | all/own |
+| **Eventos (SOLO NACIONAL - NO iglesias)** |
+| `events.create` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | all/assigned |
+| `events.edit` | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | all/assigned |
+| `events.submit` | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | assigned |
+| `events.approve` | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | all |
+| `events.actuals` | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | assigned |
+| `events.view` | ✅ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | all/assigned/own |
 | **Miembros** |
-| `members.manage` | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | own |
-| `members.view` | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | varies |
+| `members.manage` | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ | own |
+| `members.view` | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | own |
 
 ---
 
@@ -541,6 +633,17 @@ WHERE p.role = 'fund_director';
 ---
 
 ## 📝 Changelog
+
+### 2025-10-05 - Migration 040: Tesorero Nacional Agregado ✅
+- **ADDED**: Nuevo rol `national_treasurer` - Tesorero Nacional electo
+- **UPDATED**: Jerarquía de roles actualizada (admin: 6→7, nuevo national_treasurer: 6)
+- **ADDED**: 11 permisos para national_treasurer (eventos, fondos, transacciones)
+- **SCOPE**: national_treasurer supervisa TODOS los 9 fondos nacionales
+- **PERMISSIONS**: events.approve, events.view, events.edit, events.create, funds.view, funds.manage, transactions.view, transactions.create, dashboard.view, churches.view, reports.view
+- **BUSINESS**: Posición electa que supervisa fund_directors y aprueba eventos de fondos
+- **API ROUTES**: Actualizado `/api/fund-events/[id]` para permitir approve/reject por national_treasurer
+- **FRONTEND**: Agregado a defaultRolesConfig en admin configuration page
+- Sistema ahora con 7 roles jerárquicos (admin, national_treasurer, fund_director, pastor, treasurer, church_manager, secretary)
 
 ### 2025-10-05 - Migration 037: Corrección de Inconsistencias ✅
 - **FIXED**: `church_manager` ahora tiene 5 permisos definidos (view-only access)

@@ -202,10 +202,17 @@ const ConfigurationPage = (): JSX.Element => {
         editable: false,
       },
       {
+        id: 'national_treasurer',
+        name: 'Tesorero Nacional',
+        description: 'Supervisa todos los fondos nacionales y aprueba eventos (posición electa)',
+        permissions: ['events.approve', 'events.view', 'events.edit', 'events.create', 'funds.view', 'funds.manage', 'transactions.view', 'transactions.create', 'dashboard.view', 'churches.view', 'reports.view'],
+        editable: false,
+      },
+      {
         id: 'fund_director',
         name: 'Director de Fondos',
         description: 'Gestiona eventos y presupuestos de fondos nacionales asignados',
-        permissions: ['events.create', 'events.edit', 'events.submit', 'events.view', 'funds.view', 'transactions.view', 'dashboard.view'],
+        permissions: ['events.create', 'events.edit', 'events.submit', 'events.view', 'funds.view', 'transactions.view', 'dashboard.view', 'events.actuals', 'churches.view', 'reports.view'],
         editable: true,
       },
       {

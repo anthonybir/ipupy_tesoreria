@@ -74,15 +74,26 @@ CREATE TABLE profiles (
 );
 ```
 
-**Role Hierarchy** (migration 023 - simplified from 8 to 6 roles):
-1. **admin** - Platform administrators (formerly super_admin)
-2. **district_supervisor** - Regional supervisors
-3. **pastor** - Church leaders (formerly church_admin)
-4. **treasurer** - Financial managers
-5. **secretary** - Data entry staff
-6. **member** - Basic read-only access (formerly viewer)
+**Role Hierarchy** (Current: 7 roles - see migrations 023, 026, 037, 040):
+1. **admin** - Platform administrators (level 7)
+2. **national_treasurer** - National fund supervision (level 6) - Added in migration 040
+3. **fund_director** - Fund-specific management (level 5) - Added in migration 026
+4. **pastor** - Church leaders (level 4)
+5. **treasurer** - Financial managers (level 3)
+6. **church_manager** - Church administration (level 2)
+7. **secretary** - Administrative support (level 1)
 
-**Special Role**: `fund_director` - Manages specific funds via `fund_director_assignments`
+**Migration History**:
+- **Migration 023**: Simplified from 8 to 6 roles (super_admin → admin, church_admin → pastor)
+- **Migration 026**: Added fund_director role
+- **Migration 037**: Removed obsolete roles (district_supervisor, member)
+- **Migration 040**: Added national_treasurer role
+
+**Obsolete Roles** (removed in migration 037):
+- `district_supervisor` - Removed
+- `member` - Removed
+- `super_admin` - Consolidated into `admin` (migration 023)
+- `church_admin` - Renamed to `pastor` (migration 023)
 
 **Indexes**:
 - `profiles_pkey` (PRIMARY KEY on id)

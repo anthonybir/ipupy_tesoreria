@@ -385,7 +385,16 @@ ALTER TABLE pastors DROP COLUMN IF EXISTS profile_id;
 **Solution**: Unlink current profile before changing to a different one.
 
 ### **Issue**: "Invalid role"
-**Solution**: Ensure role is one of: admin, district_supervisor, pastor, treasurer, secretary, member.
+**Solution**: Ensure role is one of the current 7 valid roles:
+- `admin` - System administrator
+- `national_treasurer` - National fund supervisor (added migration 040)
+- `fund_director` - Fund-specific manager (added migration 026)
+- `pastor` - Church leader
+- `treasurer` - Church financial manager
+- `church_manager` - Church administrator
+- `secretary` - Administrative support
+
+**Obsolete roles** (removed in migration 037): `district_supervisor`, `member`, `super_admin`, `church_admin`, `viewer`
 
 ### **Issue**: Access revoked but pastor still shows as active
 **Solution**: Check `pastor_user_access` view - `access_status` should be 'revoked'. Profile may still exist but not linked.

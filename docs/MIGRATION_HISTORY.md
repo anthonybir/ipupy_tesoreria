@@ -1,5 +1,65 @@
 # Historial de Migraciones y Consolidaciones - IPU PY Tesorería
 
+## 2025-10-05 · Security Hardening & Role System Enhancements
+
+### Migration 041 · Fix Auth Trigger Role Assignment
+- **Objetivo**: Corregir asignación de roles en trigger `handle_new_user()` y eliminar referencias a roles obsoletos
+- **Problema identificado**:
+  - Referencia al rol obsoleto `'member'` (eliminado en migración 037)
+  - Asignación excesivamente permisiva: todos los usuarios `@ipupy.org.py` recibían rol `'admin'`
+- **Solución implementada**:
+  - ✅ **Default seguro**: Usuarios organizacionales ahora reciben rol `'secretary'` (privilegio mínimo)
+  - ✅ **Admins específicos**: Solo `administracion@ipupy.org.py` y `tesoreria@ipupy.org.py` obtienen rol `'admin'`
+  - ✅ **Sin roles obsoletos**: Eliminada referencia a `'member'`, reemplazada por `'secretary'`
+- **Principio de seguridad**: Implementa "privilegio mínimo" - los administradores pueden elevar roles según necesidad
+- **Impacto**: Nuevos usuarios requieren asignación manual de rol (excepto admins del sistema)
+- **Compatibilidad**: Usuarios existentes no afectados, solo aplica a nuevos registros
+
+### Migration 040 · Add National Treasurer Role
+- **Objetivo**: Crear rol de Tesorero Nacional electo para supervisar todos los fondos nacionales y directores de fondos
+- **Jerarquía**: Nuevo nivel 6 entre admin (7) y fund_director (5)
+- **Cambios en `profiles`**:
+  - Actualizado constraint `profiles_role_check` para incluir `'national_treasurer'`
+  - Actualizada función `get_role_level()`: admin 6→7, nuevo national_treasurer=6
+- **Permisos agregados** (11 total):
+  - **Eventos**: `events.approve`, `events.view`, `events.edit`, `events.create` (scope: all)
+  - **Fondos**: `funds.view`, `funds.manage` (scope: all - acceso a los 9 fondos nacionales)
+  - **Transacciones**: `transactions.view`, `transactions.create` (scope: all)
+  - **Contexto**: `dashboard.view`, `churches.view`, `reports.view` (scope: all)
+- **Tabla afectada**: `role_permissions` (+11 filas), `system_configuration` (actualizado JSONB roles)
+- **API routes actualizados**:
+  - `/api/fund-events/[id]` - Agregado national_treasurer a guards de approve/reject
+  - `/api/admin/pastors/link-profile` - Agregado a validRoles array
+- **Frontend**:
+  - `admin/configuration/page.tsx` - Agregado a defaultRolesConfig
+  - `lib/authz.ts` - Actualizado PROFILE_ROLE_ORDER y ROLE_LABELS
+  - `lib/validations/api-schemas.ts` - Agregado a Zod enums
+- **Documentación**:
+  - [ROLES_AND_PERMISSIONS.md](ROLES_AND_PERMISSIONS.md) - Sección completa agregada
+  - [USER_MANAGEMENT_GUIDE.md](USER_MANAGEMENT_GUIDE.md) - Ejemplo de caso y tablas actualizadas
+  - [MIGRATION_040_NATIONAL_TREASURER.md](MIGRATION_040_NATIONAL_TREASURER.md) - Documentación técnica completa
+
+### Lógica de Negocio
+1. **fund_director** crea evento → envía para aprobación (status: submitted)
+2. **national_treasurer** revisa y aprueba/rechaza evento
+3. **fund_director** registra gastos reales post-evento (events.actuals)
+4. **national_treasurer** supervisa variaciones presupuesto vs. real
+5. **admin** retiene autoridad final sobre sistema
+
+### Capacidades del National Treasurer
+- ✅ Aprobar/rechazar eventos de CUALQUIER fund_director
+- ✅ Ver y gestionar TODOS los 9 fondos nacionales
+- ✅ Crear y editar eventos de cualquier fondo
+- ✅ Supervisar trabajo de todos los fund_directors
+- ✅ Dashboard consolidado de tesorería nacional
+- ❌ NO puede gestionar usuarios (solo admin)
+- ❌ NO puede aprobar reportes de iglesias (solo admin)
+- ❌ NO puede configurar sistema (solo admin)
+
+**Impacto**: 6→7 roles, total system permissions verificados, supervisión centralizada de fondos nacionales implementada
+
+---
+
 ## 2025-10-01 · Directorio Pastoral Normalizado
 
 ### Migration 031 · Pastors table & primary linkage

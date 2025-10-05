@@ -6,9 +6,10 @@ import type { AuthContext } from '@/lib/auth-context';
  * @see migrations/023_simplify_roles.sql - Initial role simplification
  * @see migrations/026_fund_director_events.sql - Added fund_director role
  * @see migrations/037_fix_role_inconsistencies.sql - Fixed permissions & hierarchy
+ * @see migrations/040_add_national_treasurer_role.sql - Added national_treasurer role
  * @see docs/ROLES_AND_PERMISSIONS.md - Complete role documentation
  *
- * Database constraint allows: admin, treasurer, pastor, church_manager, secretary, fund_director
+ * Database constraint allows: admin, national_treasurer, fund_director, pastor, treasurer, church_manager, secretary
  */
 const ADMIN_ROLES = new Set(['admin']);
 
@@ -16,7 +17,8 @@ const ADMIN_ROLES = new Set(['admin']);
  * Profile roles in hierarchical order (high to low privilege)
  *
  * Hierarchy levels (see get_role_level() in database):
- * - admin (6): Full system control
+ * - admin (7): Full system control
+ * - national_treasurer (6): National fund supervision (elected position)
  * - fund_director (5): Fund-specific management
  * - pastor (4): Church leadership
  * - treasurer (3): Financial operations
@@ -25,6 +27,7 @@ const ADMIN_ROLES = new Set(['admin']);
  */
 const PROFILE_ROLE_ORDER = [
   'admin',
+  'national_treasurer',
   'fund_director',
   'pastor',
   'treasurer',
@@ -64,6 +67,7 @@ export const profileRoles = (): readonly string[] => PROFILE_ROLE_ORDER;
  */
 const ROLE_LABELS: Record<ProfileRole, string> = {
   admin: 'Administrador',
+  national_treasurer: 'Tesorero Nacional',
   fund_director: 'Director de Fondos',
   pastor: 'Pastor',
   treasurer: 'Tesorero',

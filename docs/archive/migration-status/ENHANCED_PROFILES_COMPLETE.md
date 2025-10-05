@@ -1,5 +1,19 @@
 # ✅ Enhanced Profiles Implementation Complete
 
+> **⚠️ DEPRECATED DOCUMENTATION**
+>
+> This document describes the **initial 8-role system** which has been **superseded**.
+>
+> **Current system**: 7 roles (admin, national_treasurer, fund_director, pastor, treasurer, church_manager, secretary)
+>
+> **See**: `docs/ROLES_AND_PERMISSIONS.md` for current role documentation
+>
+> **Migration history**:
+> - Migration 023: Simplified to 6 roles (super_admin → admin, church_admin → pastor)
+> - Migration 026: Added fund_director role
+> - Migration 037: Removed obsolete roles (district_supervisor, member)
+> - Migration 040: Added national_treasurer role
+
 ## Overview
 The profiles table has been significantly enhanced to provide a comprehensive user management system for the IPU PY Tesorería platform.
 
@@ -12,16 +26,25 @@ The profiles table has been significantly enhanced to provide a comprehensive us
 - **preferred_language** - Language preference (es/gn/en)
 - **last_seen_at** - Tracks user activity
 
-### Enhanced Role System
-Now supports 8 granular roles instead of 3:
-1. **super_admin** - System owner (administracion@ipupy.org.py)
-2. **admin** - Platform administrators
-3. **district_supervisor** - Regional oversight
-4. **church_admin** - Church leadership
-5. **treasurer** - Financial management
-6. **secretary** - Administrative support
-7. **member** - Church members
-8. **viewer** - Read-only access
+### Enhanced Role System (DEPRECATED - See Warning Above)
+**Original 8-role system** (no longer in use):
+1. **super_admin** - System owner → **CONSOLIDATED to `admin` in migration 023**
+2. **admin** - Platform administrators → **REMAINS as `admin`**
+3. **district_supervisor** - Regional oversight → **REMOVED in migration 037**
+4. **church_admin** - Church leadership → **RENAMED to `pastor` in migration 023**
+5. **treasurer** - Financial management → **REMAINS as `treasurer`**
+6. **secretary** - Administrative support → **REMAINS as `secretary`**
+7. **member** - Church members → **REMOVED in migration 037**
+8. **viewer** - Read-only access → **REMOVED in migration 023**
+
+**Current 7-role system** (migrations 023, 026, 037, 040):
+1. **admin** - System administrators (level 7)
+2. **national_treasurer** - National fund supervisor (level 6) - Added migration 040
+3. **fund_director** - Fund-specific manager (level 5) - Added migration 026
+4. **pastor** - Church leaders (level 4)
+5. **treasurer** - Financial managers (level 3)
+6. **church_manager** - Church administrators (level 2)
+7. **secretary** - Administrative support (level 1)
 
 ### Permission System
 - **permissions** (JSONB) - Granular permission control

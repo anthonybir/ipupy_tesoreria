@@ -74,21 +74,50 @@ export async function POST(req: NextRequest) {
 }
 ```
 
-### Roles Disponibles (Simplificado desde Migration 023)
+### Roles Disponibles (Sistema Actual: 7 Roles)
 
-El sistema se ha simplificado de 8 roles a 6 roles jerárquicos:
+El sistema utiliza **7 roles jerárquicos** para control de acceso:
 
-- `admin` - Administradores de plataforma (consolidado desde super_admin)
-- `district_supervisor` - Supervisores regionales
-- `pastor` - Líderes de iglesia (renombrado desde church_admin)
-- `treasurer` - Tesoreros
-- `secretary` - Secretarios
-- `member` - Miembros (convertido desde viewer)
+1. **`admin`** - Administrador del Sistema (nivel 7)
+   - Acceso completo al sistema
+   - Gestión de usuarios y configuración global
 
-**Roles Deprecados:**
-- `super_admin` → **Consolidado en `admin`**
-- `church_admin` → **Renombrado a `pastor`**
-- `viewer` → **Convertido a `member`**
+2. **`national_treasurer`** - Tesorero Nacional (nivel 6) - **NUEVO en Migration 040**
+   - Supervisión de todos los fondos nacionales
+   - Aprobación de eventos de fondos
+
+3. **`fund_director`** - Director de Fondos (nivel 5) - **Agregado en Migration 026**
+   - Gestión de fondos específicos asignados
+   - Creación y gestión de eventos de fondos
+
+4. **`pastor`** - Pastor de Iglesia (nivel 4)
+   - Liderazgo de iglesia
+   - Gestión de reportes mensuales
+
+5. **`treasurer`** - Tesorero de Iglesia (nivel 3)
+   - Operaciones financieras de iglesia
+   - Gestión de transacciones
+
+6. **`church_manager`** - Gerente de Iglesia (nivel 2)
+   - Administración de iglesia (solo lectura)
+   - Visualización de reportes
+
+7. **`secretary`** - Secretario de Iglesia (nivel 1)
+   - Soporte administrativo
+   - Entrada de datos básicos
+
+**Historia de Migraciones:**
+- **Migration 023**: Simplificación de 8 a 6 roles (super_admin → admin, church_admin → pastor)
+- **Migration 026**: Agregado fund_director
+- **Migration 037**: Eliminados roles obsoletos (district_supervisor, member)
+- **Migration 040**: Agregado national_treasurer
+
+**Roles Obsoletos** (eliminados en Migration 037):
+- `district_supervisor` - Eliminado
+- `member` - Eliminado
+- `super_admin` - Consolidado en `admin` (Migration 023)
+- `church_admin` - Renombrado a `pastor` (Migration 023)
+- `viewer` - Eliminado (Migration 023)
 
 ---
 
