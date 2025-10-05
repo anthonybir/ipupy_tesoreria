@@ -137,11 +137,11 @@ export const GrantAccessDialog = ({ pastorId, pastor, onClose }: PastorAccessDia
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">Administrador</SelectItem>
-                    <SelectItem value="district_supervisor">Supervisor de Distrito</SelectItem>
+                    <SelectItem value="fund_director">Director de Fondos</SelectItem>
                     <SelectItem value="pastor">Pastor</SelectItem>
                     <SelectItem value="treasurer">Tesorero</SelectItem>
+                    <SelectItem value="church_manager">Gerente de Iglesia</SelectItem>
                     <SelectItem value="secretary">Secretario</SelectItem>
-                    <SelectItem value="member">Miembro</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -220,11 +220,11 @@ export const ChangeRoleDialog = ({ pastorId, pastor, onClose }: PastorAccessDial
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="admin">Administrador</SelectItem>
-                <SelectItem value="district_supervisor">Supervisor de Distrito</SelectItem>
+                <SelectItem value="fund_director">Director de Fondos</SelectItem>
                 <SelectItem value="pastor">Pastor</SelectItem>
                 <SelectItem value="treasurer">Tesorero</SelectItem>
+                <SelectItem value="church_manager">Gerente de Iglesia</SelectItem>
                 <SelectItem value="secretary">Secretario</SelectItem>
-                <SelectItem value="member">Miembro</SelectItem>
               </SelectContent>
             </Select>
           </div>

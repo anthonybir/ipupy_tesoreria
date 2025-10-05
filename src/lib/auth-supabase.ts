@@ -79,7 +79,7 @@ export const getAuthContext = async (_request?: NextRequest): Promise<AuthContex
   const authContext: AuthContext = {
     userId: profile.id,
     email: profile.email,
-    role: profile.role || 'secretary', // Default to 'member' (was 'viewer' pre-migration-023)
+    role: profile.role || 'secretary', // Default to 'secretary' (lowest privilege role)
     churchId: profile.church_id,
     fullName: profile.full_name || undefined,
     phone: profile.phone || undefined,

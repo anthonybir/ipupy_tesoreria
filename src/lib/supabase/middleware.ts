@@ -37,7 +37,24 @@ export async function updateSession(request: NextRequest): Promise<UpdateSession
   const { data: { user }, error } = await supabase.auth.getUser();
 
   if (error) {
-    console.warn('[Middleware] Error getting user:', error.message);
+    console.error('[Middleware] Error getting user:', {
+      message: error.message,
+      status: error.status,
+      path: request.nextUrl.pathname,
+      hasCookies: request.cookies.getAll().length > 0,
+      cookieNames: request.cookies.getAll().map(c => c.name)
+    });
+  } else if (!user) {
+    console.warn('[Middleware] No user found in session:', {
+      path: request.nextUrl.pathname,
+      hasCookies: request.cookies.getAll().length > 0
+    });
+  } else {
+    console.log('[Middleware] User authenticated:', {
+      userId: user.id,
+      email: user.email,
+      path: request.nextUrl.pathname
+    });
   }
 
   return {

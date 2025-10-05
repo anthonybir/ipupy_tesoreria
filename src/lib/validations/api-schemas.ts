@@ -144,7 +144,7 @@ export const updateProviderSchema = createProviderSchema.partial().extend({
 
 export const updateUserRoleSchema = z.object({
   user_id: z.string().uuid(),
-  role: z.enum(['admin', 'district_supervisor', 'pastor', 'treasurer', 'secretary', 'member']),
+  role: z.enum(['admin', 'fund_director', 'pastor', 'treasurer', 'church_manager', 'secretary']),
   church_id: z.number().int().positive().optional(),
   assigned_funds: z.array(z.number().int().positive()).optional(),
 });
