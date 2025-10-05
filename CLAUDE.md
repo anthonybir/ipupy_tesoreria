@@ -76,6 +76,17 @@ scripts/                      # Utility scripts
 
 ## Database Architecture
 
+### ⚠️ Known Technical Debt
+
+**Database Access Pattern** (2025-10-05):
+- Currently uses **hybrid approach**: Supabase Auth + Direct PostgreSQL (`pg` library)
+- **Issue**: Connection timeouts on Vercel serverless (15s limit)
+- **Current workaround**: Using pgBouncer connection pooler (port 6543)
+- **Recommended migration**: Switch to Supabase JavaScript client exclusively
+- **Documentation**: See [docs/future-improvements/MIGRATE_TO_SUPABASE_CLIENT.md](docs/future-improvements/MIGRATE_TO_SUPABASE_CLIENT.md)
+
+This hybrid approach works but is not optimal for serverless environments. Future migration to Supabase client will eliminate connection timeouts and simplify the codebase.
+
 ### Core Tables
 
 - **churches** - 22 pre-loaded IPU Paraguay churches with pastor information
