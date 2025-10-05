@@ -93,11 +93,13 @@ export async function POST(
     }
 
     const isDraftStatus = ['draft', 'pending_revision'].includes(event.status);
-    const isFundDirectorOwner = (auth.role as string) === 'fund_director' /* TODO(fund-director): Add to migration-023 */ && event.created_by === auth.userId;
+    const isFundDirectorOwner = auth.role === 'fund_director' && event.created_by === auth.userId;
     const isTreasurer = auth.role === 'treasurer';
     const isAdmin = auth.role === 'admin';
+    const isNationalTreasurer = auth.role === 'national_treasurer';
 
-    if ((auth.role as string) === 'fund_director' /* TODO(fund-director): Add to migration-023 */) {
+    // Fund directors can only edit their own draft events
+    if (auth.role === 'fund_director') {
       if (!hasFundAccess(auth, event.fund_id) || !isDraftStatus || !isFundDirectorOwner) {
         const response = NextResponse.json(
           { error: 'Fund directors can only add items to their own draft events' },
@@ -106,7 +108,9 @@ export async function POST(
         setCORSHeaders(response);
         return response;
       }
-    } else if (!isTreasurer && !isAdmin) {
+    }
+    // National-level roles (admin, national_treasurer, treasurer) can edit any event
+    else if (!isTreasurer && !isAdmin && !isNationalTreasurer) {
       const response = NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
       setCORSHeaders(response);
       return response;

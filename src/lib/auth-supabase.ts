@@ -154,10 +154,17 @@ export const isFundDirector = (context: AuthContext): boolean => {
  * Check if user has access to specific fund
  */
 export const hasFundAccess = (context: AuthContext, fundId: number): boolean => {
-  if (context.role === 'admin' || context.role === 'treasurer') return true;
+  // National-level roles have access to all funds
+  if (context.role === 'admin' || context.role === 'national_treasurer') return true;
+
+  // Treasurer has access to all funds (legacy behavior)
+  if (context.role === 'treasurer') return true;
+
+  // Fund directors only have access to assigned funds
   if (context.role === 'fund_director') {
     return context.assignedFunds?.includes(fundId) ?? false;
   }
+
   return true;
 };
 
@@ -165,10 +172,17 @@ export const hasFundAccess = (context: AuthContext, fundId: number): boolean => 
  * Check if user has access to specific church
  */
 export const hasChurchAccess = (context: AuthContext, churchId: number): boolean => {
-  if (context.role === 'admin' || context.role === 'treasurer') return true;
+  // National-level roles have access to all churches
+  if (context.role === 'admin' || context.role === 'national_treasurer') return true;
+
+  // Treasurer has access to all churches (legacy behavior)
+  if (context.role === 'treasurer') return true;
+
+  // Fund directors only have access to assigned churches
   if (context.role === 'fund_director') {
     return context.assignedChurches?.includes(churchId) ?? false;
   }
+
   return true;
 };
 
@@ -182,8 +196,8 @@ export const isSystemOwner = (email: string): boolean =>
  * Check if user can access a specific church
  */
 export const canAccessChurch = (context: AuthContext, churchId: number): boolean => {
-  // Tier 1: Unrestricted cross-church access
-  if (['admin'].includes(context.role)) {
+  // Tier 1: Unrestricted cross-church access (national-level roles)
+  if (['admin', 'national_treasurer'].includes(context.role)) {
     return true;
   }
 

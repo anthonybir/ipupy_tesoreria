@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/components/Auth/SupabaseAuthProvider';
 import { createClient } from '@/lib/supabase/client';
+import type { ProfileRole } from '@/lib/authz';
 
 export type UserProfile = {
   id: string;
   email: string;
   full_name: string | null;
-  role: string;
+  role: ProfileRole;
   church_id: number | null;
   phone: string | null;
   avatar_url: string | null;
@@ -22,6 +23,7 @@ type UseProfileResult = {
   loading: boolean;
   error: Error | null;
   isAdmin: boolean;
+  isNationalTreasurer: boolean;
   isTreasurer: boolean;
   isFundDirector: boolean;
   isReadOnly: boolean;
@@ -91,6 +93,7 @@ export function useProfile(): UseProfileResult {
   }, [user, authLoading]);
 
   const isAdmin = profile?.role === 'admin';
+  const isNationalTreasurer = profile?.role === 'national_treasurer';
   const isTreasurer = profile?.role === 'treasurer';
   const isFundDirector = profile?.role === 'fund_director';
   const isReadOnly = !profile?.role || profile.role === 'church_manager' || profile.role === 'secretary';
@@ -100,6 +103,7 @@ export function useProfile(): UseProfileResult {
     loading,
     error,
     isAdmin,
+    isNationalTreasurer,
     isTreasurer,
     isFundDirector,
     isReadOnly,

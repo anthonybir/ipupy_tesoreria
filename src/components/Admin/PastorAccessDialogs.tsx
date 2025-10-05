@@ -137,6 +137,7 @@ export const GrantAccessDialog = ({ pastorId, pastor, onClose }: PastorAccessDia
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">Administrador</SelectItem>
+                    <SelectItem value="national_treasurer">Tesorero Nacional</SelectItem>
                     <SelectItem value="fund_director">Director de Fondos</SelectItem>
                     <SelectItem value="pastor">Pastor</SelectItem>
                     <SelectItem value="treasurer">Tesorero</SelectItem>
@@ -220,6 +221,7 @@ export const ChangeRoleDialog = ({ pastorId, pastor, onClose }: PastorAccessDial
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="admin">Administrador</SelectItem>
+                <SelectItem value="national_treasurer">Tesorero Nacional</SelectItem>
                 <SelectItem value="fund_director">Director de Fondos</SelectItem>
                 <SelectItem value="pastor">Pastor</SelectItem>
                 <SelectItem value="treasurer">Tesorero</SelectItem>

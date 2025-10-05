@@ -16,6 +16,7 @@
 - **Compatibilidad**: Usuarios existentes no afectados, solo aplica a nuevos registros
 
 ### Migration 040 · Add National Treasurer Role
+- **Estado**: ✅ Aplicada en la base de datos como `20251005101330_add_national_treasurer_role_fixed`
 - **Objetivo**: Crear rol de Tesorero Nacional electo para supervisar todos los fondos nacionales y directores de fondos
 - **Jerarquía**: Nuevo nivel 6 entre admin (7) y fund_director (5)
 - **Cambios en `profiles`**:

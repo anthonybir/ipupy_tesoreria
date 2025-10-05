@@ -86,10 +86,12 @@ export default function MainNav(): JSX.Element {
 
     let items = NAVIGATION.filter(item => {
       if (item.name === 'Eventos') {
-        return role === 'admin' || role === 'treasurer' || role === 'fund_director';
+        // National-level roles + fund_director can access events
+        return role === 'admin' || role === 'national_treasurer' || role === 'treasurer' || role === 'fund_director';
       }
       if (item.name === 'Proveedores') {
-        return role === 'admin' || role === 'treasurer';
+        // National-level roles can access providers
+        return role === 'admin' || role === 'national_treasurer' || role === 'treasurer';
       }
       return true;
     });
