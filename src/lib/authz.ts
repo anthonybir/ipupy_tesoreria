@@ -1,8 +1,28 @@
 import type { AuthContext } from '@/lib/auth-context';
 
-// Role system aligned with actual database constraint (profiles_role_check)
-// Database has: admin, treasurer, pastor, church_manager, secretary, fund_director
+/**
+ * Role system aligned with database constraint (profiles_role_check)
+ *
+ * @see migrations/023_simplify_roles.sql - Initial role simplification
+ * @see migrations/026_fund_director_events.sql - Added fund_director role
+ * @see migrations/037_fix_role_inconsistencies.sql - Fixed permissions & hierarchy
+ * @see docs/ROLES_AND_PERMISSIONS.md - Complete role documentation
+ *
+ * Database constraint allows: admin, treasurer, pastor, church_manager, secretary, fund_director
+ */
 const ADMIN_ROLES = new Set(['admin']);
+
+/**
+ * Profile roles in hierarchical order (high to low privilege)
+ *
+ * Hierarchy levels (see get_role_level() in database):
+ * - admin (6): Full system control
+ * - fund_director (5): Fund-specific management
+ * - pastor (4): Church leadership
+ * - treasurer (3): Financial operations
+ * - church_manager (2): Church administration
+ * - secretary (1): Administrative support
+ */
 const PROFILE_ROLE_ORDER = [
   'admin',
   'fund_director',

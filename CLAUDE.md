@@ -113,13 +113,14 @@ See `src/lib/db-context.ts` for context management utilities.
 
 ### Migration System
 
-Migrations are numbered sequentially (000-028) and applied via Supabase. Key migrations:
+Migrations are numbered sequentially (000-037) and applied via Supabase. Key migrations:
 
 - **010** - RLS implementation
 - **023** - Role simplification (8→6 roles)
 - **024** - RLS UUID fixes
 - **026** - Fund director events system
 - **027** - Provider registry with RUC deduplication
+- **037** - Role system fixes (church_manager permissions, get_role_level(), obsolete role cleanup)
 
 To run migrations: Use Supabase dashboard or `scripts/migrate.js`
 
@@ -132,18 +133,23 @@ To run migrations: Use Supabase dashboard or `scripts/migrate.js`
 - Admin: `administracion@ipupy.org.py`
 - Magic link fallback available
 
-### Role System (Simplified v2.0)
+### Role System (Simplified v2.2)
 
-6 hierarchical roles (migration 023):
+6 hierarchical roles (migrations 023, 026, 037):
 
-1. **admin** - Platform administrators (consolidated from super_admin)
-2. **district_supervisor** - Regional supervisors
-3. **pastor** - Church leaders (renamed from church_admin)
-4. **treasurer** - Church treasurers
-5. **secretary** - Church secretaries
-6. **member** - Basic members (converted from viewer)
+1. **admin** - Platform administrators (level 6)
+2. **fund_director** - Fund-specific management (level 5) *added in migration 026*
+3. **pastor** - Church leaders (level 4)
+4. **treasurer** - Church financial operations (level 3)
+5. **church_manager** - Church administration view-only (level 2)
+6. **secretary** - Church administrative support (level 1)
 
-**Migrated roles**: `super_admin` → `admin`, `church_admin` → `pastor`, `viewer` → `member`
+**Migration History**:
+- **023**: Initial simplification (`super_admin` → `admin`, `church_admin` → `pastor`)
+- **026**: Added `fund_director` role and events system
+- **037**: Fixed permissions & hierarchy (church_manager perms, removed obsolete roles)
+
+**Obsolete roles removed in 037**: `district_supervisor`, `member`
 
 ### Auth Flow
 

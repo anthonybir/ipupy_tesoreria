@@ -1,7 +1,7 @@
 # Sistema de Roles y Permisos - IPU PY Tesorería
 
 **Última actualización**: 2025-10-05
-**Versión**: 2.1 (Post-migración con fund_director)
+**Versión**: 2.2 (Post-corrección migration 037)
 
 ---
 
@@ -11,44 +11,39 @@ El sistema utiliza **6 roles jerárquicos** para controlar el acceso y las capac
 
 ### Roles Actuales (en orden jerárquico)
 
-1. **👑 admin** - Administrador del Sistema
-2. **💼 fund_director** - Director de Fondos
-3. **⛪ pastor** - Pastor de Iglesia
-4. **💰 treasurer** - Tesorero de Iglesia
-5. **📊 church_manager** - Gerente de Iglesia
-6. **📝 secretary** - Secretario de Iglesia
+1. **👑 admin** - Administrador del Sistema (nivel 6)
+2. **💼 fund_director** - Director de Fondos (nivel 5)
+3. **⛪ pastor** - Pastor de Iglesia (nivel 4)
+4. **💰 treasurer** - Tesorero de Iglesia (nivel 3)
+5. **📊 church_manager** - Gerente de Iglesia (nivel 2)
+6. **📝 secretary** - Secretario de Iglesia (nivel 1)
 
 ---
 
-## ⚠️ ADVERTENCIA: Inconsistencias Detectadas
+## ✅ CORRECCIONES APLICADAS (Migration 037)
 
-Durante la investigación del sistema (2025-10-05) se encontraron las siguientes inconsistencias:
+**Fecha**: 2025-10-05
+**Estado**: ✅ Todos los problemas resueltos
 
-### Roles en Base de Datos vs. Código
+### Problemas Corregidos
 
-| Rol | DB Constraint | UI (authz.ts) | role_permissions | Migration 023 |
-|-----|---------------|---------------|------------------|---------------|
-| `admin` | ✅ | ✅ | ✅ | ✅ |
-| `fund_director` | ✅ | ✅ | ✅ | ❌ |
-| `pastor` | ✅ | ✅ | ✅ | ✅ |
-| `treasurer` | ✅ | ✅ | ✅ | ✅ |
-| `church_manager` | ✅ | ✅ | ❌ | ❌ |
-| `secretary` | ✅ | ✅ | ✅ | ✅ |
-| `district_supervisor` | ❌ | ❌ | ✅ | ✅ |
-| `member` | ❌ | ❌ | ✅ | ✅ |
+1. ✅ **`church_manager`**: Ahora tiene 5 permisos definidos (view-only access)
+2. ✅ **`get_role_level()`**: Actualizada para incluir `fund_director` (5) y `church_manager` (2)
+3. ✅ **Roles obsoletos eliminados**: `district_supervisor` y `member` removidos de `role_permissions`
+4. ✅ **`fund_director`**: Permisos adicionales agregados (dashboard, churches, reports)
 
-### Problemas Identificados
+### Tabla de Consistencia Final
 
-1. **`church_manager`**: Existe en DB y UI pero NO tiene permisos definidos en `role_permissions`
-2. **`fund_director`**: Existe en DB y UI pero NO estaba en Migration 023 (agregado en Migration 026)
-3. **`district_supervisor`** y **`member`**: Tienen permisos definidos pero NO pueden ser asignados (DB constraint los rechaza)
+| Rol | DB Constraint | UI (authz.ts) | role_permissions | get_role_level() |
+|-----|---------------|---------------|------------------|------------------|
+| `admin` | ✅ | ✅ | ✅ (6 perms) | ✅ (6) |
+| `fund_director` | ✅ | ✅ | ✅ (13 perms) | ✅ (5) |
+| `pastor` | ✅ | ✅ | ✅ (5 perms) | ✅ (4) |
+| `treasurer` | ✅ | ✅ | ✅ (7 perms) | ✅ (3) |
+| `church_manager` | ✅ | ✅ | ✅ (5 perms) | ✅ (2) |
+| `secretary` | ✅ | ✅ | ✅ (3 perms) | ✅ (1) |
 
-### Recomendación
-
-Se requiere una migración de corrección para:
-- Eliminar `district_supervisor` y `member` de `role_permissions` O
-- Actualizar el constraint de DB para incluirlos O
-- Definir permisos para `church_manager` si se va a usar
+**Nota**: `district_supervisor` y `member` fueron eliminados del sistema (no asignables ni en permisos)
 
 ---
 
@@ -211,27 +206,37 @@ Responsable de las finanzas de la iglesia local. Crea reportes y aprueba eventos
 ## 📊 5. Church Manager (Gerente de Iglesia)
 
 ### Descripción
-**⚠️ ROL SIN PERMISOS DEFINIDOS** - Existe en el constraint de DB pero NO tiene permisos en `role_permissions`.
+Asistente administrativo con acceso de solo lectura a información de la iglesia. Rol de supervisión sin permisos de modificación.
 
-### Estado Actual
-- ✅ Puede ser asignado desde UI
-- ❌ NO tiene permisos definidos en `role_permissions`
-- ❌ Funcionalidad no implementada
+### Alcance
+- **Iglesia Propia** - Solo su iglesia asignada
 
-### Alcance Esperado
-- **Iglesia Propia** - Solo su iglesia asignada (asumido)
+### Permisos
 
-### Permisos Propuestos
-*Pendiente de definición - se recomienda migración para clarificar*
+| Permiso | Descripción | Ejemplos de Uso |
+|---------|-------------|-----------------|
+| `church.view` | Ver información de iglesia | Consultar datos de la iglesia |
+| `reports.view` | Ver reportes mensuales | Revisar reportes financieros |
+| `members.view` | Ver miembros | Consultar directorio de miembros |
+| `events.view` | Ver eventos | Consultar calendario de eventos |
+| `dashboard.view` | Ver panel de control | Acceder al dashboard de iglesia |
 
-Posibles permisos basados en el nombre:
-- `church.view` - Ver información de iglesia
-- `members.view` - Ver miembros
-- `events.view` - Ver eventos
-- `reports.view` - Ver reportes
+### Capacidades Clave
+- ✅ Ver información completa de la iglesia
+- ✅ Consultar reportes mensuales (solo lectura)
+- ✅ Acceder al directorio de miembros
+- ✅ Ver calendario de eventos
+- ✅ Dashboard de iglesia
+- ❌ NO puede crear ni editar nada
+- ❌ NO puede aprobar reportes
+- ❌ NO puede gestionar fondos
 
-### Recomendación
-**ACCIÓN REQUERIDA**: Definir permisos para este rol O eliminarlo del sistema si no se usa.
+### Usuarios Típicos
+- Gerentes o administradores de iglesia
+- Personal de supervisión con acceso view-only
+
+### Nota Importante
+**Migration 037 (2025-10-05)**: Permisos agregados. Anteriormente este rol no tenía permisos definidos.
 
 ---
 
@@ -265,36 +270,46 @@ Asistente administrativo de la iglesia. Gestiona miembros y eventos.
 
 ---
 
-## 🚫 Roles Obsoletos / No Asignables
+## 🗑️ Roles Obsoletos ELIMINADOS (Migration 037)
 
-### District Supervisor (Supervisor de Distrito)
+**Fecha de eliminación**: 2025-10-05
 
-**Estado**: Definido en `role_permissions` pero NO en constraint de DB (no asignable).
+Los siguientes roles fueron **removidos del sistema** porque:
+1. No estaban en el constraint de DB (no asignables)
+2. Causaban confusión en el código
+3. Sus permisos nunca fueron utilizados
 
-**Permisos Definidos** (no utilizables):
+---
+
+### ~~District Supervisor (Supervisor de Distrito)~~ ❌ ELIMINADO
+
+**Estado anterior**: Definido en `role_permissions` pero NO en constraint de DB.
+
+**Permisos eliminados**:
 - `churches.view` (district)
 - `reports.approve` (district)
 - `reports.view` (district)
 - `members.view` (district)
 
-**Problema**: Existe en migration 023 y tiene permisos, pero el constraint de DB lo rechaza.
-
-**Recomendación**: Eliminar de `role_permissions` O actualizar constraint para incluirlo.
+**Razón**: Rol de migration 023 que nunca fue incluido en constraint. **Removido en migration 037**.
 
 ---
 
-### Member (Miembro)
+### ~~Member (Miembro)~~ ❌ ELIMINADO
 
-**Estado**: Definido en `role_permissions` pero NO en constraint de DB (no asignable).
+**Estado anterior**: Definido en `role_permissions` pero NO en constraint de DB.
 
-**Permisos Definidos** (no utilizables):
+**Permisos eliminados**:
 - `profile.edit` (own)
 - `contributions.view` (own)
 - `events.view` (own)
 
-**Problema**: Rol de menor privilegio en migration 023, pero constraint lo rechaza.
+**Razón**: Rol para portal de miembros nunca implementado. **Removido en migration 037**.
 
-**Recomendación**: Si se va a usar portal de miembros, actualizar constraint para incluirlo.
+**Nota**: Si en el futuro se requiere un portal de miembros, se debe:
+1. Agregar `member` al constraint de DB
+2. Recrear permisos en `role_permissions`
+3. Actualizar `get_role_level()` con nivel apropiado (probablemente 0)
 
 ---
 
@@ -333,16 +348,18 @@ can_manage_role(manager_role TEXT, target_role TEXT) → BOOLEAN
 
 ### Jerarquía de Roles (Función `get_role_level`)
 
+**Actualizada en Migration 037 (2025-10-05)**
+
 ```
 admin            → 6 (máximo privilegio)
-district_supervisor → 5 (obsoleto)
-pastor           → 4
-treasurer        → 3
-secretary        → 2
-member           → 1 (mínimo privilegio, obsoleto)
+fund_director    → 5 (fondos específicos)
+pastor           → 4 (liderazgo de iglesia)
+treasurer        → 3 (finanzas)
+church_manager   → 2 (administración view-only)
+secretary        → 1 (asistente administrativo)
 ```
 
-**Nota**: `fund_director` y `church_manager` NO tienen nivel definido en la función (bug).
+**Nota**: `district_supervisor` (5) y `member` (1) fueron eliminados del sistema en migration 037.
 
 ---
 
@@ -474,31 +491,41 @@ WHERE p.role = 'fund_director';
 
 ---
 
-## ⚠️ Problemas Conocidos y Acciones Requeridas
+## ✅ Problemas RESUELTOS (Migration 037)
 
-### 1. Church Manager Sin Permisos
-**Problema**: Rol existe pero no tiene permisos definidos
-**Impacto**: Usuarios con este rol no pueden hacer nada
-**Acción**: Definir permisos O eliminar rol
+**Todos los problemas identificados fueron corregidos el 2025-10-05**
 
-### 2. Roles Obsoletos en role_permissions
-**Problema**: `district_supervisor` y `member` tienen permisos pero no son asignables
-**Impacto**: Código confuso, permisos inútiles
-**Acción**: Eliminar de `role_permissions` O actualizar constraint
+### 1. Church Manager Sin Permisos ✅ RESUELTO
+**Problema**: Rol existía pero no tenía permisos definidos
+**Solución**: Agregados 5 permisos de view-only (church.view, reports.view, members.view, events.view, dashboard.view)
+**Estado**: ✅ Completamente funcional
 
-### 3. Fund Director Sin Nivel en get_role_level()
-**Problema**: Función `get_role_level()` no incluye `fund_director`
-**Impacto**: Comparaciones jerárquicas fallan
-**Acción**: Actualizar función para incluir nivel (probablemente 5)
+### 2. Roles Obsoletos en role_permissions ✅ RESUELTO
+**Problema**: `district_supervisor` y `member` tenían permisos pero no eran asignables
+**Solución**: Eliminados de `role_permissions` (7 permisos removidos en total)
+**Estado**: ✅ Base de datos limpia
 
-### 4. Inconsistencia Migration 023 vs. Constraint Actual
-**Problema**: Constraint actual no coincide con migration 023
-**Impacto**: Confusión sobre estado real del sistema
-**Acción**: Crear migration de corrección que documente cambios manuales
+### 3. Fund Director Sin Nivel en get_role_level() ✅ RESUELTO
+**Problema**: Función `get_role_level()` no incluía `fund_director` ni `church_manager`
+**Solución**: Función actualizada con niveles correctos (fund_director=5, church_manager=2)
+**Estado**: ✅ Jerarquía completa
+
+### 4. Inconsistencia Migration 023 vs. Constraint Actual ✅ RESUELTO
+**Problema**: Constraint no coincidía con migrations originales
+**Solución**: Migration 037 documenta y corrige todas las inconsistencias
+**Estado**: ✅ Sistema consistente
 
 ---
 
 ## 📝 Changelog
+
+### 2025-10-05 - Migration 037: Corrección de Inconsistencias ✅
+- **FIXED**: `church_manager` ahora tiene 5 permisos definidos (view-only access)
+- **FIXED**: `get_role_level()` actualizada con `fund_director` (5) y `church_manager` (2)
+- **REMOVED**: Eliminados roles obsoletos `district_supervisor` y `member` de `role_permissions`
+- **ADDED**: Permisos adicionales para `fund_director` (dashboard, churches, reports)
+- Sistema ahora 100% consistente entre DB, código y permisos
+- Todos los problemas identificados han sido resueltos
 
 ### 2025-10-05 - Documentación Inicial
 - Investigación completa del sistema de roles
