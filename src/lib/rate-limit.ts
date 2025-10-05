@@ -6,19 +6,33 @@
  */
 
 import { type NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-// Supabase Admin client for server-side rate limiting (service_role)
-const supabaseAdmin = createClient(
-  process.env['NEXT_PUBLIC_SUPABASE_URL'] ?? '',
-  process.env['SUPABASE_SERVICE_ROLE_KEY'] ?? '',
-  {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false
+// Lazy-initialized Supabase Admin client for server-side rate limiting (service_role)
+// Using lazy initialization to ensure environment variables are loaded
+let supabaseAdmin: SupabaseClient | null = null;
+
+function getSupabaseAdmin(): SupabaseClient {
+  if (!supabaseAdmin) {
+    const supabaseUrl = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+    const serviceRoleKey = process.env['SUPABASE_SERVICE_ROLE_KEY'];
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      throw new Error(
+        'Missing required environment variables: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set'
+      );
     }
+
+    supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false
+      }
+    });
   }
-);
+
+  return supabaseAdmin;
+}
 
 // Configuration for different endpoint types
 interface RateLimitConfig {
@@ -105,8 +119,11 @@ export async function isRateLimited(
   const windowSeconds = Math.floor(config.windowMs / 1000);
 
   try {
+    // Get Supabase admin client (lazy initialization)
+    const admin = getSupabaseAdmin();
+
     // Call Supabase RPC function for atomic rate limit check
-    const { data, error } = await supabaseAdmin.rpc('rate_limit_hit', {
+    const { data, error } = await admin.rpc('rate_limit_hit', {
       _key: clientId,
       _limit: config.maxRequests,
       _window_seconds: windowSeconds
