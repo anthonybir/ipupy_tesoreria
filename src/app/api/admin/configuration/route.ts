@@ -12,9 +12,28 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 
+    // Check if user is authenticated
+    if (!auth) {
+      console.error('[CONFIG_API] Authentication failed - auth context is null');
+      const response = NextResponse.json({
+        error: 'Authentication required',
+        details: 'User session not found or expired. Please login again.'
+      }, { status: 401 });
+      setCORSHeaders(response);
+      return response;
+    }
+
     // Check if user is admin
-    if (!auth || auth.role !== 'admin') {
-      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (auth.role !== 'admin') {
+      console.error('[CONFIG_API] Authorization failed - insufficient privileges:', {
+        role: auth.role,
+        userId: auth.userId,
+        email: auth.email
+      });
+      const response = NextResponse.json({
+        error: 'Unauthorized',
+        details: `Admin role required. Your role: ${auth.role || 'none'}`
+      }, { status: 403 });
       setCORSHeaders(response);
       return response;
     }
@@ -206,9 +225,24 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 
+    // Check if user is authenticated
+    if (!auth) {
+      console.error('[CONFIG_API] POST - Authentication failed');
+      const response = NextResponse.json({
+        error: 'Authentication required',
+        details: 'Please login again'
+      }, { status: 401 });
+      setCORSHeaders(response);
+      return response;
+    }
+
     // Check if user is admin
-    if (!auth || auth.role !== 'admin') {
-      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (auth.role !== 'admin') {
+      console.error('[CONFIG_API] POST - Authorization failed:', { role: auth.role });
+      const response = NextResponse.json({
+        error: 'Unauthorized',
+        details: `Admin role required. Your role: ${auth.role || 'none'}`
+      }, { status: 403 });
       setCORSHeaders(response);
       return response;
     }
@@ -283,9 +317,24 @@ export async function PUT(req: NextRequest): Promise<NextResponse> {
   try {
     const auth = await getAuthContext(req);
 
+    // Check if user is authenticated
+    if (!auth) {
+      console.error('[CONFIG_API] PUT - Authentication failed');
+      const response = NextResponse.json({
+        error: 'Authentication required',
+        details: 'Please login again'
+      }, { status: 401 });
+      setCORSHeaders(response);
+      return response;
+    }
+
     // Only admin can reset configuration
-    if (!auth || auth.role !== 'admin') {
-      const response = NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (auth.role !== 'admin') {
+      console.error('[CONFIG_API] PUT - Authorization failed:', { role: auth.role });
+      const response = NextResponse.json({
+        error: 'Unauthorized',
+        details: `Admin role required. Your role: ${auth.role || 'none'}`
+      }, { status: 403 });
       setCORSHeaders(response);
       return response;
     }

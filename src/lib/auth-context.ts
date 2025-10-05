@@ -23,7 +23,17 @@ export const getAuthContext = async (_request?: NextRequest): Promise<AuthContex
   const supabase = await createClient();
   const { data: { user }, error } = await supabase.auth.getUser();
 
-  if (error || !user) {
+  if (error) {
+    console.error('[AUTH_CONTEXT] Supabase auth.getUser() failed:', {
+      error: error.message,
+      status: error.status,
+      name: error.name
+    });
+    return null;
+  }
+
+  if (!user) {
+    console.warn('[AUTH_CONTEXT] No authenticated user found in session');
     return null;
   }
 
@@ -58,7 +68,10 @@ export const getAuthContext = async (_request?: NextRequest): Promise<AuthContex
   }
 
   // Fallback if no profile exists yet (shouldn't happen with trigger)
-  console.error(`No profile found for authenticated user ${user.id}`);
+  console.error('[AUTH_CONTEXT] No profile found for authenticated user:', {
+    userId: user.id,
+    email: user.email
+  });
   return {
     userId: user.id,
     email: user.email || undefined,
