@@ -40,7 +40,7 @@ export async function setDatabaseContext(
 
   await client.query(
     "SELECT set_config('app.current_user_role', $1, true)",
-    [auth.role || '']
+    [auth.role] // Always defined (AuthContext.role is ProfileRole, defaults to 'secretary')
   );
 
   await client.query(

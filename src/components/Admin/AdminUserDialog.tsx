@@ -63,13 +63,13 @@ export function AdminUserDialog({ open, mode, onClose, user, churches }: AdminUs
   }, [mode, open, user]);
 
   const disableSubmit = useMemo(() => {
-    if (!email || !role) {
+    if (!email) {
       return true;
     }
     // Client-side email domain validation
     const emailValid = /^[^\s@]+@ipupy\.org\.py$/i.test(email.trim());
     return !emailValid;
-  }, [email, role]);
+  }, [email]);
 
   const handleSubmit = async () => {
     if (disableSubmit) {

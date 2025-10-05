@@ -491,7 +491,7 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
   const fotoInforme = await saveBase64Attachment(attachments?.summary, `${attachmentPrefix}-resumen`);
   const fotoDeposito = await saveBase64Attachment(attachments?.deposit, `${attachmentPrefix}-deposito`);
 
-  const isChurchSubmission = false /* TODO(role-cleanup): 'church' is not a valid role */ || auth.role === 'pastor' || auth.role === 'treasurer';
+  const isChurchSubmission = auth.role === 'pastor' || auth.role === 'treasurer';
   const isAdminSubmission = isAdminRole;
 
   // Determine submission source based on role and data
@@ -857,7 +857,7 @@ const handleUpdateReport = async (
   const hasObservaciones = Object.prototype.hasOwnProperty.call(data, 'observaciones');
   const observacionesUpdate = hasObservaciones ? observacionesPayload : existingObservaciones;
 
-  const isChurchUpdate = false /* TODO(role-cleanup): 'church' is not a valid role */ || auth.role === 'pastor' || auth.role === 'treasurer';
+  const isChurchUpdate = auth.role === 'pastor' || auth.role === 'treasurer';
   const submissionTypePayload = getRecordString(data, 'submission_type', '');
   const existingSubmissionType = getRecordString(existing, 'submission_type', '');
   const submissionType = submissionTypePayload || existingSubmissionType || (isChurchUpdate ? 'online' : 'manual');
