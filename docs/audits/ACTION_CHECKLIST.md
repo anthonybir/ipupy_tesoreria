@@ -190,23 +190,25 @@ CREATE INDEX idx_reports_processed_at ON reports(processed_at) WHERE processed_a
 
 ## 🟡 MEDIUM (Technical Debt - 1 Month)
 
-### [ ] 11. Extract Fund Transfer Logic
-- **Create**: `src/lib/fund-transfers.ts`
+### [x] 11. Extract Fund Transfer Logic
+- **Created**: `src/lib/fund-transfers.ts` (commit 6641d2f)
 - **Function**: `transferFunds(sourceChurch, sourceFund, destFund, amount, description, auth)`
-- **Why**: DRY principle, reusability
+- **Why**: DRY principle, reusability, blocks other MEDIUM tasks
 - **Reference**: BUSINESS_LOGIC.md:643-695
+- **Features**: Atomic two-transaction pattern, InsufficientFundsError, FOR UPDATE locking
 
 ---
 
-### [ ] 12. Add CHECK Constraint on Fund Balance
-- **Create**: `migrations/046_fund_balance_check.sql`
+### [x] 12. Add CHECK Constraint on Fund Balance
+- **Created**: `migrations/046_fund_balance_check.sql`
 - **Code**:
 ```sql
 ALTER TABLE funds
   ADD CONSTRAINT funds_balance_non_negative
   CHECK (current_balance >= 0);
 ```
-- **Why**: DB-level non-negative enforcement
+- **Why**: DB-level non-negative enforcement (defense-in-depth)
+- **Features**: Pre-migration validation, detailed error messages, verification tests
 
 ---
 
