@@ -139,25 +139,25 @@ exit 0
 ---
 
 ### [x] 7. Fix Concurrent Report Submission Race
-- **File**: `src/app/api/reports/route.ts:445-453`
-- **Change**: Use `ON CONFLICT DO UPDATE` pattern
+- **File**: `src/app/api/reports/route.ts:581-639`
+- **Change**: Use `ON CONFLICT DO NOTHING` pattern with rowCount check
 - **Code**:
 ```typescript
 const result = await executeWithContext(auth, `
   INSERT INTO reports (church_id, month, year, ...)
   VALUES ($1, $2, $3, ...)
-  ON CONFLICT (church_id, month, year) DO UPDATE
-    SET updated_at = NOW()
-  RETURNING *,
-    CASE WHEN xmax = 0 THEN 'inserted' ELSE 'duplicate' END as action
+  ON CONFLICT (church_id, month, year) DO NOTHING
+  RETURNING *
 `, [scopedChurchId, reportMonth, reportYear, ...]);
 
-if (result.rows[0].action === 'duplicate') {
+// ON CONFLICT DO NOTHING returns 0 rows when duplicate exists
+// This prevents mutating historical metadata (updated_at, audit timestamps)
+if (result.rowCount === 0) {
   throw new BadRequestError('Ya existe un informe para este mes y año');
 }
 ```
-- **Why**: Eliminate race condition window
-- **Risk**: Concurrent requests create duplicate reports
+- **Why**: Eliminate race condition without mutating existing records
+- **Risk**: Concurrent requests create duplicate reports or rewrite history
 
 ---
 
@@ -308,11 +308,11 @@ ALTER TABLE funds
 - ✅ Performance indexes added
 - ✅ All routes use RLS context
 
-### Month 1 (MEDIUM)
-- ✅ Fund transfer logic extracted
-- ✅ CHECK constraints added
-- ✅ Integration tests written
-- ✅ Technical debt reduced
+### Month 1 (MEDIUM) - FUTURE
+- [ ] Fund transfer logic extracted
+- [ ] CHECK constraints added
+- [ ] Integration tests written
+- [ ] Technical debt reduced
 
 ---
 
