@@ -236,10 +236,14 @@ ALTER TABLE funds
 
 ---
 
-### [ ] 15. Review Migration 029 for Balance Locking
+### [x] 15. Review Migration 029 for Balance Locking
 - **File**: `migrations/029_fix_fund_event_approval_balance.sql`
-- **Check**: Line 90 has `FOR UPDATE` clause
-- **Why**: Verify race condition prevention
+- **Reviewed**: Line 42 - Missing FOR UPDATE clause ⚠️
+- **Issue Found**: Fund balance retrieved without row lock
+- **Risk**: Concurrent event approvals create race condition
+- **Fix Created**: `migrations/048_fix_event_approval_locking.sql`
+- **Change**: Added `FOR UPDATE` to `SELECT current_balance FROM funds` (line 47)
+- **Why**: Prevent lost updates when multiple events approved simultaneously
 
 ---
 
