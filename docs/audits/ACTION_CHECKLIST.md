@@ -212,10 +212,12 @@ ALTER TABLE funds
 
 ---
 
-### [ ] 13. Convert Report Totals to GENERATED Columns
-- **File**: Database schema
-- **Change**: Make `total_entradas`, `total_salidas` GENERATED
-- **Why**: Prevent manual override like `fondo_nacional`
+### [x] 13. Convert Report Totals to GENERATED Columns
+- **Created**: `migrations/047_report_totals_generated.sql`
+- **Change**: Make `total_entradas`, `total_salidas`, `saldo_mes` GENERATED
+- **Why**: Prevent manual override like `fondo_nacional`, enforce calculation consistency
+- **⚠️ Breaking Change**: Requires application code changes in `src/app/api/reports/route.ts`
+- **Documentation**: `docs/deployment/MIGRATION_047_CODE_CHANGES.md` (deployment guide)
 
 ---
 
