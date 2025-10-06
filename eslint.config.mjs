@@ -18,6 +18,7 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      "tests/**", // Exclude test scaffolds (Jest not yet configured)
     ],
   },
   {

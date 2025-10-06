@@ -221,11 +221,18 @@ ALTER TABLE funds
 
 ---
 
-### [ ] 14. Add Integration Tests
-- **Create**: `tests/workflows/report-submission.test.ts`
-- **Create**: `tests/workflows/event-approval.test.ts`
-- **Create**: `tests/workflows/fund-transactions.test.ts`
-- **Why**: Automated workflow validation
+### [x] 14. Add Integration Tests (SCAFFOLD ONLY)
+- **Scaffolded**: `tests/workflows/report-submission.test.ts` (189 lines)
+- **Scaffolded**: `tests/workflows/event-approval.test.ts` (243 lines)
+- **Scaffolded**: `tests/workflows/fund-transactions.test.ts` (500 lines)
+- **Scaffolded**: `tests/workflows/README.md` (97 lines - implementation guide)
+- **Status**: Jest not yet configured - files are documentation/blueprints
+- **Why**: Document expected workflow behavior and test approach
+- **Tests Document**:
+  - Report submission: GENERATED columns, bank deposit validation, RLS immutability, race conditions
+  - Event approval: Authorization (CRITICAL #1), negative balance prevention (CRITICAL #4), transaction creation
+  - Fund transfers: transferFunds() helper (MEDIUM #11), CHECK constraint (MEDIUM #12), concurrency, FOR UPDATE locking
+- **Next Step**: Configure Jest + fix type mismatches when implementing tests
 
 ---
 
@@ -291,7 +298,7 @@ ALTER TABLE funds
 **Completion Status**:
 - [x] Week 1: Complete CRITICAL tasks (4/4) ✅
 - [x] Week 2-3: Complete HIGH tasks (6/6) ✅
-- [ ] Month 1: Complete MEDIUM tasks (0/8)
+- [ ] Month 1: Complete MEDIUM tasks (4/8) - 50% complete
 - [ ] Backlog: LOW tasks (0/3)
 
 ---
