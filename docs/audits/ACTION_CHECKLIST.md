@@ -260,10 +260,16 @@ ALTER TABLE funds
 
 ---
 
-### [ ] 17. Review Provider RUC Deduplication
-- **Check**: Migration 027 `find_provider_by_ruc()` function
-- **Verify**: UNIQUE constraint enforced
-- **Why**: Ensure no RUC duplicates possible
+### [x] 17. Review Provider RUC Deduplication
+- **Reviewed**: Migration 027 `find_provider_by_ruc()` function (line 165-188)
+- **Verified**: ✅ TWO-LEVEL uniqueness enforcement:
+  1. TABLE constraint: `providers_ruc_unique UNIQUE (ruc)` (line 31)
+  2. UNIQUE index: `idx_providers_ruc ON providers(ruc)` (line 45)
+- **Function Behavior**: Queries existing RUC before insertion
+- **RLS Enforcement**: CREATE policy allows all transaction creators (line 143)
+- **Data Migration**: Uses `ON CONFLICT (ruc) DO NOTHING` (lines 96, 253, 274)
+- **Verdict**: ✅ No RUC duplicates possible - database-level enforcement
+- **Why**: Prevent duplicate provider entries across churches
 
 ---
 
