@@ -1,5 +1,44 @@
 #!/bin/sh
 # Pre-commit hook for IPU PY Tesorería
-# Enforces TypeScript type safety and code quality
+# Enforces TypeScript type safety, code quality, and security best practices
+
+# =============================================================================
+# SECURITY CHECK: Prevent direct pool.query() usage in API routes
+# =============================================================================
+# All database queries MUST use executeWithContext() to ensure RLS enforcement
+# Direct pool.query() bypasses session context and RLS policies
+# Related: BUSINESS_LOGIC_AUDIT_2025-01-06.md HIGH Issue #2
+
+echo "🔒 Checking for RLS bypass risks..."
+
+# Get staged API route files
+STAGED_API_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E "^src/app/api/.*\.ts$" || true)
+
+if [ -n "$STAGED_API_FILES" ]; then
+  # Check for direct pool.query() usage
+  POOL_QUERY_FILES=$(echo "$STAGED_API_FILES" | xargs grep -l "pool\.query" 2>/dev/null || true)
+
+  if [ -n "$POOL_QUERY_FILES" ]; then
+    echo "❌ ERROR: Direct pool.query() detected in API routes!"
+    echo ""
+    echo "The following files use pool.query() instead of executeWithContext():"
+    echo "$POOL_QUERY_FILES" | sed 's/^/  - /'
+    echo ""
+    echo "💡 Fix: Replace pool.query() with executeWithContext()"
+    echo "   Example:"
+    echo "   ❌ const result = await pool.query('SELECT ...', [params]);"
+    echo "   ✅ const result = await executeWithContext(auth, 'SELECT ...', [params]);"
+    echo ""
+    echo "   This ensures RLS policies are enforced via session context."
+    echo ""
+    exit 1
+  fi
+
+  echo "✅ RLS bypass check passed"
+fi
+
+# =============================================================================
+# CODE QUALITY: Run lint-staged for TypeScript and ESLint checks
+# =============================================================================
 
 npm run lint-staged

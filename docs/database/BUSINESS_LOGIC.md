@@ -151,7 +151,7 @@ WHERE id = $2;
 
 **Business Rules**:
 - ✅ Fund director can ONLY create events for assigned funds
-- ✅ Only treasurer can approve events
+- ✅ Only **admin** or **national_treasurer** can approve events (updated per migrations 038/040)
 - ✅ Budget totals calculated automatically (trigger)
 - ✅ Transactions created ONLY on approval
 - ✅ Variance analysis: budget vs actuals
@@ -576,9 +576,9 @@ submitted
 |------|-----|-------|-----------|
 | draft | submitted | Fund Director | Budget complete |
 | draft | cancelled | Fund Director | Anytime |
-| submitted | approved | Treasurer | Budget valid |
-| submitted | rejected | Treasurer | Budget invalid |
-| submitted | pending_revision | Treasurer | Needs changes |
+| submitted | approved | **Admin / National Treasurer** | Budget valid (updated 038/040) |
+| submitted | rejected | **Admin / National Treasurer** | Budget invalid (updated 038/040) |
+| submitted | pending_revision | **Admin / National Treasurer** | Needs changes (updated 038/040) |
 | pending_revision | submitted | Fund Director | Changes made |
 | approved | - | - | FINAL STATE |
 

@@ -442,15 +442,18 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
 
   await setAuditContext(auth.email);
 
-  const existingReport = await executeWithContext(
-    auth,
-    'SELECT id, estado FROM reports WHERE church_id = $1 AND month = $2 AND year = $3',
-    [scopedChurchId, reportMonth, reportYear]
-  );
-
-  if (existingReport.rows.length > 0) {
-    throw new BadRequestError('Ya existe un informe para este mes y año');
-  }
+  // REMOVED: Check-then-insert pattern (race condition risk)
+  // const existingReport = await executeWithContext(
+  //   auth,
+  //   'SELECT id, estado FROM reports WHERE church_id = $1 AND month = $2 AND year = $3',
+  //   [scopedChurchId, reportMonth, reportYear]
+  // );
+  //
+  // if (existingReport.rows.length > 0) {
+  //   throw new BadRequestError('Ya existe un informe para este mes y año');
+  // }
+  //
+  // NEW: Use ON CONFLICT to atomically handle duplicates (see after INSERT below)
 
   const { totals, breakdown, expenses } = extractReportPayload(data);
 
@@ -575,7 +578,10 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
         $38, $39, $40, $41, $42,
         $43, $44, $45, $46, $47
       )
-      RETURNING *
+      ON CONFLICT (church_id, month, year) DO UPDATE
+        SET updated_at = NOW()
+      RETURNING *,
+        CASE WHEN xmax = 0 THEN 'inserted' ELSE 'conflict' END as action
     `,
     [
       scopedChurchId,
@@ -629,6 +635,13 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
   );
 
   const report = expectOne(result.rows) as GenericRecord;
+
+  // Check if this was a conflict (duplicate report)
+  const action = getRecordString(report, 'action', 'inserted');
+  if (action === 'conflict') {
+    throw new BadRequestError('Ya existe un informe para este mes y año');
+  }
+
   const reportIdValue = getRecordNumber(report, 'id', 0);
   const reportEstado = getRecordString(report, 'estado', '');
 
