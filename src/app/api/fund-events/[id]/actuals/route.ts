@@ -1,8 +1,9 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { requireAuth, hasFundAccess } from '@/lib/auth-supabase';
+import { requireAuth } from '@/lib/auth-supabase';
 import { executeWithContext } from '@/lib/db';
 import { firstOrNull, expectOne } from '@/lib/db-helpers';
 import { setCORSHeaders } from '@/lib/cors';
+import { canViewFundEvent, canMutateFundEvent } from '@/lib/fund-event-authz';
 
 export const runtime = 'nodejs';
 
@@ -29,7 +30,8 @@ export async function GET(
       return response;
     }
 
-    if (auth.role === 'fund_director' && !hasFundAccess(auth, event['fund_id'])) {
+    // Authorization check: prevent church-scoped roles from viewing national fund data
+    if (!canViewFundEvent(auth, event['fund_id'])) {
       const response = NextResponse.json(
         { error: 'No access to this event' },
         { status: 403 }
@@ -122,15 +124,24 @@ export async function POST(
       return response;
     }
 
-    if (auth.role === 'fund_director') {
-      if (!hasFundAccess(auth, event['fund_id']) || event['created_by'] !== auth.userId) {
-        const response = NextResponse.json(
-          { error: 'Only the event creator can add actuals' },
-          { status: 403 }
-        );
-        setCORSHeaders(response);
-        return response;
-      }
+    // Authorization check: use centralized helper
+    if (!canMutateFundEvent(auth, event['fund_id'])) {
+      const response = NextResponse.json(
+        { error: 'No access to modify this event' },
+        { status: 403 }
+      );
+      setCORSHeaders(response);
+      return response;
+    }
+
+    // Fund directors can only add actuals to their own events
+    if (auth.role === 'fund_director' && event['created_by'] !== auth.userId) {
+      const response = NextResponse.json(
+        { error: 'Only the event creator can add actuals' },
+        { status: 403 }
+      );
+      setCORSHeaders(response);
+      return response;
     }
 
     const result = await executeWithContext(auth, `

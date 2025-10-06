@@ -17,21 +17,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const filters: string[] = [];
     const params: unknown[] = [];
 
-    // TODO(fund-director): Restore when fund_director role is added to migration-023
-    // if ((auth.role as string) === 'fund_director') {
-    //   if (!auth.assignedFunds || auth.assignedFunds.length === 0) {
-    //     const response = NextResponse.json({
-    //       success: true,
-    //       data: [],
-    //       stats: { draft: 0, submitted: 0, approved: 0, rejected: 0, pending_revision: 0 }
-    //     });
-    //     setCORSHeaders(response);
-    //     return response;
-    //   }
-    //
-    //   filters.push(`fe.fund_id = ANY($${params.length + 1})`);
-    //   params.push(auth.assignedFunds);
-    // }
+    // Fund directors see only their assigned funds (enforced by RLS policies)
+    // Admin and national_treasurer see all fund events
 
     const status = searchParams.get('status');
     if (status) {
@@ -199,15 +186,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       throw error;
     }
 
-    // TODO(fund-director): Restore when fund_director role is added to migration-023
-    // if ((auth.role as string) === 'fund_director' && !hasFundAccess(auth, body.fund_id)) {
-    //   const response = NextResponse.json(
-    //     { error: 'No access to this fund' },
-    //     { status: 403 }
-    //   );
-    //   setCORSHeaders(response);
-    //   return response;
-    // }
+    // Authorization enforced by RLS policies (migration 049)
+    // Fund directors can only create events for assigned funds
+    // Admin and national_treasurer can create events for any fund
 
     // Use executeTransaction for atomic multi-insert operation
     const event = await executeTransaction(auth, async (client) => {

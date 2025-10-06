@@ -87,7 +87,8 @@ export default function MainNav(): JSX.Element {
     let items = NAVIGATION.filter(item => {
       if (item.name === 'Eventos') {
         // National-level roles + fund_director can access events
-        return role === 'admin' || role === 'national_treasurer' || role === 'treasurer' || role === 'fund_director';
+        // Note: treasurer role removed in migration 038 (church-scoped, not national)
+        return role === 'admin' || role === 'national_treasurer' || role === 'fund_director';
       }
       if (item.name === 'Proveedores') {
         // National-level roles can access providers

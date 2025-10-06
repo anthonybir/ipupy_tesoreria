@@ -1,9 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
-import { requireAuth, hasFundAccess } from '@/lib/auth-supabase';
+import { requireAuth } from '@/lib/auth-supabase';
 import { executeWithContext } from '@/lib/db';
 import { firstOrNull, expectOne } from '@/lib/db-helpers';
 import { setCORSHeaders } from '@/lib/cors';
+import { canViewFundEvent, canMutateFundEvent } from '@/lib/fund-event-authz';
 
 export const runtime = 'nodejs';
 
@@ -38,7 +39,8 @@ export async function GET(
       return response;
     }
 
-    if ((auth.role as string) === 'fund_director' /* TODO(fund-director): Add to migration-023 */ && !hasFundAccess(auth, event.fund_id)) {
+    // Authorization check: prevent church-scoped roles from viewing national fund data
+    if (!canViewFundEvent(auth, event.fund_id)) {
       const response = NextResponse.json({ error: 'No access to this event' }, { status: 403 });
       setCORSHeaders(response);
       return response;
@@ -92,15 +94,19 @@ export async function POST(
       return response;
     }
 
+    // Authorization check: use centralized helper
+    if (!canMutateFundEvent(auth, event.fund_id)) {
+      const response = NextResponse.json({ error: 'No access to modify this event' }, { status: 403 });
+      setCORSHeaders(response);
+      return response;
+    }
+
     const isDraftStatus = ['draft', 'pending_revision'].includes(event.status);
     const isFundDirectorOwner = auth.role === 'fund_director' && event.created_by === auth.userId;
-    const isTreasurer = auth.role === 'treasurer';
-    const isAdmin = auth.role === 'admin';
-    const isNationalTreasurer = auth.role === 'national_treasurer';
 
     // Fund directors can only edit their own draft events
     if (auth.role === 'fund_director') {
-      if (!hasFundAccess(auth, event.fund_id) || !isDraftStatus || !isFundDirectorOwner) {
+      if (!isDraftStatus || !isFundDirectorOwner) {
         const response = NextResponse.json(
           { error: 'Fund directors can only add items to their own draft events' },
           { status: 403 }
@@ -108,12 +114,6 @@ export async function POST(
         setCORSHeaders(response);
         return response;
       }
-    }
-    // National-level roles (admin, national_treasurer, treasurer) can edit any event
-    else if (!isTreasurer && !isAdmin && !isNationalTreasurer) {
-      const response = NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
-      setCORSHeaders(response);
-      return response;
     }
 
     const insertResult = await executeWithContext(auth, `
