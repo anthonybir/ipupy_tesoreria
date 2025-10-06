@@ -186,9 +186,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       throw error;
     }
 
-    // Authorization enforced by RLS policies (migration 049)
+    // Authorization enforced by RLS policies (migration 053)
     // Fund directors can only create events for assigned funds
     // Admin and treasurer can create events for any fund
+    // Note: treasurer is NATIONAL-scoped (level 6), not church-specific
 
     // Use executeTransaction for atomic multi-insert operation
     const event = await executeTransaction(auth, async (client) => {
