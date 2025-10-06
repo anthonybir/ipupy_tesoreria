@@ -2,6 +2,10 @@
 -- Adds CHECK constraint to ensure funds.current_balance is never negative
 -- Related: BUSINESS_LOGIC_AUDIT_2025-01-06.md MEDIUM Issue #12
 -- Depends on: migration 045 (indexes), src/lib/fund-transfers.ts
+--
+-- ⚠️ DEPLOYMENT BLOCKER: This migration will FAIL if any funds have negative balances.
+-- Before deploying, run: SELECT id, name, current_balance FROM funds WHERE current_balance < 0;
+-- See docs/deployment/MIGRATION_046_DEPLOYMENT.md for reconciliation procedures.
 
 -- =============================================================================
 -- PART 1: Validate Current Data
