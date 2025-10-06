@@ -168,7 +168,7 @@ describe('Fund Transaction Workflow', () => {
         SELECT id, fund_id, amount_out, concept
         FROM transactions
         WHERE id = $1
-      `, [result.sourceTransactionId]);
+      `, [result.transferOutId]);
 
       const debitTx = debitResult.rows[0];
       expect(debitTx?.['fund_id']).toBe(sourceFundId);
@@ -180,7 +180,7 @@ describe('Fund Transaction Workflow', () => {
         SELECT id, fund_id, amount_in, concept
         FROM transactions
         WHERE id = $1
-      `, [result.destinationTransactionId]);
+      `, [result.transferInId]);
 
       const creditTx = creditResult.rows[0];
       expect(creditTx?.['fund_id']).toBe(destFundId);
@@ -441,7 +441,7 @@ describe('Fund Transaction Workflow', () => {
         SELECT id, created_by
         FROM transactions
         WHERE id IN ($1, $2)
-      `, [result.sourceTransactionId, result.destinationTransactionId]);
+      `, [result.transferOutId, result.transferInId]);
 
       expect(txResult.rows.length).toBe(2);
       txResult.rows.forEach(row => {

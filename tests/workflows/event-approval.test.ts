@@ -64,7 +64,7 @@ describe('Fund Event Approval Workflow', () => {
       RETURNING id
     `);
     testChurchId = churchResult.rows[0]?.['id'] as number;
-    treasurerAuth.church_id = testChurchId;
+    treasurerAuth.churchId = testChurchId;
 
     // Setup test fund with initial balance
     const fundResult = await executeWithContext(adminAuth, `
