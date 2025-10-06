@@ -1,7 +1,27 @@
 # Sistema de Roles y Permisos - IPU PY Tesorería
 
-**Última actualización**: 2025-10-05
-**Versión**: 4.0 (Migration 040 - Tesorero Nacional Agregado)
+**Última actualización**: 2025-01-06
+**Versión**: 4.1 (Role Scope Security Fixes)
+
+---
+
+## 🔒 SEGURIDAD: Alcances de Roles Corregidos (2025-01-06)
+
+**CRÍTICO**: Se corrigieron bugs de seguridad en el enforcement de alcances de roles:
+
+### Cambios Aplicados:
+1. ✅ **treasurer** ahora restringido a su iglesia ÚNICAMENTE (antes tenía acceso global incorrectamente)
+2. ✅ **church_manager** ahora incluido en filtros de reportes (antes veía todas las iglesias)
+3. ✅ **fund_director** ahora limitado a iglesias asignadas (antes veía todos los reportes)
+4. ✅ **national_treasurer** ahora explícitamente manejado en API de reportes
+
+### Archivos Modificados:
+- `src/lib/auth-supabase.ts`: Funciones `hasFundAccess()` y `hasChurchAccess()` corregidas
+- `src/app/api/reports/route.ts`: Lógica de scoping mejorada en `handleGetReports()`
+
+### Impacto de Seguridad:
+- **ANTES**: Tesoreros de iglesia podían ver datos de TODAS las iglesias
+- **AHORA**: Tesoreros de iglesia solo ven SU iglesia
 
 ---
 
@@ -268,10 +288,11 @@ Líder de la iglesia local. Gestiona la congregación y supervisalas finanzas.
 ## 💰 5. Treasurer (Tesorero de Iglesia)
 
 ### Descripción
-Responsable de las finanzas de la iglesia local. Crea reportes y aprueba eventos.
+Responsable de las finanzas de la iglesia local. Crea reportes mensuales y registra transacciones de su iglesia.
 
 ### Alcance
-- **Iglesia Propia** - Solo su iglesia asignada
+- **Iglesia Propia** - Solo su iglesia asignada (CHURCH-LEVEL ONLY)
+- **⚠️ IMPORTANTE**: Los tesoreros de iglesia NO tienen acceso a otras iglesias ni a fondos nacionales
 
 ### Permisos
 
@@ -279,26 +300,33 @@ Responsable de las finanzas de la iglesia local. Crea reportes y aprueba eventos
 |---------|-------------|-----------------|
 | `reports.create` | Crear reportes mensuales | Nuevo reporte financiero |
 | `reports.edit` | Editar reportes propios | Actualizar montos |
-| `events.create` | Crear eventos | Planificar evento local |
-| `events.manage` | Gestionar eventos | Ver todos los eventos |
-| `events.approve` | Aprobar eventos | Aprobar solicitudes de fund_director |
-| `funds.view` | Ver fondos de iglesia | Consultar balances |
-| `transactions.view` | Ver transacciones | Revisar movimientos |
+| `transactions.create` | Crear transacciones | Registrar movimientos de iglesia |
+| `funds.view` | Ver fondos de iglesia | Consultar balances (solo lectura) |
+| `transactions.view` | Ver transacciones | Revisar movimientos de iglesia |
 
 ### Capacidades Clave
-- ✅ Crear y editar reportes mensuales
-- ✅ Aprobar eventos planificados por fund_directors
-- ✅ Crear y gestionar eventos de la iglesia
-- ✅ Ver todas las transacciones de su iglesia
-- ✅ Consultar balances de fondos
-- ❌ NO puede aprobar sus propios reportes mensuales
+- ✅ Crear y editar reportes mensuales de su iglesia
+- ✅ Registrar transacciones de su iglesia local
+- ✅ Ver balances de fondos (solo lectura)
+- ✅ Ver transacciones de su iglesia
+- ❌ NO puede aprobar sus propios reportes mensuales (solo admin)
 - ❌ NO puede ver otras iglesias
+- ❌ NO puede aprobar eventos de fondos nacionales (eso es del national_treasurer)
+- ❌ NO puede crear eventos nacionales (eso es del fund_director)
 
 ### Responsabilidades Principales
 1. **Reportes Mensuales**: Crear reporte antes del día 5 de cada mes
-2. **Aprobación de Eventos**: Revisar y aprobar eventos de fund_directors
-3. **Registro de Transacciones**: Mantener ledger actualizado
-4. **Depósitos Bancarios**: Registrar depósitos del fondo nacional (10%)
+2. **Registro de Transacciones**: Mantener ledger actualizado de su iglesia
+3. **Depósitos Bancarios**: Registrar depósitos del fondo nacional (10%)
+
+### Diferencia con National Treasurer
+| Capacidad | treasurer (Iglesia) | national_treasurer (Nacional) |
+|-----------|:-------------------:|:-----------------------------:|
+| Alcance | **Solo su iglesia** | **Todas las iglesias** |
+| Fondos | Solo lectura | Gestión completa (9 fondos) |
+| Eventos | NO puede aprobar | Aprueba eventos de fondos |
+| Reportes | Crea para su iglesia | Lee todos (no aprueba) |
+| Transacciones | Solo su iglesia | Todas las transacciones |
 
 ---
 

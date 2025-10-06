@@ -5,7 +5,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { executeWithContext } from '@/lib/db';
 import { firstOrNull, expectOne } from '@/lib/db-helpers';
 import { buildCorsHeaders, handleCorsPreflight } from '@/lib/cors';
-import { requireAuth, type AuthContext } from '@/lib/auth-context';
+import { requireAuth, type AuthContext } from '@/lib/auth-supabase';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
 import { createReportTransactions } from './route-helpers';
 
@@ -296,14 +296,24 @@ const handleGetReports = async (request: NextRequest, auth: AuthContext) => {
   const filters: string[] = [];
   const params: unknown[] = [];
 
-  // Church-level roles can only see their own church's reports
-  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer'  /* TODO(role-cleanup): removed 'church' is not a valid role */ || auth.role === 'secretary';
+  // Define role-based access patterns
+  const isNationalRole = auth.role === 'admin' || auth.role === 'national_treasurer';
+  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer' || auth.role === 'church_manager' || auth.role === 'secretary';
+  const isFundDirector = auth.role === 'fund_director';
 
+  // Church-scoped roles: restrict to own church only
   if (isChurchRole) {
     const scopedChurchId = parseRequiredChurchId(auth.churchId);
     params.push(scopedChurchId);
     filters.push(`r.church_id = $${params.length}`);
-  } else if (churchFilter !== null) {
+  }
+  // Fund directors: restrict to assigned churches (if any)
+  else if (isFundDirector && auth.assignedChurches && auth.assignedChurches.length > 0) {
+    params.push(auth.assignedChurches);
+    filters.push(`r.church_id = ANY($${params.length}::int[])`);
+  }
+  // National roles (admin, national_treasurer): apply optional church filter if provided
+  else if (isNationalRole && churchFilter !== null) {
     params.push(churchFilter);
     filters.push(`r.church_id = $${params.length}`);
   }
@@ -408,8 +418,8 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
   // Check if user has admin privileges
   const isAdminRole = auth.role === 'admin';
 
-  // Church-level roles that can create reports: pastor, treasurer, and legacy 'church' role
-  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer'  /* TODO(role-cleanup): removed 'church' is not a valid role */;
+  // Church-level roles that can create reports: pastor and treasurer only
+  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer';
 
   // Determine which church this report is for
   const payloadChurchIdRaw = getRecordValue(data, 'church_id');
@@ -736,7 +746,7 @@ const handleUpdateReport = async (
   const existingMonth = getRecordNumber(existing, 'month', 0);
 
   // Check if user has permission to modify this report
-  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer'  /* TODO(role-cleanup): removed 'church' is not a valid role */;
+  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer';
   const isAdminRole = auth.role === 'admin';
 
 
@@ -1044,7 +1054,7 @@ const handleDeleteReport = async (reportId: number, auth: AuthContext) => {
   const existingChurchId = getRecordNumber(existing, 'church_id', 0);
   const existingEstado = getRecordString(existing, 'estado', '');
   // Check if user has permission to delete this report
-  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer'  /* TODO(role-cleanup): removed 'church' is not a valid role */;
+  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer';
   const isAdminRole = auth.role === 'admin';
 
   if (isChurchRole && parseRequiredChurchId(auth.churchId) !== existingChurchId) {
@@ -1089,7 +1099,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // Make GET endpoint authentication-optional
     // Return empty array for unauthenticated users
     // This allows the reports page to load without login
-    const { getAuthContext } = await import('@/lib/auth-context');
+    const { getAuthContext } = await import('@/lib/auth-supabase');
     const auth = await getAuthContext(request);
 
     if (!auth) {

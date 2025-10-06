@@ -157,15 +157,14 @@ export const hasFundAccess = (context: AuthContext, fundId: number): boolean => 
   // National-level roles have access to all funds
   if (context.role === 'admin' || context.role === 'national_treasurer') return true;
 
-  // Treasurer has access to all funds (legacy behavior)
-  if (context.role === 'treasurer') return true;
-
   // Fund directors only have access to assigned funds
   if (context.role === 'fund_director') {
     return context.assignedFunds?.includes(fundId) ?? false;
   }
 
-  return true;
+  // Church-level roles (treasurer, pastor, church_manager, secretary) have NO fund access
+  // Funds are NATIONAL scope only
+  return false;
 };
 
 /**
@@ -175,15 +174,17 @@ export const hasChurchAccess = (context: AuthContext, churchId: number): boolean
   // National-level roles have access to all churches
   if (context.role === 'admin' || context.role === 'national_treasurer') return true;
 
-  // Treasurer has access to all churches (legacy behavior)
-  if (context.role === 'treasurer') return true;
-
   // Fund directors only have access to assigned churches
   if (context.role === 'fund_director') {
     return context.assignedChurches?.includes(churchId) ?? false;
   }
 
-  return true;
+  // Church-level roles (pastor, treasurer, church_manager, secretary) only access their own church
+  if (['pastor', 'treasurer', 'church_manager', 'secretary'].includes(context.role)) {
+    return context.churchId === churchId;
+  }
+
+  return false;
 };
 
 /**
