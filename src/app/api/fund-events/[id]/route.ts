@@ -207,7 +207,9 @@ export async function PATCH(
     }
 
     if (action === 'approve') {
-      if (!['admin', 'national_treasurer', 'treasurer'].includes(auth.role)) {
+      // Only admin and national_treasurer can approve events (migration 038/040)
+      // treasurer role is church-scoped and cannot approve national fund events
+      if (!['admin', 'national_treasurer'].includes(auth.role)) {
         const response = NextResponse.json(
           { error: 'Insufficient permissions to approve events' },
           { status: 403 }

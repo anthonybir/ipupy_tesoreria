@@ -886,6 +886,27 @@ const handleUpdateReport = async (
   let processedAt = existingProcessedAt ? new Date(String(existingProcessedAt)) : null;
 
   if (estado === 'procesado') {
+    // CRITICAL: Validate bank deposit before approval (BUSINESS_LOGIC.md:616-622)
+    // This prevents incorrect deposits from being approved without verification
+
+    // 1. Validate deposit receipt uploaded
+    if (!fotoDepositoPath) {
+      throw new ValidationError('Foto de depósito es requerida para aprobar el reporte');
+    }
+
+    // 2. Validate deposit amount matches expected total
+    const expectedDeposit = totals.fondoNacional + totals.totalDesignados;
+    const tolerance = 100; // ₲100 tolerance for rounding differences
+    const difference = Math.abs(montoDepositado - expectedDeposit);
+
+    if (difference > tolerance) {
+      throw new ValidationError(
+        `Monto depositado (₲${montoDepositado.toLocaleString('es-PY')}) no coincide con total esperado (₲${expectedDeposit.toLocaleString('es-PY')}). ` +
+        `Diferencia: ₲${difference.toLocaleString('es-PY')}. ` +
+        `Verifique el monto depositado y vuelva a intentar.`
+      );
+    }
+
     processedBy = auth.email || processedBy || null;
     processedAt = new Date();
   } else if (previousStatus === 'procesado' && estado !== 'procesado') {
