@@ -247,10 +247,16 @@ ALTER TABLE funds
 
 ---
 
-### [ ] 16. Add API Documentation
-- **Create**: `docs/api/ENDPOINTS.md`
-- **Document**: All API routes with auth requirements
-- **Why**: Developer reference
+### [x] 16. Add API Documentation
+- **Created**: `docs/api/ENDPOINTS.md` (282 lines)
+- **Documented**: All major API routes with:
+  - Auth requirements and role restrictions
+  - RLS enforcement patterns
+  - Request/response formats
+  - Security best practices
+  - CRITICAL/HIGH audit fix references
+- **Coverage**: Churches, reports, funds, transactions, events, providers, donors, admin endpoints
+- **Why**: Developer reference and onboarding guide
 
 ---
 
