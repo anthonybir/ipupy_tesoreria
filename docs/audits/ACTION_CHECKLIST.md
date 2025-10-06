@@ -1,13 +1,14 @@
 # 🎯 BUSINESS LOGIC AUDIT - ACTION CHECKLIST
 
 **Source**: [BUSINESS_LOGIC_AUDIT_2025-01-06.md](./BUSINESS_LOGIC_AUDIT_2025-01-06.md)
-**Status**: 4 CRITICAL, 6 HIGH, 8 MEDIUM, 3 LOW issues found
+**Status**: ✅ 4 CRITICAL COMPLETED (2025-01-06), 6 HIGH, 8 MEDIUM, 3 LOW remaining
+**Last Updated**: 2025-01-06 (Post-Commit 75c1e5b)
 
 ---
 
-## 🔴 CRITICAL (Do Today)
+## ✅ CRITICAL (COMPLETED 2025-01-06)
 
-### [ ] 1. Fix Event Approval Logic
+### [x] 1. Fix Event Approval Logic
 - **File**: `src/app/api/fund-events/[id]/route.ts:210`
 - **Change**: Remove `'treasurer'` from approval roles array
 - **From**: `if (!['admin', 'national_treasurer', 'treasurer'].includes(auth.role))`
@@ -17,7 +18,7 @@
 
 ---
 
-### [ ] 2. Add Bank Deposit Validation
+### [x] 2. Add Bank Deposit Validation
 - **File**: `src/app/api/reports/route.ts:886-894`
 - **Add**: Photo validation + amount reconciliation
 - **Code**:
@@ -46,8 +47,8 @@ if (estado === 'procesado') {
 
 ---
 
-### [ ] 3. Create Migration: GENERATED fondo_nacional
-- **Create**: `migrations/041_make_fondo_nacional_generated.sql`
+### [x] 3. Create Migration: GENERATED fondo_nacional
+- **Create**: `migrations/042_make_fondo_nacional_generated.sql`
 - **Code**:
 ```sql
 -- Backup existing data
@@ -78,8 +79,8 @@ END $$;
 
 ---
 
-### [ ] 4. Add Negative Balance Check in Event Approval
-- **Create**: `migrations/042_fix_event_approval_balance_check.sql`
+### [x] 4. Add Negative Balance Check in Event Approval
+- **Create**: `migrations/043_fix_event_approval_balance_check.sql`
 - **Modify**: Function `process_fund_event_approval` (migration 029:78-109)
 - **Add After Line 80**:
 ```sql
@@ -102,7 +103,7 @@ INSERT INTO transactions (...) VALUES (...);
 ## 🟠 HIGH (Next Sprint - 2 Weeks)
 
 ### [ ] 5. Add RLS Policy for Approved Reports
-- **Create**: `migrations/043_rls_approved_reports.sql`
+- **Create**: `migrations/044_rls_approved_reports.sql`
 - **Code**:
 ```sql
 CREATE POLICY "Cannot modify approved reports"
@@ -169,7 +170,7 @@ if (result.rows[0].action === 'duplicate') {
 ---
 
 ### [ ] 9. Add Missing Indexes
-- **Create**: `migrations/044_add_performance_indexes.sql`
+- **Create**: `migrations/045_add_performance_indexes.sql`
 - **Code**:
 ```sql
 CREATE INDEX idx_reports_estado ON reports(estado);
@@ -198,7 +199,7 @@ CREATE INDEX idx_reports_processed_at ON reports(processed_at) WHERE processed_a
 ---
 
 ### [ ] 12. Add CHECK Constraint on Fund Balance
-- **Create**: `migrations/045_fund_balance_check.sql`
+- **Create**: `migrations/046_fund_balance_check.sql`
 - **Code**:
 ```sql
 ALTER TABLE funds

@@ -704,8 +704,8 @@ if (estado === 'procesado') {
 
 ---
 
-#### 3. **Convert fondo_nacional to GENERATED Column** (BUG #1)
-**Create Migration**: `migrations/041_make_fondo_nacional_generated.sql`
+#### 3. **Convert fondo_nacional to GENERATED Column** (BUG #1) ✅ COMPLETED
+**Create Migration**: `migrations/042_make_fondo_nacional_generated.sql` (Commit 75c1e5b)
 
 ```sql
 -- Backup existing data
@@ -736,8 +736,8 @@ END $$;
 
 ---
 
-#### 4. **Add Negative Balance Prevention in Event Approval**
-**File**: Migration needed - `migrations/041_fix_event_approval_balance_check.sql`
+#### 4. **Add Negative Balance Prevention in Event Approval** ✅ COMPLETED
+**File**: Migration created - `migrations/043_fix_event_approval_balance_check.sql` (Commit 75c1e5b)
 
 **Add to function `process_fund_event_approval`**:
 ```sql
@@ -761,7 +761,7 @@ INSERT INTO transactions (...) VALUES (...);
 ### 🟠 HIGH (Fix in Next Sprint)
 
 #### 5. **Add RLS Policy for Approved Reports**
-**Create Migration**: `migrations/042_rls_approved_reports.sql`
+**Create Migration**: `migrations/044_rls_approved_reports.sql`
 
 ```sql
 CREATE POLICY "Cannot modify approved reports"
@@ -808,7 +808,7 @@ Implement reusable `transferFunds()` function per BUSINESS_LOGIC.md:643-695
 ---
 
 #### 8. **Add CHECK Constraint on Fund Balance**
-**Migration**: `migrations/043_fund_balance_check.sql`
+**Migration**: `migrations/045_fund_balance_check.sql`
 
 ```sql
 ALTER TABLE funds
