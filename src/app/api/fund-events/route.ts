@@ -18,7 +18,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const params: unknown[] = [];
 
     // Fund directors see only their assigned funds (enforced by RLS policies)
-    // Admin and national_treasurer see all fund events
+    // Admin and treasurer see all fund events
 
     const status = searchParams.get('status');
     if (status) {
@@ -188,7 +188,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     // Authorization enforced by RLS policies (migration 049)
     // Fund directors can only create events for assigned funds
-    // Admin and national_treasurer can create events for any fund
+    // Admin and treasurer can create events for any fund
 
     // Use executeTransaction for atomic multi-insert operation
     const event = await executeTransaction(auth, async (client) => {

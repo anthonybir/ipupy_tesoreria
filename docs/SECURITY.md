@@ -16,20 +16,22 @@ The IPU PY Treasury system implements a comprehensive security model featuring R
 
 ## Role-Based Access Control (RBAC)
 
-### Current Role System (7 Roles)
+### Current Role System (6 Roles)
 
-The system uses **7 hierarchical roles** for access control (see migrations 023, 026, 037, 040):
+The system uses **6 hierarchical roles** for access control (see migrations 023, 026, 037, 040, 051-054):
 
 ```sql
 -- Role hierarchy (highest to lowest permissions)
-1. admin              -- Full system administration (level 7)
-2. national_treasurer -- National fund supervision (level 6) - Added in migration 040
-3. fund_director      -- Fund-specific management (level 5) - Added in migration 026
-4. pastor             -- Church leadership (level 4)
-5. treasurer          -- Financial operations (level 3)
-6. church_manager     -- Church administration view-only (level 2)
-7. secretary          -- Administrative support (level 1)
+1. admin           -- Full system administration (level 7)
+2. treasurer       -- National treasury operations (level 6) - Consolidated in migration 053
+3. fund_director   -- Fund-specific management (level 5) - Added in migration 026
+4. pastor          -- Church leadership (level 4)
+5. church_manager  -- Church administration view-only (level 2)
+6. secretary       -- Administrative support (level 1)
 ```
+
+> **Note**: The `treasurer` role has **national scope** (all churches). It is NOT a church-level treasurer.
+> Local church financial operations are handled by the `pastor` role.
 
 #### Migration History
 
@@ -49,33 +51,37 @@ The system uses **7 hierarchical roles** for access control (see migrations 023,
 - Added `get_role_level()` database function
 
 **Migration 040** (National Treasurer):
-- Added `national_treasurer` role for national fund oversight
+- Added `national_treasurer` role for national fund oversight (level 6)
 - Highest privilege after admin
 - Supervises all fund directors
 
+**Migrations 051-054** (Treasurer Consolidation):
+- **Migration 051**: Restored treasurer to national-level access
+- **Migration 053**: Merged `national_treasurer` into `treasurer` role
+- Eliminated redundant roles, creating single national treasurer position
+- Updated all RLS policies, API routes, and permissions
+- `churchId` is now null for treasurer (national scope)
+
 #### Obsolete Roles (Removed)
 
-The following roles are **no longer valid** and were removed in migration 037:
-- `district_supervisor` - Removed (no longer needed)
-- `member` - Removed (consolidated into secretary)
+The following roles are **no longer valid**:
+- `national_treasurer` - **Consolidated into `treasurer`** (migration 053)
+- `district_supervisor` - Removed (migration 037)
+- `member` - Removed (migration 037)
 - `super_admin` - Consolidated into `admin` (migration 023)
 - `church_admin` - Renamed to `pastor` (migration 023)
 - `viewer` - Removed (migration 023)
 
 ### Role Permissions Matrix
 
-> **⚠️ DEPRECATED SECTION**
->
-> The detailed permissions below describe the **old role system** (pre-migration 037).
->
 > **For current permissions**, see:
-> - `docs/ROLES_AND_PERMISSIONS.md` - Complete current permissions matrix
-> - `docs/CORRECT_PERMISSIONS_MODEL.md` - Business model documentation
-> - `docs/MIGRATION_038_VERIFICATION.md` - Permissions verification
+> - `docs/ROLES_AND_PERMISSIONS.md` - Complete current permissions matrix (needs update to 6-role model)
+> - `docs/architecture/AUTHENTICATION_AUTHORIZATION.md` - Current auth system documentation
+> - `docs/api/API_COMPLETE_REFERENCE.md` - API endpoint permissions
 >
-> **Current roles** (7 total): admin, national_treasurer, fund_director, pastor, treasurer, church_manager, secretary
+> **Current roles** (6 total): admin, treasurer, fund_director, pastor, church_manager, secretary
 >
-> **Obsolete roles** (removed): district_supervisor, member
+> **Obsolete roles** (removed): national_treasurer (→ treasurer), district_supervisor, member
 
 #### 1. Admin Role (`admin`)
 
@@ -102,109 +108,134 @@ AS $$
 $$;
 ```
 
-#### 2. District Supervisor Role (`district_supervisor`)
+#### 2. Treasurer Role (`treasurer`) - National Scope
 
-**Scope**: Multi-church district oversight
+**Scope**: National treasury operations (ALL churches and funds)
+**Level**: 6 (consolidated from `national_treasurer` in migration 053)
+**Church Assignment**: `churchId` = null (not church-specific)
+
 **Permissions**:
 ```sql
-'churches.view' -> 'district'
-'reports.approve' -> 'district'
-'reports.view' -> 'district'
-'members.view' -> 'district'
+'reports.view' -> 'all'           -- View all church reports
+'reports.approve' -> 'all'        -- Approve/reject church reports
+'events.view' -> 'all'            -- View all fund events
+'events.approve' -> 'all'         -- Approve fund events
+'events.create' -> 'all'          -- Create national fund events
+'events.edit' -> 'all'            -- Edit fund events
+'funds.view' -> 'all'             -- View all 9 national funds
+'funds.manage' -> 'all'           -- Manage fund balances
+'transactions.view' -> 'all'      -- View all transactions
+'transactions.create' -> 'all'    -- Create national transactions
+'churches.view' -> 'all'          -- View all churches
+'dashboard.view' -> 'all'         -- National dashboard
 ```
 
-**Database Functions**:
-```sql
-CREATE OR REPLACE FUNCTION app_user_is_district_supervisor()
-RETURNS BOOLEAN
-LANGUAGE SQL
-STABLE
-AS $$
-  SELECT app_current_user_role() = 'district_supervisor';
-$$;
-```
+> **Note**: The `treasurer` role is NATIONAL, not church-level. Local church finances are managed by the `pastor` role.
 
-#### 3. Pastor Role (`pastor`) - Renamed from church_admin
-
-**Scope**: Single church management
-**Permissions**:
-```sql
-'church.manage' -> 'own'
-'reports.create' -> 'own'
-'reports.edit' -> 'own'
-'members.manage' -> 'own'
-'funds.view' -> 'own'
-```
-
-#### 4. Treasurer Role (`treasurer`)
-
-**Scope**: Financial management for assigned church
-**Permissions**:
-```sql
-'reports.create' -> 'own'
-'reports.edit' -> 'own'
-'funds.view' -> 'own'
-'transactions.view' -> 'own'
-'financial.manage' -> 'own'
-```
-
-#### 5. Secretary Role (`secretary`)
-
-**Scope**: Administrative support for assigned church
-**Permissions**:
-```sql
-'members.manage' -> 'own'
-'reports.view' -> 'own'
-'events.manage' -> 'own'
-'documents.manage' -> 'own'
-```
-
-#### 6. Member Role (`member`) - Converted from viewer
-
-**Scope**: Basic read-only access to own data
-**Permissions**:
-```sql
-'profile.edit' -> 'own'
-'contributions.view' -> 'own'
-'events.view' -> 'own'
-```
-
-### Fund Director Role (Migration 025)
-
-The fund_director role was added to enable designated users to plan and manage events for specific funds.
+#### 3. Fund Director Role (`fund_director`)
 
 **Scope**: Assigned fund(s) only
+**Level**: 5
 **Permissions**:
 ```sql
 'events.create' -> 'assigned'       -- Create events for assigned funds
-'events.edit' -> 'own_draft'        -- Edit own draft/pending_revision events
+'events.edit' -> 'own_draft'        -- Edit own draft/pending events
+'events.submit' -> 'assigned'       -- Submit events for approval
 'events.view' -> 'assigned'         -- View events in assigned funds
 'funds.view' -> 'assigned'          -- View assigned fund details
-'churches.view' -> 'assigned'       -- View churches in assigned funds
+'dashboard.view' -> 'assigned'      -- Dashboard for assigned funds
 ```
 
-**Database Functions**:
-```sql
-CREATE OR REPLACE FUNCTION app_user_is_fund_director()
-RETURNS BOOLEAN
-LANGUAGE SQL
-STABLE
-AS $$
-  SELECT app_current_user_role() = 'fund_director';
-$$;
+#### 4. Pastor Role (`pastor`)
 
+**Scope**: Single church (manages ALL local operations including finances)
+**Level**: 4
+**Permissions**:
+```sql
+'reports.create' -> 'own'           -- Create monthly reports
+'reports.edit' -> 'own'             -- Edit draft reports
+'transactions.view' -> 'own'        -- View church transactions
+'transactions.create' -> 'own'      -- Record church transactions
+'funds.view' -> 'own'               -- View church fund balances
+'members.manage' -> 'own'           -- Manage church members
+'dashboard.view' -> 'own'           -- Church dashboard
+```
+
+> **Note**: Pastor handles local church treasury operations (no separate church treasurer role exists).
+
+#### 5. Church Manager Role (`church_manager`)
+
+**Scope**: Single church (view-only administration)
+**Level**: 2
+**Permissions**:
+```sql
+'reports.view' -> 'own'             -- View church reports
+'transactions.view' -> 'own'        -- View church transactions
+'funds.view' -> 'own'               -- View church balances
+'members.view' -> 'own'             -- View church members
+'dashboard.view' -> 'own'           -- Church dashboard
+```
+
+#### 6. Secretary Role (`secretary`)
+
+**Scope**: Single church (administrative support)
+**Level**: 1
+**Permissions**:
+```sql
+'members.manage' -> 'own'           -- Manage church member records
+'documents.manage' -> 'own'         -- Manage church documents
+```
+
+---
+
+### Role Level Hierarchy (Current)
+
+The 6-role hierarchy enforced by `get_role_level()` function:
+
+```sql
+CREATE OR REPLACE FUNCTION get_role_level(role_name TEXT)
+RETURNS INTEGER AS $$
+  SELECT CASE role_name
+    WHEN 'admin' THEN 7
+    WHEN 'treasurer' THEN 6         -- National scope (consolidated from national_treasurer)
+    WHEN 'fund_director' THEN 5
+    WHEN 'pastor' THEN 4
+    WHEN 'church_manager' THEN 2
+    WHEN 'secretary' THEN 1
+    ELSE 0
+  END;
+$$ LANGUAGE SQL IMMUTABLE;
+```
+
+### Database Functions (Current)
+
+**Fund Access Control**:
+```sql
 CREATE OR REPLACE FUNCTION app_user_has_fund_access(p_fund_id INTEGER)
 RETURNS BOOLEAN
-LANGUAGE SQL
+LANGUAGE plpgsql
 STABLE
 AS $$
-  SELECT
-    app_current_user_role() = 'admin' OR
-    (app_current_user_role() = 'fund_director' AND p_fund_id = ANY(app_user_assigned_funds()));
+BEGIN
+  -- National-level roles always have access (admin, treasurer)
+  IF app_current_user_role() IN ('admin', 'treasurer') THEN
+    RETURN TRUE;
+  END IF;
+
+  -- Fund directors: check assigned funds
+  IF app_current_user_role() = 'fund_director' THEN
+    RETURN (
+      p_fund_id IN (SELECT * FROM app_user_assigned_funds())
+    );
+  END IF;
+
+  -- Church-scoped roles: no fund access
+  RETURN FALSE;
+END;
 $$;
 
 CREATE OR REPLACE FUNCTION app_user_assigned_funds()
-RETURNS INTEGER[]
+RETURNS SETOF bigint
 LANGUAGE SQL
 STABLE
 AS $$
@@ -220,19 +251,19 @@ $$;
 ### Role Management Functions
 
 ```sql
--- Function to get role hierarchy level
+-- Function to get role hierarchy level (6-role model)
 CREATE OR REPLACE FUNCTION get_role_level(user_role TEXT)
 RETURNS INTEGER
 LANGUAGE SQL
 IMMUTABLE
 AS $$
   SELECT CASE user_role
-    WHEN 'admin' THEN 6
-    WHEN 'district_supervisor' THEN 5
+    WHEN 'admin' THEN 7
+    WHEN 'treasurer' THEN 6
+    WHEN 'fund_director' THEN 5
     WHEN 'pastor' THEN 4
-    WHEN 'treasurer' THEN 3
-    WHEN 'secretary' THEN 2
-    WHEN 'member' THEN 1
+    WHEN 'church_manager' THEN 2
+    WHEN 'secretary' THEN 1
     ELSE 0
   END;
 $$;
@@ -246,13 +277,13 @@ AS $$
   SELECT get_role_level(manager_role) > get_role_level(target_role);
 $$;
 
--- Church management role check
-CREATE OR REPLACE FUNCTION app_user_is_church_manager()
+-- Church-scoped role check (local operations)
+CREATE OR REPLACE FUNCTION app_user_is_church_role()
 RETURNS BOOLEAN
 LANGUAGE SQL
 STABLE
 AS $$
-  SELECT app_current_user_role() IN ('pastor', 'treasurer', 'secretary');
+  SELECT app_current_user_role() IN ('pastor', 'church_manager', 'secretary');
 $$;
 ```
 
@@ -327,28 +358,24 @@ $$;
 #### Church Data Access Policy
 
 ```sql
--- Churches table RLS policy
+-- Churches table RLS policy (6-role model)
 CREATE POLICY "churches_access" ON churches
   FOR ALL TO authenticated
   USING (
-    app_user_is_admin() OR  -- Admins see all churches
-    (app_user_is_district_supervisor() AND district_id = app_current_user_district_id()) OR  -- District supervisors see their district
-    id = app_current_user_church_id()  -- Church users see only their church
+    get_role_level(app_current_user_role()) >= 6  -- admin / treasurer → acceso nacional
+    OR id = app_current_user_church_id()          -- Roles de iglesia (pastor, church_manager, secretary) → su iglesia
   );
 ```
 
 #### Monthly Reports Access Policy
 
 ```sql
--- Monthly reports RLS policy
+-- Monthly reports RLS policy (6-role model)
 CREATE POLICY "monthly_reports_access" ON monthly_reports
   FOR ALL TO authenticated
   USING (
-    app_user_is_admin() OR  -- Admins see all reports
-    (app_user_is_district_supervisor() AND church_id IN (
-      SELECT id FROM churches WHERE district_id = app_current_user_district_id()
-    )) OR
-    church_id = app_current_user_church_id()  -- Church users see only their reports
+    get_role_level(app_current_user_role()) >= 6  -- admin / treasurer → ven todos los reportes
+    OR church_id = app_current_user_church_id()   -- Roles de iglesia → solo su iglesia
   );
 ```
 
@@ -361,7 +388,7 @@ CREATE POLICY "profiles_access" ON profiles
   USING (
     app_user_is_admin() OR  -- Admins manage all profiles
     id = app_current_user_id() OR  -- Users manage their own profile
-    (app_user_is_church_manager() AND church_id = app_current_user_church_id())  -- Church managers manage their church users
+    (app_user_is_church_role() AND church_id = app_current_user_church_id())  -- Roles de iglesia gestionan su congregación
   );
 ```
 
@@ -692,8 +719,8 @@ BEGIN
         WHEN NEW.email IN ('administracion@ipupy.org.py', 'tesoreria@ipupy.org.py') THEN 'admin'
         -- Organizational emails get admin role
         WHEN NEW.email LIKE '%@ipupy.org%' THEN 'admin'
-        -- Default role for new users
-        ELSE 'member'
+        -- Default role for new external users (lowest privilege)
+        ELSE 'secretary'
       END,
       true,
       now(),
@@ -716,7 +743,7 @@ CASE
   -- Organizational domain users
   WHEN NEW.email LIKE '%@ipupy.org%' THEN 'admin'
   -- Default for external users
-  ELSE 'member'
+  ELSE 'secretary'
 END
 ```
 
@@ -891,12 +918,9 @@ CREATE TABLE user_activity (
 CREATE POLICY "financial_data_encryption" ON monthly_reports
   FOR ALL TO authenticated
   USING (
-    -- Only authorized roles can access financial details
-    app_user_is_admin() OR
-    (app_user_is_church_manager() AND church_id = app_current_user_church_id()) OR
-    (app_user_is_district_supervisor() AND church_id IN (
-      SELECT id FROM churches WHERE district_id = app_current_user_district_id()
-    ))
+    -- Solo roles nacionales o la iglesia propietaria acceden a datos financieros
+    get_role_level(app_current_user_role()) >= 6  -- admin / treasurer
+    OR church_id = app_current_user_church_id()   -- Roles de iglesia (pastor, church_manager, secretary)
   );
 ```
 
@@ -938,13 +962,10 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
   CASE user_role
-    WHEN 'admin' THEN
-      RETURN true;  -- Admin can manage all reports
-    WHEN 'district_supervisor' THEN
-      -- TODO: Check if church is in user's district
-      RETURN church_id IS NOT NULL;
-    WHEN 'pastor', 'treasurer' THEN
-      -- Can only manage own church reports
+    WHEN 'admin', 'treasurer' THEN
+      RETURN true;  -- Roles nacionales gestionan todos los reportes
+    WHEN 'pastor', 'church_manager' THEN
+      -- Roles de iglesia gestionan únicamente su congregación
       RETURN church_id = app_current_user_church_id();
     ELSE
       RETURN false;
@@ -963,19 +984,10 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
   CASE user_role
-    WHEN 'admin' THEN
-      RETURN true;
-    WHEN 'district_supervisor' THEN
-      -- District supervisors can view financial data in their district
-      RETURN EXISTS (
-        SELECT 1 FROM churches
-        WHERE id = church_id AND district_id = app_current_user_district_id()
-      );
-    WHEN 'pastor', 'treasurer' THEN
-      -- Church financial staff can access own church data
-      RETURN church_id = app_current_user_church_id();
-    WHEN 'secretary' THEN
-      -- Secretaries have limited financial access
+    WHEN 'admin', 'treasurer' THEN
+      RETURN true;  -- Acceso nacional a datos financieros
+    WHEN 'pastor', 'church_manager', 'secretary' THEN
+      -- Roles de iglesia acceden solo a su congregación
       RETURN church_id = app_current_user_church_id();
     ELSE
       RETURN false;

@@ -913,13 +913,13 @@ From now on, type errors cannot reach production!
 
 ### For New Developers
 
-1. **Read first:** [TYPE_SAFETY_GUIDE.md](./TYPE_SAFETY_GUIDE.md)
+1. **Read first:** [TYPE_SAFETY_GUIDE.md](../development/TYPE_SAFETY_GUIDE.md)
 2. **Reference:** [src/types/utils.ts](../src/types/utils.ts)
 3. **Examples:** Look at recently fixed files for patterns
 
 ### For Ongoing Maintenance
 
-1. **Add new patterns** to TYPE_SAFETY_GUIDE.md
+1. **Add new patterns** to [TYPE_SAFETY_GUIDE.md](../development/TYPE_SAFETY_GUIDE.md)
 2. **Update database.ts** when schema changes
 3. **Create new type utilities** as needed
 4. **Keep pre-commit hook updated**

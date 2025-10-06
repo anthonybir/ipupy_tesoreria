@@ -97,7 +97,7 @@ if (!churchId) {
 ```
 
 ### Documentation
-**File:** `docs/TYPE_SAFETY_GUIDE.md` (500+ lines)
+**File:** `docs/development/TYPE_SAFETY_GUIDE.md` (500+ lines)
 
 Comprehensive guide covering:
 - TypeScript configuration explanations

@@ -155,14 +155,14 @@ export const isFundDirector = (context: AuthContext): boolean => {
  */
 export const hasFundAccess = (context: AuthContext, fundId: number): boolean => {
   // National-level roles have access to all funds
-  if (context.role === 'admin' || context.role === 'national_treasurer') return true;
+  if (context.role === 'admin' || context.role === 'treasurer') return true;
 
   // Fund directors only have access to assigned funds
   if (context.role === 'fund_director') {
     return context.assignedFunds?.includes(fundId) ?? false;
   }
 
-  // Church-level roles (treasurer, pastor, church_manager, secretary) have NO fund access
+  // Church-level roles (pastor, church_manager, secretary) have NO fund access
   // Funds are NATIONAL scope only
   return false;
 };
@@ -172,7 +172,7 @@ export const hasFundAccess = (context: AuthContext, fundId: number): boolean => 
  */
 export const hasChurchAccess = (context: AuthContext, churchId: number): boolean => {
   // National-level roles have access to all churches
-  if (context.role === 'admin' || context.role === 'national_treasurer') return true;
+  if (context.role === 'admin' || context.role === 'treasurer') return true;
 
   // Fund directors only have access to assigned churches
   if (context.role === 'fund_director') {
@@ -198,7 +198,7 @@ export const isSystemOwner = (email: string): boolean =>
  */
 export const canAccessChurch = (context: AuthContext, churchId: number): boolean => {
   // Tier 1: Unrestricted cross-church access (national-level roles)
-  if (['admin', 'national_treasurer'].includes(context.role)) {
+  if (['admin', 'treasurer'].includes(context.role)) {
     return true;
   }
 

@@ -506,7 +506,7 @@ rm src/test-file.ts
 **Morning (2 hours):**
 - [ ] Phase 1: Fix all utility files
 - [ ] Create `src/types/database.ts` for reusable row types
-- [ ] Document patterns in TYPE_SAFETY_GUIDE.md
+- [ ] Document patterns in [TYPE_SAFETY_GUIDE.md](../development/TYPE_SAFETY_GUIDE.md)
 
 **Afternoon (2 hours):**
 - [ ] Phase 2: Start database patterns
@@ -550,7 +550,7 @@ rm src/test-file.ts
 ## 📚 Resources During Remediation
 
 ### Quick Reference
-- **[TYPE_SAFETY_GUIDE.md](./TYPE_SAFETY_GUIDE.md#common-fixes)** - Common fix patterns
+- **[TYPE_SAFETY_GUIDE.md](../development/TYPE_SAFETY_GUIDE.md#common-fixes)** - Common fix patterns
 - **[src/types/utils.ts](../src/types/utils.ts)** - Type utilities to reuse
 - **TypeScript Error Reference:** https://typescript-eslint.io/rules/
 

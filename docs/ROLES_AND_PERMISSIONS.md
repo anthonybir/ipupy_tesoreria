@@ -1,43 +1,69 @@
 # Sistema de Roles y Permisos - IPU PY Tesorería
 
-**Última actualización**: 2025-01-06
-**Versión**: 4.1 (Role Scope Security Fixes)
+**Última actualización**: 2025-10-06
+**Versión**: 5.0 (Treasurer Role Consolidation - Migrations 051-054)
+
+> **⚠️ IMPORTANTE**: Este documento requiere actualización completa al modelo de 6 roles.
+>
+> **Para información actualizada**, consulte:
+> - [`docs/architecture/AUTHENTICATION_AUTHORIZATION.md`](./architecture/AUTHENTICATION_AUTHORIZATION.md) - Sistema de autenticación actual
+> - [`docs/api/API_COMPLETE_REFERENCE.md`](./api/API_COMPLETE_REFERENCE.md) - Permisos de API actualizados
+> - [`docs/SECURITY.md`](./SECURITY.md) - Documentación de seguridad actual
+> - [`src/lib/authz.ts`](../src/lib/authz.ts) - Fuente de verdad del código
 
 ---
 
-## 🔒 SEGURIDAD: Alcances de Roles Corregidos (2025-01-06)
+## 🔄 CAMBIOS RECIENTES: Consolidación del Tesorero (Oct 2025)
 
-**CRÍTICO**: Se corrigieron bugs de seguridad en el enforcement de alcances de roles:
+**CRÍTICO**: El sistema ahora usa **6 roles** después de la consolidación de tesorero (migrations 051-054):
 
-### Cambios Aplicados:
-1. ✅ **treasurer** ahora restringido a su iglesia ÚNICAMENTE (antes tenía acceso global incorrectamente)
-2. ✅ **church_manager** ahora incluido en filtros de reportes (antes veía todas las iglesias)
-3. ✅ **fund_director** ahora limitado a iglesias asignadas (antes veía todos los reportes)
-4. ✅ **national_treasurer** ahora explícitamente manejado en API de reportes
+### Cambios Aplicados (Migrations 051-054):
+
+1. ✅ **`national_treasurer` consolidado en `treasurer`** (migration 053)
+   - El rol `national_treasurer` ya NO EXISTE
+   - El rol `treasurer` ahora tiene alcance NACIONAL (todas las iglesias)
+   - `churchId` es null para treasurer (no está asignado a una iglesia específica)
+
+2. ✅ **Jerarquía actualizada a 6 niveles**:
+   - admin: nivel 7
+   - treasurer: nivel 6 (alcance nacional, aprueba reportes y eventos)
+   - fund_director: nivel 5
+   - pastor: nivel 4 (maneja finanzas de iglesia local)
+   - church_manager: nivel 2
+   - secretary: nivel 1
+
+3. ✅ **Responsabilidades de iglesia local**: Pastor maneja TODO a nivel local, incluyendo finanzas
 
 ### Archivos Modificados:
-- `src/lib/auth-supabase.ts`: Funciones `hasFundAccess()` y `hasChurchAccess()` corregidas
-- `src/app/api/reports/route.ts`: Lógica de scoping mejorada en `handleGetReports()`
-
-### Impacto de Seguridad:
-- **ANTES**: Tesoreros de iglesia podían ver datos de TODAS las iglesias
-- **AHORA**: Tesoreros de iglesia solo ven SU iglesia
+- `migrations/053_merge_national_treasurer_into_treasurer.sql`: Consolidación principal
+- `migrations/054_fix_treasurer_merge_data_issues.sql`: Corrección de datos
+- `src/lib/authz.ts`: Definiciones de roles actualizadas (6 roles)
+- `src/lib/fund-event-authz.ts`: Autorización de eventos actualizada
+- `src/app/api/reports/route.ts`: 5 ubicaciones - treasurer es nacional, NO de iglesia
 
 ---
 
 ## 📋 Resumen Ejecutivo
 
-El sistema utiliza **7 roles jerárquicos** para controlar el acceso y las capacidades de los usuarios en la plataforma de tesorería.
+El sistema utiliza **6 roles jerárquicos** para controlar el acceso y las capacidades de los usuarios en la plataforma de tesorería.
 
 ### Roles Actuales (en orden jerárquico)
 
 1. **👑 admin** - Administrador del Sistema (nivel 7)
-2. **🏛️ national_treasurer** - Tesorero Nacional (nivel 6) - **NUEVO en v4.0**
+2. **💰 treasurer** - Tesorero Nacional (nivel 6) - **ALCANCE NACIONAL** (consolidado desde national_treasurer)
 3. **💼 fund_director** - Director de Fondos (nivel 5)
-4. **⛪ pastor** - Pastor de Iglesia (nivel 4)
-5. **💰 treasurer** - Tesorero de Iglesia (nivel 3)
-6. **📊 church_manager** - Gerente de Iglesia (nivel 2)
-7. **📝 secretary** - Secretario de Iglesia (nivel 1)
+4. **⛪ pastor** - Pastor de Iglesia (nivel 4) - **Maneja finanzas locales**
+5. **📊 church_manager** - Gerente de Iglesia (nivel 2)
+6. **📝 secretary** - Secretario de Iglesia (nivel 1)
+
+> **IMPORTANTE**:
+> - **treasurer** = NACIONAL (todas las iglesias, aprueba reportes y eventos)
+> - **pastor** = LOCAL (su iglesia, crea reportes, maneja transacciones)
+> - NO existe rol de "tesorero de iglesia" - el pastor maneja las finanzas locales
+
+### Roles Obsoletos (ELIMINADOS):
+
+- ❌ **`national_treasurer`** - Consolidado en `treasurer` (migration 053, Oct 2025)
 
 ---
 
@@ -74,19 +100,21 @@ El sistema utiliza **7 roles jerárquicos** para controlar el acceso y las capac
 2. ✅ `fund_director.dashboard.view` (assigned_funds) - Ver panel de fondos asignados
 3. ✅ `treasurer.transactions.create` (own) - Registrar transacciones de iglesia local
 
-### Tabla de Consistencia Final
+### Tabla de Consistencia Actual (Post-Migration 053)
 
 | Rol | DB Constraint | UI (authz.ts) | role_permissions | get_role_level() | Scope |
 |-----|---------------|---------------|------------------|------------------|-------|
-| `admin` | ✅ | ✅ | ✅ (6 perms) | ✅ (7) | ALL - Nacional |
-| `national_treasurer` | ✅ | ✅ | ✅ (11 perms) | ✅ (6) | ALL - Nacional |
-| `fund_director` | ✅ | ✅ | ✅ (10 perms) | ✅ (5) | assigned_funds - Nacional |
-| `pastor` | ✅ | ✅ | ✅ (5 perms) | ✅ (4) | own - Iglesia |
-| `treasurer` | ✅ | ✅ | ✅ (5 perms) | ✅ (3) | own - Iglesia |
-| `church_manager` | ✅ | ✅ | ✅ (5 perms) | ✅ (2) | own - Iglesia |
-| `secretary` | ✅ | ✅ | ✅ (2 perms) | ✅ (1) | own - Iglesia |
+| `admin` | ✅ | ✅ | ✅ | ✅ (7) | ALL - Nacional |
+| `treasurer` | ✅ | ✅ | ✅ (consolidado) | ✅ (6) | ALL - Nacional ⚠️ |
+| `fund_director` | ✅ | ✅ | ✅ | ✅ (5) | assigned_funds - Nacional |
+| `pastor` | ✅ | ✅ | ✅ | ✅ (4) | own - Iglesia |
+| `church_manager` | ✅ | ✅ | ✅ | ✅ (2) | own - Iglesia |
+| `secretary` | ✅ | ✅ | ✅ | ✅ (1) | own - Iglesia |
+| ~~`national_treasurer`~~ | ❌ ELIMINADO | ❌ ELIMINADO | ❌ ELIMINADO | ❌ ELIMINADO | (consolidado → treasurer) |
 
-**Total**: 44 permisos (desde migration 040)
+**Total**: 6 roles activos (migration 053, Oct 2025)
+
+⚠️ **CAMBIO CRÍTICO**: `treasurer` ahora es de alcance NACIONAL, no de iglesia. El pastor maneja las finanzas locales.
 
 **Documentación completa**: Ver [`CORRECT_PERMISSIONS_MODEL.md`](./CORRECT_PERMISSIONS_MODEL.md) y [`MIGRATION_038_VERIFICATION.md`](./MIGRATION_038_VERIFICATION.md)
 
@@ -129,17 +157,21 @@ Todos los usuarios con email `@ipupy.org.py` reciben rol `admin` automáticament
 
 ---
 
-## 🏛️ 2. National Treasurer (Tesorero Nacional)
+## 💰 2. Treasurer (Tesorero Nacional) - CONSOLIDADO
+
+> **⚠️ CAMBIO IMPORTANTE**: El rol `national_treasurer` fue consolidado en `treasurer` (migration 053, Oct 2025).
+> Esta sección describe las capacidades actuales del rol `treasurer` consolidado.
 
 ### Descripción
-Posición electa que supervisa TODOS los fondos nacionales y dirige a todos los fund_directors. Tiene acceso total a los 9 fondos nacionales (vs. fund_director que solo accede 1 fondo).
+Posición electa que supervisa TODOS los fondos nacionales y dirige a todos los fund_directors. Tiene acceso total a los 9 fondos nacionales (vs. fund_director que solo accede 1 fondo). **Alcance nacional** - NO está asignado a una iglesia específica.
 
 ### Alcance
-- **Nacional** - Acceso a TODOS los fondos nacionales
+- **Nacional** - Acceso a TODAS las iglesias y fondos nacionales
 - **Multi-fondo** - Supervisa los 9 fondos nacionales simultáneamente
-- **Supervisión** - Dirige y aprueba trabajo de fund_directors
+- **Aprobación** - Aprueba reportes mensuales de iglesias Y eventos de fondos
+- **churchId** = `null` (no asignado a iglesia específica)
 
-### Permisos
+### Permisos Consolidados
 
 | Permiso | Descripción | Ejemplos de Uso |
 |---------|-------------|-----------------|
@@ -149,57 +181,77 @@ Posición electa que supervisa TODOS los fondos nacionales y dirige a todos los 
 | `events.create` | Crear eventos de fondos nacionales | Planificar nuevo evento nacional |
 | `funds.view` | Ver todos los fondos nacionales | Consultar balances de los 9 fondos |
 | `funds.manage` | Gestionar balances de fondos | Ajustar balances, crear fondos |
-| `transactions.view` | Ver todas las transacciones de fondos | Revisar movimientos de todos los fondos |
+| `transactions.view` | Ver todas las transacciones | Revisar movimientos de todos los fondos |
 | `transactions.create` | Crear transacciones de fondos | Registrar movimientos nacionales |
 | `dashboard.view` | Ver dashboard de tesorería nacional | Panel de control de fondos |
-| `churches.view` | Ver iglesias para contexto | Consultar iglesias relacionadas a eventos |
-| `reports.view` | Ver reportes mensuales | Consultar reportes (solo lectura) |
+| `churches.view` | Ver todas las iglesias | Consultar iglesias |
+| `reports.view` | Ver reportes de todas las iglesias | Consultar reportes mensuales |
+| `reports.approve` | Aprobar reportes de iglesias | Aprobar/rechazar reportes mensuales |
 
 ### Capacidades Clave
+- ✅ Aprobar reportes mensuales de TODAS las iglesias
 - ✅ Aprobar eventos propuestos por CUALQUIER fund_director
 - ✅ Ver y gestionar TODOS los 9 fondos nacionales
 - ✅ Crear y editar eventos de cualquier fondo
 - ✅ Supervisar trabajo de todos los fund_directors
-- ✅ Ver todas las transacciones de fondos
+- ✅ Ver todas las transacciones de fondos Y reportes de iglesias
 - ✅ Dashboard consolidado de tesorería nacional
 - ❌ NO puede gestionar usuarios (solo admin)
-- ❌ NO puede aprobar reportes de iglesias (solo admin)
 - ❌ NO puede modificar configuración del sistema (solo admin)
 
 ### Diferencia con Admin
-| Capacidad | national_treasurer | admin |
-|-----------|:------------------:|:-----:|
+| Capacidad | treasurer | admin |
+|-----------|:---------:|:-----:|
 | Gestionar usuarios | ❌ | ✅ |
 | Configurar sistema | ❌ | ✅ |
-| Aprobar reportes de iglesias | ❌ | ✅ |
-| Gestionar iglesias | ❌ | ✅ |
+| **Aprobar reportes de iglesias** | ✅ | ✅ |
+| Gestionar iglesias (CRUD) | ❌ | ✅ |
 | **Aprobar eventos de fondos** | ✅ | ✅ |
 | **Gestionar todos los fondos** | ✅ | ✅ |
 | **Supervisar fund_directors** | ✅ | ✅ |
 
 ### Diferencia con Fund Director
-| Capacidad | national_treasurer | fund_director |
-|-----------|:------------------:|:-------------:|
-| Fondos accesibles | **TODOS (9)** | Solo 1 asignado |
+| Capacidad | treasurer | fund_director |
+|-----------|:---------:|:-------------:|
+| Fondos accesibles | **TODOS (9)** | Solo fondos asignados |
 | Aprobar eventos | ✅ | ❌ |
 | Ver eventos de otros fondos | ✅ | ❌ |
-| Crear eventos | ✅ | ✅ |
+| Crear eventos | ✅ | ✅ (solo fondos asignados) |
 | Editar eventos de otros | ✅ | ❌ |
+| Aprobar reportes de iglesias | ✅ | ❌ |
+
+### Diferencia con Pastor (Iglesia Local)
+| Capacidad | treasurer (nacional) | pastor (iglesia) |
+|-----------|:--------------------:|:----------------:|
+| Alcance | TODAS las iglesias | SU iglesia |
+| Aprobar reportes | ✅ | ❌ (solo crear) |
+| Ver fondos nacionales | ✅ | ❌ |
+| Crear reportes mensuales | ❌ | ✅ |
+| Registrar transacciones locales | ❌ | ✅ |
 
 ### Usuarios Típicos
-- Tesorero Nacional electo (posición única)
+- Tesorero Nacional electo (posición única, alcance nacional)
 - Supervisor de todos los fondos nacionales
+- Aprobador de reportes mensuales de iglesias
 
-### Flujo de Trabajo Típico
+### Flujos de Trabajo Típicos
+
+**Aprobación de Eventos**:
 1. **Fund_director crea evento**: Propone evento con presupuesto
 2. **Fund_director envía para aprobación**: Status cambia a "submitted"
-3. **National_treasurer revisa**: Evalúa presupuesto y justificación
-4. **National_treasurer aprueba/rechaza**: Cambia status a "approved" o "rejected"
-5. **Post-evento**: Fund_director registra gastos reales
-6. **National_treasurer supervisa**: Revisa variaciones presupuesto vs. real
+3. **Treasurer revisa**: Evalúa presupuesto y justificación
+4. **Treasurer aprueba/rechaza**: Evento aprobado o devuelto
 
-### Nota Importante
-**Migration 040 (2025-10-05)**: Rol creado como posición electa para supervisar fondos nacionales. Nivel 6 en jerarquía, entre admin (7) y fund_director (5).
+**Aprobación de Reportes**:
+1. **Pastor envía reporte mensual**: Con diezmos, ofrendas, comprobante
+2. **Reporte queda pendiente**: Status "pendiente_admin"
+3. **Treasurer revisa**: Valida montos, comprobante de depósito
+4. **Treasurer aprueba**: Status cambia a "procesado"
+
+### Notas de Migración
+- **Migration 040 (2025-01-05)**: Rol `national_treasurer` creado inicialmente (nivel 6)
+- **Migration 053 (2025-10-06)**: Consolidado en rol `treasurer` con alcance nacional
+- **Resultado**: Un solo tesorero nacional vs. dos roles separados (eliminación de redundancia)
 
 ---
 
@@ -285,52 +337,17 @@ Líder de la iglesia local. Gestiona la congregación y supervisalas finanzas.
 
 ---
 
-## 💰 5. Treasurer (Tesorero de Iglesia)
+## 🚫 Rol Eliminado: Treasurer (Tesorero de Iglesia)
 
-### Descripción
-Responsable de las finanzas de la iglesia local. Crea reportes mensuales y registra transacciones de su iglesia.
-
-### Alcance
-- **Iglesia Propia** - Solo su iglesia asignada (CHURCH-LEVEL ONLY)
-- **⚠️ IMPORTANTE**: Los tesoreros de iglesia NO tienen acceso a otras iglesias ni a fondos nacionales
-
-### Permisos
-
-| Permiso | Descripción | Ejemplos de Uso |
-|---------|-------------|-----------------|
-| `reports.create` | Crear reportes mensuales | Nuevo reporte financiero |
-| `reports.edit` | Editar reportes propios | Actualizar montos |
-| `transactions.create` | Crear transacciones | Registrar movimientos de iglesia |
-| `funds.view` | Ver fondos de iglesia | Consultar balances (solo lectura) |
-| `transactions.view` | Ver transacciones | Revisar movimientos de iglesia |
-
-### Capacidades Clave
-- ✅ Crear y editar reportes mensuales de su iglesia
-- ✅ Registrar transacciones de su iglesia local
-- ✅ Ver balances de fondos (solo lectura)
-- ✅ Ver transacciones de su iglesia
-- ❌ NO puede aprobar sus propios reportes mensuales (solo admin)
-- ❌ NO puede ver otras iglesias
-- ❌ NO puede aprobar eventos de fondos nacionales (eso es del national_treasurer)
-- ❌ NO puede crear eventos nacionales (eso es del fund_director)
-
-### Responsabilidades Principales
-1. **Reportes Mensuales**: Crear reporte antes del día 5 de cada mes
-2. **Registro de Transacciones**: Mantener ledger actualizado de su iglesia
-3. **Depósitos Bancarios**: Registrar depósitos del fondo nacional (10%)
-
-### Diferencia con National Treasurer
-| Capacidad | treasurer (Iglesia) | national_treasurer (Nacional) |
-|-----------|:-------------------:|:-----------------------------:|
-| Alcance | **Solo su iglesia** | **Todas las iglesias** |
-| Fondos | Solo lectura | Gestión completa (9 fondos) |
-| Eventos | NO puede aprobar | Aprueba eventos de fondos |
-| Reportes | Crea para su iglesia | Lee todos (no aprueba) |
-| Transacciones | Solo su iglesia | Todas las transacciones |
+> **Estado**: Eliminado en migrations 051-054 (Oct 2025). Las responsabilidades locales ahora recaen en el **pastor** y en el **treasurer** nacional consolidado.
+>
+> - El pastor gestiona la tesorería local (crea y edita reportes, registra transacciones).
+> - El treasurer nacional aprueba reportes y supervisa los fondos para TODAS las iglesias.
+> - No existen usuarios activos con este rol en la base de datos ni en el código (`profiles.role`).
 
 ---
 
-## 📊 6. Church Manager (Gerente de Iglesia)
+## 📊 5. Church Manager (Gerente de Iglesia)
 
 ### Descripción
 Asistente administrativo con acceso de solo lectura a información de la iglesia. Rol de supervisión sin permisos de modificación.
@@ -367,7 +384,7 @@ Asistente administrativo con acceso de solo lectura a información de la iglesia
 
 ---
 
-## 📝 7. Secretary (Secretario de Iglesia)
+## 📝 6. Secretary (Secretario de Iglesia)
 
 ### Descripción
 Asistente administrativo de la iglesia. Gestiona miembros y eventos.

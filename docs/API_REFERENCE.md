@@ -1,5 +1,7 @@
 # API Reference - IPU PY Tesorería
 
+> 🕒 **Historical Snapshot** — The canonical and up-to-date reference now lives in [`docs/api/API_COMPLETE_REFERENCE.md`](./api/API_COMPLETE_REFERENCE.md). Keep this file for context only.
+
 ## Descripción General
 
 Sistema de API serverless construido con Next.js 15 API Routes, optimizado para la gestión financiera de 22 iglesias de la Iglesia Pentecostal Unida del Paraguay.

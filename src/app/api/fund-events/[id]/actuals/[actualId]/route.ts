@@ -57,7 +57,7 @@ function canManageActual(
 ) {
   const isAdmin = auth.role === 'admin';
   const isTreasurer = auth.role === 'treasurer';
-  const isNationalTreasurer = auth.role === 'national_treasurer';
+  const isNationalTreasurer = auth.role === 'treasurer';
   const isFundDirector = auth.role === 'fund_director';
   const isOwner = event.created_by === auth.userId;
   const statusAllowsDirectorEdit = ['draft', 'pending_revision', 'submitted'].includes(event.status);

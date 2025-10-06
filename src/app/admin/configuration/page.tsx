@@ -202,7 +202,7 @@ const ConfigurationPage = (): JSX.Element => {
         editable: false,
       },
       {
-        id: 'national_treasurer',
+        id: 'treasurer',
         name: 'Tesorero Nacional',
         description: 'Supervisa todos los fondos nacionales y aprueba eventos (posición electa)',
         permissions: ['events.approve', 'events.view', 'events.edit', 'events.create', 'funds.view', 'funds.manage', 'transactions.view', 'transactions.create', 'dashboard.view', 'churches.view', 'reports.view'],
@@ -218,15 +218,8 @@ const ConfigurationPage = (): JSX.Element => {
       {
         id: 'pastor',
         name: 'Pastor',
-        description: 'Gestión de iglesia local',
-        permissions: ['church.manage', 'funds.view', 'members.manage', 'reports.create', 'reports.edit'],
-        editable: true,
-      },
-      {
-        id: 'treasurer',
-        name: 'Tesorero de Iglesia',
-        description: 'Gestión financiera de iglesia local',
-        permissions: ['funds.view', 'reports.create', 'reports.edit', 'transactions.create', 'transactions.view'],
+        description: 'Gestión de iglesia local (maneja todo localmente incluyendo finanzas)',
+        permissions: ['church.manage', 'funds.view', 'members.manage', 'reports.create', 'reports.edit', 'transactions.create', 'transactions.view'],
         editable: true,
       },
       {

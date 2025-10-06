@@ -325,7 +325,7 @@ $$ LANGUAGE SQL IMMUTABLE;
 - **Migration 040**: `docs/MIGRATION_040_NATIONAL_TREASURER.md`
 - **User Management**: `docs/USER_MANAGEMENT_GUIDE.md`
 - **Security Model**: `docs/SECURITY.md`
-- **Type Safety**: `docs/TYPE_SAFETY_GUIDE.md`
+- **Type Safety**: `docs/development/TYPE_SAFETY_GUIDE.md`
 
 ---
 

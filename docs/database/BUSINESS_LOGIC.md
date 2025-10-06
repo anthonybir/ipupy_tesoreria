@@ -151,7 +151,7 @@ WHERE id = $2;
 
 **Business Rules**:
 - ✅ Fund director can ONLY create events for assigned funds
-- ✅ Only **admin** or **national_treasurer** can approve events (updated per migrations 038/040)
+- ✅ Only **admin** or **treasurer** can approve events (updated per migrations 038/040, consolidated in 053)
 - ✅ Budget totals calculated automatically (trigger)
 - ✅ Transactions created ONLY on approval
 - ✅ Variance analysis: budget vs actuals

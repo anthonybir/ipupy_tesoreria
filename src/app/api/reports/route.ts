@@ -297,8 +297,8 @@ const handleGetReports = async (request: NextRequest, auth: AuthContext) => {
   const params: unknown[] = [];
 
   // Define role-based access patterns
-  const isNationalRole = auth.role === 'admin' || auth.role === 'national_treasurer';
-  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer' || auth.role === 'church_manager' || auth.role === 'secretary';
+  const isNationalRole = auth.role === 'admin' || auth.role === 'treasurer';
+  const isChurchRole = auth.role === 'pastor' || auth.role === 'church_manager' || auth.role === 'secretary';
   const isFundDirector = auth.role === 'fund_director';
 
   // Church-scoped roles: restrict to own church only
@@ -312,7 +312,7 @@ const handleGetReports = async (request: NextRequest, auth: AuthContext) => {
     params.push(auth.assignedChurches);
     filters.push(`r.church_id = ANY($${params.length}::int[])`);
   }
-  // National roles (admin, national_treasurer): apply optional church filter if provided
+  // National roles (admin, treasurer): apply optional church filter if provided
   else if (isNationalRole && churchFilter !== null) {
     params.push(churchFilter);
     filters.push(`r.church_id = $${params.length}`);
@@ -418,8 +418,9 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
   // Check if user has admin privileges
   const isAdminRole = auth.role === 'admin';
 
-  // Church-level roles that can create reports: pastor and treasurer only
-  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer';
+  // Church-level roles that can create reports: pastor only
+  // Note: treasurer is NATIONAL-scoped (migration 053), not church-level
+  const isChurchRole = auth.role === 'pastor';
 
   // Determine which church this report is for
   const payloadChurchIdRaw = getRecordValue(data, 'church_id');
@@ -504,7 +505,7 @@ const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
   const fotoInforme = await saveBase64Attachment(attachments?.summary, `${attachmentPrefix}-resumen`);
   const fotoDeposito = await saveBase64Attachment(attachments?.deposit, `${attachmentPrefix}-deposito`);
 
-  const isChurchSubmission = auth.role === 'pastor' || auth.role === 'treasurer';
+  const isChurchSubmission = auth.role === 'pastor';
   const isAdminSubmission = isAdminRole;
 
   // Determine submission source based on role and data
@@ -752,7 +753,7 @@ const handleUpdateReport = async (
   const existingMonth = getRecordNumber(existing, 'month', 0);
 
   // Check if user has permission to modify this report
-  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer';
+  const isChurchRole = auth.role === 'pastor';
   const isAdminRole = auth.role === 'admin';
 
 
@@ -873,7 +874,7 @@ const handleUpdateReport = async (
   const hasObservaciones = Object.prototype.hasOwnProperty.call(data, 'observaciones');
   const observacionesUpdate = hasObservaciones ? observacionesPayload : existingObservaciones;
 
-  const isChurchUpdate = auth.role === 'pastor' || auth.role === 'treasurer';
+  const isChurchUpdate = auth.role === 'pastor';
   const submissionTypePayload = getRecordString(data, 'submission_type', '');
   const existingSubmissionType = getRecordString(existing, 'submission_type', '');
   const submissionType = submissionTypePayload || existingSubmissionType || (isChurchUpdate ? 'online' : 'manual');
@@ -1075,7 +1076,7 @@ const handleDeleteReport = async (reportId: number, auth: AuthContext) => {
   const existingChurchId = getRecordNumber(existing, 'church_id', 0);
   const existingEstado = getRecordString(existing, 'estado', '');
   // Check if user has permission to delete this report
-  const isChurchRole = auth.role === 'pastor' || auth.role === 'treasurer';
+  const isChurchRole = auth.role === 'pastor';
   const isAdminRole = auth.role === 'admin';
 
   if (isChurchRole && parseRequiredChurchId(auth.churchId) !== existingChurchId) {

@@ -4,10 +4,10 @@ import { hasFundAccess, type AuthContext } from '@/lib/auth-supabase';
  * Authorization helpers for fund event operations
  *
  * Centralizes permission logic to prevent data leakage and ensure
- * national_treasurer role has proper access to all fund events.
+ * national roles (admin, treasurer) have proper access.
  *
- * @see migrations/040_add_national_treasurer_role.sql - Role definition
- * @see migrations/049_add_national_treasurer_to_rls_policies.sql - RLS policies
+ * @see migrations/053_merge_national_treasurer_into_treasurer.sql - Merged national_treasurer → treasurer
+ * @see migrations/051_restore_treasurer_national_access.sql - Restored treasurer national access
  */
 
 /**
@@ -15,9 +15,9 @@ import { hasFundAccess, type AuthContext } from '@/lib/auth-supabase';
  *
  * Permission hierarchy:
  * - admin: All fund events (level 7)
- * - national_treasurer: All fund events (level 6)
+ * - treasurer: All fund events (level 6) - NATIONAL role
  * - fund_director: Only assigned funds (level 5)
- * - pastor/treasurer/church_manager/secretary: NO ACCESS to national fund events
+ * - pastor/church_manager/secretary: NO ACCESS to national fund events
  *
  * @param auth - Authenticated user context
  * @param fundId - Fund ID to check access for
@@ -28,7 +28,7 @@ export function canViewFundEvent(
   fundId: number
 ): boolean {
   // National-level roles: unrestricted access to all funds
-  if (auth.role === 'admin' || auth.role === 'national_treasurer') {
+  if (auth.role === 'admin' || auth.role === 'treasurer') {
     return true;
   }
 
@@ -37,7 +37,7 @@ export function canViewFundEvent(
     return hasFundAccess(auth, fundId);
   }
 
-  // Church-scoped roles (pastor, treasurer, church_manager, secretary):
+  // Church-scoped roles (pastor, church_manager, secretary):
   // NO ACCESS to national fund events
   return false;
 }
@@ -47,9 +47,9 @@ export function canViewFundEvent(
  *
  * Permission hierarchy:
  * - admin: Can create/edit all fund events (level 7)
- * - national_treasurer: Can create/edit all fund events (level 6)
+ * - treasurer: Can create/edit all fund events (level 6) - NATIONAL role
  * - fund_director: Can create/edit events for assigned funds (level 5)
- * - pastor/treasurer/church_manager/secretary: NO ACCESS
+ * - pastor/church_manager/secretary: NO ACCESS
  *
  * @param auth - Authenticated user context
  * @param fundId - Fund ID to check access for
@@ -68,14 +68,14 @@ export function canMutateFundEvent(
  *
  * Permission hierarchy:
  * - admin: Can approve all fund events (level 7)
- * - national_treasurer: Can approve all fund events (level 6)
+ * - treasurer: Can approve all fund events (level 6) - NATIONAL role
  * - fund_director: CANNOT approve (can only submit for approval)
- * - pastor/treasurer/church_manager/secretary: NO ACCESS
+ * - pastor/church_manager/secretary: NO ACCESS
  *
  * Approval workflow:
  * 1. fund_director creates event (draft)
  * 2. fund_director submits event (submitted)
- * 3. national_treasurer approves event (approved) ← This permission
+ * 3. treasurer approves event (approved) ← This permission
  * 4. System creates ledger transactions
  *
  * @param auth - Authenticated user context
@@ -83,7 +83,7 @@ export function canMutateFundEvent(
  */
 export function canApproveFundEvent(auth: AuthContext): boolean {
   // Only national-level roles can approve fund events
-  return auth.role === 'admin' || auth.role === 'national_treasurer';
+  return auth.role === 'admin' || auth.role === 'treasurer';
 }
 
 /**
@@ -97,7 +97,7 @@ export function canApproveFundEvent(auth: AuthContext): boolean {
 export function hasFundEventAccess(auth: AuthContext): boolean {
   return (
     auth.role === 'admin' ||
-    auth.role === 'national_treasurer' ||
+    auth.role === 'treasurer' ||
     auth.role === 'fund_director'
   );
 }

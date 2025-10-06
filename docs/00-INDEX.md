@@ -4,6 +4,8 @@
 
 Welcome to the IPU PY Tesorería documentation. This index provides a complete navigation guide to all project documentation.
 
+> 📌 **Maintainers**: see [`_meta/DOCUMENTATION_STRUCTURE.md`](./_meta/DOCUMENTATION_STRUCTURE.md) for the directory map and upkeep guidelines.
+
 ---
 
 ## 🚀 Getting Started
@@ -163,7 +165,7 @@ Welcome to the IPU PY Tesorería documentation. This index provides a complete n
 
 ## ♿ Accessibility
 
-- **[Accessibility Restoration Plan](./ACCESSIBILITY_RESTORATION_PLAN.md)** - WCAG 2.1 AA compliance
+- **[Accessibility Restoration Plan](./future-improvements/ACCESSIBILITY_RESTORATION_PLAN.md)** - WCAG 2.1 AA compliance
   - Features removed (Sept 22, 2025)
   - Restoration strategy (3 phases)
   - Screen reader support
@@ -186,7 +188,7 @@ Welcome to the IPU PY Tesorería documentation. This index provides a complete n
 
 ### Type Safety
 
-- **[Type Safety Guide](../docs/TYPE_SAFETY_GUIDE.md)** - TypeScript strict mode patterns
+- **[Type Safety Guide](./development/TYPE_SAFETY_GUIDE.md)** - TypeScript strict mode patterns
   - Common type errors & fixes
   - Strict mode configuration
   - Type definitions
@@ -225,7 +227,7 @@ Welcome to the IPU PY Tesorería documentation. This index provides a complete n
 **Focus on:**
 1. [Components Guide](./COMPONENTS.md)
 2. [BIRHAUS React Patterns](../design_philosophy/BIRHAUS_REACT_PATTERNS.md)
-3. [Accessibility Restoration](./ACCESSIBILITY_RESTORATION_PLAN.md)
+3. [Accessibility Restoration](./future-improvements/ACCESSIBILITY_RESTORATION_PLAN.md)
 4. [Performance Monitoring](./MONITORING.md)
 5. [Testing Strategy](./TESTING.md)
 
@@ -253,7 +255,7 @@ Welcome to the IPU PY Tesorería documentation. This index provides a complete n
 1. [BIRHAUS Principles](../design_philosophy/BIRHAUS_PRINCIPLES.md)
 2. [BIRHAUS React Patterns](../design_philosophy/BIRHAUS_REACT_PATTERNS.md)
 3. [Components Guide](./COMPONENTS.md)
-4. [Accessibility Restoration](./ACCESSIBILITY_RESTORATION_PLAN.md)
+4. [Accessibility Restoration](./future-improvements/ACCESSIBILITY_RESTORATION_PLAN.md)
 
 ---
 
@@ -267,21 +269,21 @@ Welcome to the IPU PY Tesorería documentation. This index provides a complete n
 | **Create database migration** | [Migration Guide](../MIGRATION_GUIDE.md) |
 | **Add new component** | [Components Guide](./COMPONENTS.md) |
 | **Implement RLS policy** | [RLS Policies](./database/RLS_POLICIES.md) |
-| **Fix TypeScript errors** | [Type Safety Guide](../docs/TYPE_SAFETY_GUIDE.md) |
+| **Fix TypeScript errors** | [Type Safety Guide](./development/TYPE_SAFETY_GUIDE.md) |
 | **Deploy to production** | [CI/CD Pipeline](./CI_CD.md) |
 | **Investigate security issue** | [Security Testing](./SECURITY_TESTING.md) |
 | **Optimize performance** | [Performance Monitoring](./MONITORING.md) |
 | **Restore from backup** | [Disaster Recovery](./DISASTER_RECOVERY.md) |
-| **Make UI accessible** | [Accessibility Restoration](./ACCESSIBILITY_RESTORATION_PLAN.md) |
+| **Make UI accessible** | [Accessibility Restoration](./future-improvements/ACCESSIBILITY_RESTORATION_PLAN.md) |
 
 ### Key Principles
 
 | Principle | Documentation |
 |-----------|---------------|
-| **Type Safety** | Strict TypeScript mode ([Type Safety Guide](../docs/TYPE_SAFETY_GUIDE.md)) |
+| **Type Safety** | Strict TypeScript mode ([Type Safety Guide](./development/TYPE_SAFETY_GUIDE.md)) |
 | **Security** | RLS enforcement ([RLS Policies](./database/RLS_POLICIES.md)) |
 | **Performance** | < 2s page load ([Performance Monitoring](./MONITORING.md)) |
-| **Accessibility** | WCAG 2.1 AA ([Accessibility Plan](./ACCESSIBILITY_RESTORATION_PLAN.md)) |
+| **Accessibility** | WCAG 2.1 AA ([Accessibility Plan](./future-improvements/ACCESSIBILITY_RESTORATION_PLAN.md)) |
 | **Design** | BIRHAUS principles ([Design Philosophy](../design_philosophy/BIRHAUS_PRINCIPLES.md)) |
 
 ---

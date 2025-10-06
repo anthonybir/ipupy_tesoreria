@@ -53,7 +53,7 @@ export async function PUT(
 
     const isFundDirector = auth.role === 'fund_director';
     const isAdmin = auth.role === 'admin';
-    const isNationalTreasurer = auth.role === 'national_treasurer';
+    const isNationalTreasurer = auth.role === 'treasurer';
     const isTreasurer = auth.role === 'treasurer';
 
     if (isFundDirector) {
@@ -137,7 +137,7 @@ export async function DELETE(
 
     const isFundDirector = auth.role === 'fund_director';
     const isAdmin = auth.role === 'admin';
-    const isNationalTreasurer = auth.role === 'national_treasurer';
+    const isNationalTreasurer = auth.role === 'treasurer';
     const isTreasurer = auth.role === 'treasurer';
 
     if (isFundDirector) {

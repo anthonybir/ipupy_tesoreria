@@ -240,7 +240,7 @@ All criteria must be met for 100% completion:
 
 - [Comprehensive Plan](../Claude's%20Plan.md) - Full 10-phase plan
 - [DB Helpers Migration Guide](./DB_HELPERS_MIGRATION_GUIDE.md) - Detailed patterns
-- [Type Safety Guide](../TYPE_SAFETY_GUIDE.md) - General patterns (if exists)
+- [Type Safety Guide](../development/TYPE_SAFETY_GUIDE.md) - General patterns (if exists)
 - [CLAUDE.md](../CLAUDE.md) - Project-specific guidance
 
 ---
