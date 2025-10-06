@@ -6,11 +6,15 @@
 
 ## Overview
 
-This directory contains **scaffolded integration tests** for three critical business workflows:
+This directory contains **scaffolded integration tests** for critical business workflows:
 
+### Workflow Tests (`tests/workflows/`)
 1. **report-submission.test.ts** (189 lines) - Monthly report lifecycle
 2. **event-approval.test.ts** (243 lines) - Fund event approval workflow
 3. **fund-transactions.test.ts** (500 lines) - Fund transfers and transactions
+
+### Security Tests (`tests/security/`)
+4. **error-handling.test.ts** (317 lines) - Error handling and security validation (MEDIUM #18)
 
 ## Current State
 
