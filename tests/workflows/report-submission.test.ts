@@ -38,14 +38,14 @@ describe('Report Submission Workflow', () => {
     userId: 'test-treasurer-uuid',
     email: 'treasurer@ipupy.org.py',
     role: 'treasurer',
-    church_id: 0, // Will be set in beforeAll
+    churchId: 0, // Will be set in beforeAll
   };
 
   const adminAuth: AuthContext = {
     userId: 'test-admin-uuid',
     email: 'admin@ipupy.org.py',
     role: 'admin',
-    church_id: null,
+    churchId: null,
   };
 
   beforeAll(async () => {
@@ -56,7 +56,7 @@ describe('Report Submission Workflow', () => {
       RETURNING id
     `);
     testChurchId = churchResult.rows[0]?.['id'] as number;
-    treasurerAuth.church_id = testChurchId;
+    treasurerAuth.churchId = testChurchId;
 
     // Setup test users
     const treasurerResult = await executeWithContext(adminAuth, `
@@ -285,7 +285,7 @@ describe('Report Submission Workflow', () => {
         userId: 'test-pastor-uuid',
         email: 'pastor@ipupy.org.py',
         role: 'pastor',
-        church_id: testChurchId,
+        churchId: testChurchId,
       };
 
       await expect(

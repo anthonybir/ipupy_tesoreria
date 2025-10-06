@@ -39,21 +39,21 @@ describe('Fund Event Approval Workflow', () => {
     userId: 'test-treasurer-uuid',
     email: 'treasurer@ipupy.org.py',
     role: 'treasurer',
-    church_id: 0, // Set in beforeAll
+    churchId: 0, // Set in beforeAll
   };
 
   const nationalTreasurerAuth: AuthContext = {
     userId: 'test-national-treasurer-uuid',
     email: 'national-treasurer@ipupy.org.py',
     role: 'national_treasurer',
-    church_id: null,
+    churchId: null,
   };
 
   const adminAuth: AuthContext = {
     userId: 'test-admin-uuid',
     email: 'admin@ipupy.org.py',
     role: 'admin',
-    church_id: null,
+    churchId: null,
   };
 
   beforeAll(async () => {

@@ -239,11 +239,14 @@ ALTER TABLE funds
 ### [x] 15. Review Migration 029 for Balance Locking
 - **File**: `migrations/029_fix_fund_event_approval_balance.sql`
 - **Reviewed**: Line 42 - Missing FOR UPDATE clause ⚠️
-- **Issue Found**: Fund balance retrieved without row lock
+- **Issue Found**: Fund balance retrieved without row lock in original migration 029
 - **Risk**: Concurrent event approvals create race condition
-- **Fix Created**: `migrations/048_fix_event_approval_locking.sql`
-- **Change**: Added `FOR UPDATE` to `SELECT current_balance FROM funds` (line 47)
-- **Why**: Prevent lost updates when multiple events approved simultaneously
+- **Fix Applied**: `migrations/043_fix_event_approval_balance_check.sql` (already deployed)
+- **Change**: Added `FOR UPDATE` to `SELECT current_balance FROM funds` (line 60)
+- **Additional Fixes in 043**:
+  - IF NOT FOUND check after fund selection (lines 63-65)
+  - Negative balance validation before expense transactions (lines 105-115)
+- **Note**: Migration 048 was redundant (deleted) - all fixes already in migration 043
 
 ---
 
@@ -347,7 +350,7 @@ ALTER TABLE funds
 - ✅ CHECK constraints added (MEDIUM #12 - migration 046)
 - ✅ Report totals GENERATED columns (MEDIUM #13 - migration 047)
 - ✅ Integration test scaffolds created (MEDIUM #14)
-- ✅ Migration 029 locking fixed (MEDIUM #15 - migration 048)
+- ✅ Migration 029 locking fixed (MEDIUM #15 - migration 043, not 048)
 - ✅ API documentation added (MEDIUM #16)
 - ✅ Provider RUC deduplication verified (MEDIUM #17)
 - ✅ Error handling tests scaffolded (MEDIUM #18)

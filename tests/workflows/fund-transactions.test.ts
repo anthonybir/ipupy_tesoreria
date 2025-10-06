@@ -36,7 +36,7 @@ describe('Fund Transaction Workflow', () => {
     userId: 'test-admin-uuid',
     email: 'admin@ipupy.org.py',
     role: 'admin',
-    church_id: null,
+    churchId: null,
   };
 
   beforeAll(async () => {
@@ -131,12 +131,11 @@ describe('Fund Transaction Workflow', () => {
         adminAuth
       );
 
-      // Verify return value
-      expect(result.sourceFundId).toBe(sourceFundId);
-      expect(result.destinationFundId).toBe(destFundId);
-      expect(result.amount).toBe(transferAmount);
-      expect(result.sourceTransactionId).toBeDefined();
-      expect(result.destinationTransactionId).toBeDefined();
+      // Verify return value (matches TransferFundsResult interface)
+      expect(result.transferOutId).toBeDefined();
+      expect(result.transferInId).toBeDefined();
+      expect(result.sourceFundBalance).toBe(sourceBalanceBefore - transferAmount);
+      expect(result.destinationFundBalance).toBe(destBalanceBefore + transferAmount);
 
       // Verify balances updated correctly
       const afterResult = await executeWithContext(adminAuth, `
