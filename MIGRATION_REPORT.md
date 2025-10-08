@@ -1,13 +1,13 @@
 # 🎉 Convex Migration - Environment Variables Setup Complete
 
-**Date**: January 8, 2025  
-**Status**: ✅ **COMPLETE AND READY TO DEPLOY**
+**Date**: October 8, 2025  
+**Status**: ✅ **DEPLOYED TO PRODUCTION (DATA IMPORT PARTIAL)**
 
 ---
 
 ## Executive Summary
 
-Successfully configured all required environment variables for the Convex migration across local development and Vercel production environments. The application is now ready to deploy with full Convex + NextAuth integration.
+Successfully configured all required environment variables for the Convex migration across local development and Vercel production environments, rotated the production NextAuth secret, and repointed the production frontend to the Convex deployment `prod:different-schnauzer-772`. The application is live in production with Convex + NextAuth integration; only the reports/transactions import remains pending due to a `church_id` mapping issue.
 
 ---
 
@@ -26,17 +26,22 @@ Successfully configured all required environment variables for the Convex migrat
 
 ### 2. Vercel Production Environment
 
-**Added to ALL environments** (Production, Preview, Development):
+**Updated across environments** (Production, Preview, Development):
 
 | Variable | Environments | Status |
 |----------|--------------|--------|
-| `NEXT_PUBLIC_CONVEX_URL` | Production, Preview, Development | ✅ Added |
-| `CONVEX_DEPLOYMENT` | Production, Preview, Development | ✅ Added |
-| `NEXTAUTH_SECRET` | Production, Preview, Development | ✅ Added |
+| `NEXT_PUBLIC_CONVEX_URL` | Production, Preview, Development | ✅ Updated |
+| `CONVEX_DEPLOYMENT` | Production, Preview, Development | ✅ Updated |
+| `NEXTAUTH_SECRET` | Production, Preview, Development | ✅ Rotated (prod), ✅ Verified (preview/dev) |
 | `NEXTAUTH_URL` | Production, Development | ✅ Added |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Production, Preview, Development | ✅ Added |
 
-**Total**: 14 new environment variables added across all environments
+**Total**: 14 environment variables verified across all environments (production values refreshed on 2025-10-08)
+
+**Production overrides**:
+- `CONVEX_DEPLOYMENT → prod:different-schnauzer-772`
+- `NEXT_PUBLIC_CONVEX_URL → https://different-schnauzer-772.convex.cloud`
+- `NEXTAUTH_SECRET → PZClyHfHiXS1FRGzdSlHgpNRaE7LtKb6SfNtxpXa0mQ=`
 
 ### 3. Code Updates
 
@@ -65,12 +70,14 @@ Successfully configured all required environment variables for the Convex migrat
 ### Secrets Generated
 
 1. **Development Secret** (local only):
-   - `NEXTAUTH_SECRET=lyN01fGd4URYL57XKVTRrh9vp9ddswJuhdUKL0EabFI=`
+   - `NEXTAUTH_SECRET=[Generate with: openssl rand -base64 32]`
    - Stored in `.env.local` (gitignored)
+   - Never commit to git
 
 2. **Production Secret** (Vercel):
-   - `NEXTAUTH_SECRET=iElqt2xSxZO5KNh1geK6H3JsY52NcCh20ytzz1kWZwk=`
-   - Stored encrypted in Vercel
+   - `NEXTAUTH_SECRET=[Set via Vercel dashboard only]`
+   - Stored encrypted in Vercel (Production scope)
+   - Never commit to git or documentation
 
 ### Security Best Practices Applied
 
@@ -180,12 +187,25 @@ Total: 14 variables across all environments
 ### Deployment-Specific Values
 
 **Production**:
-- `CONVEX_DEPLOYMENT=prod:dashing-clownfish-472`
+- `CONVEX_DEPLOYMENT=prod:different-schnauzer-772`
+- `NEXT_PUBLIC_CONVEX_URL=https://different-schnauzer-772.convex.cloud`
 - `NEXTAUTH_URL=https://ipupytesoreria.vercel.app`
 
 **Preview/Development**:
 - `CONVEX_DEPLOYMENT=dev:dashing-clownfish-472`
+- `NEXT_PUBLIC_CONVEX_URL=https://dashing-clownfish-472.convex.cloud`
 - `NEXTAUTH_URL=http://localhost:3000` (development only)
+
+---
+
+## 📦 Data Migration Status (2025-10-08)
+
+- ✅ 38 churches imported (Supabase parity confirmed via Supabase MCP)
+- ✅ 2 admin profiles imported
+- ✅ 9 funds imported
+- ✅ 179 providers imported
+- ⏳ 326 reports pending re-import (null `church_id` needs transform fix in `scripts/transform-for-convex.ts`)
+- ⏳ Transactions import blocked until reports reprocessed
 
 ---
 
@@ -259,4 +279,3 @@ If issues arise after deployment:
 **Prepared by**: AI Assistant  
 **Date**: January 8, 2025  
 **Review Status**: Ready for deployment
-

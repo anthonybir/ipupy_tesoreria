@@ -19,6 +19,11 @@ data/databases/*.db
 mydatabase.db
 uploads/
 
+# Convex production data exports (NEVER COMMIT)
+convex-data/prod-export/
+convex-data/*-export/
+convex-data/*.zip
+
 # Supabase CLI temporary files
 supabase/.temp/
 supabase/functions/

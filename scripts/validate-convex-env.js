@@ -13,13 +13,13 @@ const requiredVars = {
   // Convex Backend
   'NEXT_PUBLIC_CONVEX_URL': {
     description: 'Convex deployment URL (client-side)',
-    example: 'https://dashing-clownfish-472.convex.cloud',
+    example: 'https://different-schnauzer-772.convex.cloud (prod) or https://dashing-clownfish-472.convex.cloud (dev)',
     required: true,
     public: true
   },
   'CONVEX_DEPLOYMENT': {
     description: 'Convex deployment identifier (server-side)',
-    example: 'dev:dashing-clownfish-472 or prod:dashing-clownfish-472',
+    example: 'dev:dashing-clownfish-472 or prod:different-schnauzer-772',
     required: true,
     public: false
   },
@@ -165,4 +165,3 @@ if (hasErrors) {
   console.log('');
   process.exit(0);
 }
-

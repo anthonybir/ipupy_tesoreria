@@ -1,14 +1,14 @@
 # Convex Migration - Environment Variables Setup Complete ✅
 
-**Date**: 2025-01-08  
-**Status**: ✅ Complete  
+**Date**: 2025-10-08  
+**Status**: ✅ Updated after production deployment  
 **Migration Phase**: Environment Variables Configuration
 
 ---
 
 ## Summary
 
-Successfully configured all required environment variables for the Convex migration in both local development and Vercel production environments.
+Successfully configured all required environment variables for the Convex migration in both local development and Vercel production environments. Production now targets the new Convex deployment `different-schnauzer-772`, and the NextAuth secret was rotated on 2025-10-08 ahead of the go-live cutover.
 
 ---
 
@@ -20,7 +20,7 @@ Added the following variables to `.env.local`:
 
 ```bash
 # NextAuth v5 Configuration
-NEXTAUTH_SECRET=lyN01fGd4URYL57XKVTRrh9vp9ddswJuhdUKL0EabFI=
+NEXTAUTH_SECRET=[Generate with: openssl rand -base64 32]
 NEXTAUTH_URL=http://localhost:3000
 
 # Public Google Client ID for Convex
@@ -37,9 +37,9 @@ Added the following variables to Vercel (all environments: Production, Preview, 
 
 | Variable | Production Value | Preview/Dev Value |
 |----------|-----------------|-------------------|
-| `NEXT_PUBLIC_CONVEX_URL` | `https://dashing-clownfish-472.convex.cloud` | Same |
-| `CONVEX_DEPLOYMENT` | `prod:dashing-clownfish-472` | `dev:dashing-clownfish-472` |
-| `NEXTAUTH_SECRET` | `iElqt2xSxZO5KNh1geK6H3JsY52NcCh20ytzz1kWZwk=` | Same |
+| `NEXT_PUBLIC_CONVEX_URL` | `https://different-schnauzer-772.convex.cloud` | `https://dashing-clownfish-472.convex.cloud` |
+| `CONVEX_DEPLOYMENT` | `prod:different-schnauzer-772` | `dev:dashing-clownfish-472` |
+| `NEXTAUTH_SECRET` | `[REDACTED - Set via Vercel dashboard]` | `[REDACTED - Set in .env.local]` |
 | `NEXTAUTH_URL` | `https://ipupytesoreria.vercel.app` | `http://localhost:3000` |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | `44786170581-apr8ukthgnp6dku7rkjh90kfruc2sf8t.apps.googleusercontent.com` | Same |
 
@@ -156,13 +156,15 @@ All Supabase variables remain in place during the transition:
 
 ### Secrets Generated
 
-1. **Development NEXTAUTH_SECRET**: `lyN01fGd4URYL57XKVTRrh9vp9ddswJuhdUKL0EabFI=`
-   - Used in `.env.local` only
+1. **Development NEXTAUTH_SECRET**: `[Generate with: openssl rand -base64 32]`
+   - Used in `.env.local` and Vercel Preview/Development
    - Not committed to git
+   - Store only in `.env.local` (gitignored)
 
-2. **Production NEXTAUTH_SECRET**: `iElqt2xSxZO5KNh1geK6H3JsY52NcCh20ytzz1kWZwk=`
-   - Stored in Vercel environment variables
+2. **Production NEXTAUTH_SECRET**: `[Set via Vercel dashboard only]`
+   - Stored in Vercel production environment variables
    - Encrypted at rest
+   - Never commit to git or documentation
 
 ### Best Practices Applied
 
@@ -236,4 +238,3 @@ If you encounter any issues:
 **Migration Status**: ✅ Environment Variables Complete  
 **Next Phase**: Test deployment and verify authentication flow  
 **Estimated Time to Production**: Ready to deploy
-

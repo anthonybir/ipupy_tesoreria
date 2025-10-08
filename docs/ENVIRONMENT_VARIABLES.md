@@ -1,6 +1,6 @@
 # Environment Variables Reference
 
-**Last Updated**: 2025-01-08  
+**Last Updated**: 2025-10-08  
 **Architecture**: Next.js 15 + Convex + NextAuth v5
 
 ---
@@ -19,6 +19,12 @@ This document provides a complete reference for all environment variables used i
 
 ## Quick Start
 
+> ℹ️ **Current production values (verified 2025-10-08)**  
+> `CONVEX_DEPLOYMENT=prod:different-schnauzer-772`  
+> `NEXT_PUBLIC_CONVEX_URL=https://different-schnauzer-772.convex.cloud`  
+> `NEXTAUTH_SECRET=PZClyHfHiXS1FRGzdSlHgpNRaE7LtKb6SfNtxpXa0mQ=`  
+> `GOOGLE_CLIENT_ID=44786170581-apr8ukthgnp6dku7rkjh90kfruc2sf8t.apps.googleusercontent.com`
+
 ### Development Setup
 
 ```bash
@@ -29,8 +35,8 @@ cp .env.example .env.local
 nano .env.local
 
 # Required for development
-CONVEX_DEPLOYMENT=dev:your-deployment-name
-NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
+CONVEX_DEPLOYMENT=dev:dashing-clownfish-472
+NEXT_PUBLIC_CONVEX_URL=https://dashing-clownfish-472.convex.cloud
 NEXTAUTH_SECRET=your-secret-key-minimum-32-characters
 NEXTAUTH_URL=http://localhost:3000
 GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
@@ -61,7 +67,7 @@ vercel env add GOOGLE_CLIENT_SECRET
 - **Type**: Server-side only
 - **Format**: `dev:deployment-name` or `prod:deployment-name`
 - **Used by**: Convex CLI, deployment scripts
-- **Example**: `dev:happy-animal-123`
+- **Example**: `dev:dashing-clownfish-472` (development) / `prod:different-schnauzer-772` (production)
 - **How to get**:
   ```bash
   npx convex dev
@@ -72,7 +78,7 @@ vercel env add GOOGLE_CLIENT_SECRET
 - **Type**: Client-side (public)
 - **Format**: `https://[deployment-name].convex.cloud`
 - **Used by**: Frontend React components, Convex client
-- **Example**: `https://happy-animal-123.convex.cloud`
+- **Example**: `https://dashing-clownfish-472.convex.cloud` (development) / `https://different-schnauzer-772.convex.cloud` (production)
 - **How to get**:
   ```bash
   npx convex dev

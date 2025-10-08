@@ -228,10 +228,10 @@ middleware.ts → getToken() from next-auth/jwt
 
 ### Required in Production (Vercel)
 ```bash
-# ✅ Verified configured as of 2025-01-08
-CONVEX_DEPLOYMENT=prod:dashing-clownfish-472
-NEXT_PUBLIC_CONVEX_URL=https://dashing-clownfish-472.convex.cloud
-NEXTAUTH_SECRET=<your-secret-32-chars-min>
+# ✅ Verified configured as of 2025-10-08
+CONVEX_DEPLOYMENT=prod:different-schnauzer-772
+NEXT_PUBLIC_CONVEX_URL=https://different-schnauzer-772.convex.cloud
+NEXTAUTH_SECRET=<your-secret-32-chars-min> # rotated to PZClyHfHiXS1FRGzdSlHgpNRaE7LtKb6SfNtxpXa0mQ=
 NEXTAUTH_URL=https://ipupytesoreria.vercel.app
 GOOGLE_CLIENT_ID=<your-client-id>.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=<your-client-secret>

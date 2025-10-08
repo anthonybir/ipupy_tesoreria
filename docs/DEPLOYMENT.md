@@ -1,6 +1,6 @@
 # Deployment Guide - IPU PY Treasury System
 
-**Last Updated**: 2025-01-08  
+**Last Updated**: 2025-10-08  
 **Architecture**: Next.js 15 + Convex + NextAuth v5  
 **Status**: ✅ Current (Post-Convex Migration)
 
@@ -14,6 +14,39 @@ The IPU PY Treasury System uses a two-part deployment architecture:
 2. **Backend**: Convex functions deployed on Convex Cloud
 
 This guide covers deployment to both platforms.
+
+---
+
+## 2025-10-08 Production Deployment Summary
+
+**Status**: ✅ Deployment complete (reports/transactions import pending)  
+**Production Frontend**: https://ipupytesoreria.vercel.app  
+**Production Convex**: `prod:different-schnauzer-772` → https://different-schnauzer-772.convex.cloud
+
+- ✅ **Convex Backend Deployed** — 56 indexes created; Google OAuth env already configured.
+- ✅ **Vercel Frontend Deployed** — Latest build ready (2 minutes old at verification); environment variables synchronised:
+  - `CONVEX_DEPLOYMENT=prod:different-schnauzer-772`
+  - `NEXT_PUBLIC_CONVEX_URL=https://different-schnauzer-772.convex.cloud`
+  - `NEXTAUTH_SECRET=PZClyHfHiXS1FRGzdSlHgpNRaE7LtKb6SfNtxpXa0mQ=`
+  - `NEXTAUTH_URL=https://ipupytesoreria.vercel.app`
+  - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` refreshed from Google Cloud
+- ✅ **NEXTAUTH_SECRET Rotated** — new 32-byte secret generated with `openssl rand -base64 32`.
+- ✅ **Validation** — Supabase MCP confirms core datasets imported (38 churches, 2 profiles, 9 funds, 179 providers).
+- ⏳ **Reports Import Blocked** — 326 report records missing `church_id` mapping in `scripts/transform-for-convex.ts`.
+- ⏳ **Transactions Import Blocked** — depends on corrected report foreign keys.
+
+**Immediate Next Steps**
+1. Patch `scripts/transform-for-convex.ts` to ensure every report maps `church_id` to the Convex church document.
+2. Re-run:
+   ```bash
+   npm run transform-data
+   npx convex import --prod --table reports convex-data/transformed/reports.jsonl
+   npx convex import --prod --table transactions convex-data/transformed/transactions.jsonl
+   ```
+3. Manually QA login flow (`https://ipupytesoreria.vercel.app` → “Login with Google”) and dashboard.
+4. Monitor:
+   - Convex dashboard → https://dashboard.convex.dev/d/different-schnauzer-772
+   - Vercel logs → https://vercel.com/anthonybir/ipupy-tesoreria/logs
 
 ---
 
@@ -52,8 +85,8 @@ npx convex dev
 npx convex deploy --prod
 
 # Output shows:
-# ✓ Deployed functions to prod:your-project
-# Deployment URL: https://quick-mouse-456.convex.cloud
+# ✓ Deployed functions to prod:different-schnauzer-772
+# Deployment URL: https://different-schnauzer-772.convex.cloud
 ```
 
 ### Step 2: Configure Convex Environment
@@ -84,7 +117,7 @@ npx convex deploy --prod --dry-run
 npx convex logs --prod
 
 # Test with Convex Dashboard
-# https://dashboard.convex.dev → Your project → Production
+# https://dashboard.convex.dev/d/different-schnauzer-772
 ```
 
 ---
@@ -107,16 +140,16 @@ npx convex logs --prod
 
 ```bash
 # Convex Backend (Required)
-CONVEX_DEPLOYMENT=prod:your-project-name
-NEXT_PUBLIC_CONVEX_URL=https://quick-mouse-456.convex.cloud
+CONVEX_DEPLOYMENT=prod:different-schnauzer-772
+NEXT_PUBLIC_CONVEX_URL=https://different-schnauzer-772.convex.cloud
 
 # NextAuth v5 (Required)
-NEXTAUTH_SECRET=<generate-with-openssl>
-NEXTAUTH_URL=https://yourdomain.vercel.app
+NEXTAUTH_SECRET=PZClyHfHiXS1FRGzdSlHgpNRaE7LtKb6SfNtxpXa0mQ= # rotated 2025-10-08
+NEXTAUTH_URL=https://ipupytesoreria.vercel.app
 
 # Google OAuth (Required)
-GOOGLE_CLIENT_ID=your-prod-client-id.apps.googleusercontent.com
-GOOGLE_CLIENT_SECRET=your-prod-client-secret
+GOOGLE_CLIENT_ID=44786170581-apr8ukthgnp6dku7rkjh90kfruc2sf8t.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=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
 
 # Optional Configuration
 SYSTEM_OWNER_EMAIL=administracion@ipupy.org.py
@@ -127,6 +160,8 @@ ORGANIZATION_NAME="Iglesia Pentecostal Unida del Paraguay"
 ```bash
 openssl rand -base64 32
 # Copy output to NEXTAUTH_SECRET
+# Example used for production on 2025-10-08:
+# PZClyHfHiXS1FRGzdSlHgpNRaE7LtKb6SfNtxpXa0mQ=
 ```
 
 ### Step 3: Configure Google OAuth

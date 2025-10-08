@@ -4,10 +4,62 @@ import path from 'path';
 
 const INPUT_DIR = './convex-data';
 const OUTPUT_DIR = './convex-data/transformed';
+const CONVEX_EXPORT_DIR = './convex-data/prod-export';
 
 // ID Mapping (SQL → Church Name for lookup)
 // We'll use church name as the stable identifier since Convex will generate new IDs
 const churchIdToName = new Map<number, string>();
+
+let convexChurchIdMap = new Map<number, string>();
+let convexFundIdMap = new Map<number, string>();
+let convexProviderIdMap = new Map<number, string>();
+let convexReportIdMap = new Map<number, string>();
+
+function loadConvexIdMap(table: string): Map<number, string> {
+  const map = new Map<number, string>();
+  const exportPath = path.join(CONVEX_EXPORT_DIR, table, 'documents.jsonl');
+
+  if (!fs.existsSync(exportPath)) {
+    console.warn(`⚠️  Convex export not found for ${table}: ${exportPath}`);
+    return map;
+  }
+
+  const contents = fs.readFileSync(exportPath, 'utf-8');
+  const lines = contents.split('\n').filter(Boolean);
+
+  for (const line of lines) {
+    try {
+      const doc = JSON.parse(line);
+      if (doc.supabase_id === undefined || !doc._id) continue;
+      const supabaseId = Number(doc.supabase_id);
+      if (!Number.isNaN(supabaseId)) {
+        map.set(supabaseId, doc._id as string);
+      }
+    } catch (error) {
+      console.warn(`⚠️  Failed to parse ${table} export line: ${(error as Error).message}`);
+    }
+  }
+
+  return map;
+}
+
+function requireMapping(map: Map<number, string>, supabaseId: number, label: string): string {
+  const convexId = map.get(supabaseId);
+  if (!convexId) {
+    throw new Error(`Missing Convex ID for ${label} (supabase_id=${supabaseId})`);
+  }
+  return convexId;
+}
+
+function optionalMapping(map: Map<number, string>, supabaseId: number | null | undefined, label: string): string | undefined {
+  if (supabaseId === null || supabaseId === undefined) return undefined;
+  const convexId = map.get(supabaseId);
+  if (!convexId) {
+    console.warn(`⚠️  Missing Convex ID for optional ${label} (supabase_id=${supabaseId})`);
+    return undefined;
+  }
+  return convexId;
+}
 
 // Helper: Convert timestamp to Unix ms
 function toUnixMs(dateString: string | null | undefined): number | undefined {
@@ -89,7 +141,7 @@ function transformProfiles(data: any[]): any[] {
     user_id: row.id, // UUID from Supabase auth
     email: row.email,
     role: row.role || "secretary",
-    church_id: row.church_id ? `_church_${churchIdToName.get(row.church_id)}` : undefined,
+    church_id: optionalMapping(convexChurchIdMap, row.church_id ?? undefined, 'profile.church_id'),
     full_name: row.full_name || undefined,
     active: row.active ?? true,
     created_at: toUnixMs(row.created_at) || Date.now(),
@@ -100,16 +152,12 @@ function transformProfiles(data: any[]): any[] {
 // Transform reports (depends on churches)
 function transformReports(data: any[]): any[] {
   return data.map(row => {
-    const churchName = churchIdToName.get(row.church_id);
-    if (!churchName) {
-      console.warn(`⚠️  Report ${row.id} references missing church ${row.church_id}`);
-    }
+    const supabaseChurchId = Number(row.church_id);
+    const churchId = requireMapping(convexChurchIdMap, supabaseChurchId, 'report.church_id');
 
     return {
       supabase_id: row.id,
-      // Store church name for post-import reference update
-      temp_church_name: churchName || `unknown_${row.church_id}`,
-      // church_id will be set in post-import script
+      church_id: churchId,
 
       month: row.month,
       year: row.year,
@@ -212,17 +260,18 @@ function transformReports(data: any[]): any[] {
 // Transform transactions (depends on churches, reports, funds, providers)
 function transformTransactions(data: any[]): any[] {
   return data.map(row => {
-    const churchName = row.church_id ? churchIdToName.get(row.church_id) : null;
+    const fundId = requireMapping(convexFundIdMap, Number(row.fund_id), 'transaction.fund_id');
+    const churchId = optionalMapping(convexChurchIdMap, row.church_id ?? undefined, 'transaction.church_id');
+    const providerId = optionalMapping(convexProviderIdMap, row.provider_id ?? undefined, 'transaction.provider_id');
+    const reportId = optionalMapping(convexReportIdMap, row.report_id ?? undefined, 'transaction.report_id');
 
     return {
       supabase_id: row.id,
       date: toUnixMs(row.date) || Date.now(),
-      // Store reference data for post-import FK resolution (undefined if null)
-      temp_church_name: churchName || undefined,
-      temp_report_supabase_id: row.report_id || undefined,
-      temp_fund_supabase_id: row.fund_id || undefined,
-      temp_provider_supabase_id: row.provider_id || undefined,
-      // FKs will be set in post-import script
+      church_id: churchId,
+      fund_id: fundId,
+      provider_id: providerId,
+      report_id: reportId,
       concept: row.concept,
       provider: row.provider || undefined,
       document_number: row.document_number || undefined,
@@ -263,6 +312,22 @@ async function main() {
 
   const reports = JSON.parse(fs.readFileSync(path.join(INPUT_DIR, 'reports.json'), 'utf-8'));
   const transactions = JSON.parse(fs.readFileSync(path.join(INPUT_DIR, 'transactions.json'), 'utf-8'));
+
+  // Load Convex ID mappings from latest production export
+  convexChurchIdMap = loadConvexIdMap('churches');
+  convexFundIdMap = loadConvexIdMap('funds');
+  convexProviderIdMap = loadConvexIdMap('providers');
+  convexReportIdMap = loadConvexIdMap('reports');
+
+  if (convexChurchIdMap.size === 0) {
+    throw new Error('Convex church mapping not found. Run `npx convex export --prod --path convex-data/prod-export.zip` before transforming.');
+  }
+  if (convexFundIdMap.size === 0) {
+    throw new Error('Convex fund mapping not found. Ensure convex-data/prod-export/funds/documents.jsonl exists.');
+  }
+  if (convexProviderIdMap.size === 0) {
+    console.warn('⚠️  Convex provider mapping is empty; provider_id fields may be unset.');
+  }
 
   // Transform in dependency order
   console.log('\n📊 Transforming churches...');
@@ -334,13 +399,12 @@ async function main() {
   console.log(`   - Profiles: ${profiles.length}`);
   console.log(`   - Reports: ${transformedReports.length}`);
   console.log(`   - Transactions: ${transformedTransactions.length}`);
-  console.log('\n⚠️  IMPORTANT: Foreign key references use placeholder format:');
-  console.log('   - church_id: "_church_IPU LAMBARÉ"');
-  console.log('   - fund_id: "_fund_2"');
-  console.log('   - report_id: "_report_123"');
-  console.log('\n📌 You will need to update these references after import using Convex queries.');
-  console.log('\nNext step: Import to Convex');
-  console.log('   npx convex import --table churches convex-data/transformed/churches.jsonl');
+  console.log('\n✅ Foreign keys mapped to production Convex IDs using convex-data/prod-export.');
+  console.log('\nNext steps:');
+  console.log('   1. Import reports into production:');
+  console.log('      npx convex import --prod --table reports convex-data/transformed/reports.jsonl');
+  console.log('   2. Import transactions once reports succeed:');
+  console.log('      npx convex import --prod --table transactions convex-data/transformed/transactions.jsonl');
 }
 
 main().catch(console.error);

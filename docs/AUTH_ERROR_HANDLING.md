@@ -183,10 +183,10 @@ NODE_ENV=development
 
 ### Production (Vercel Dashboard)
 ```bash
-# ✅ Verified as of 2025-01-08
-CONVEX_DEPLOYMENT=prod:dashing-clownfish-472
-NEXT_PUBLIC_CONVEX_URL=https://dashing-clownfish-472.convex.cloud
-NEXTAUTH_SECRET=<your-production-secret>
+# ✅ Verified as of 2025-10-08
+CONVEX_DEPLOYMENT=prod:different-schnauzer-772
+NEXT_PUBLIC_CONVEX_URL=https://different-schnauzer-772.convex.cloud
+NEXTAUTH_SECRET=<your-production-secret> # rotated to PZClyHfHiXS1FRGzdSlHgpNRaE7LtKb6SfNtxpXa0mQ=
 NEXTAUTH_URL=https://ipupytesoreria.vercel.app
 GOOGLE_CLIENT_ID=<your-google-client-id>
 GOOGLE_CLIENT_SECRET=<your-google-client-secret>
@@ -238,7 +238,7 @@ NODE_ENV=production
 
 #### Convex Connection Status
 - [ ] Look for Convex websocket connection in Network tab (WS filter)
-- [ ] Should see `wss://dashing-clownfish-472.convex.cloud/_ws`
+- [ ] Should see `wss://different-schnauzer-772.convex.cloud/_ws`
 - [ ] No "Reconectando con el servidor de Convex…" banner should appear
 - [ ] If banner appears, check console for auth errors
 

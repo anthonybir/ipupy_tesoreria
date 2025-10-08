@@ -35,16 +35,23 @@ export interface AuthContext {
 
 /**
  * Get authenticated user identity from Convex context
- * 
+ *
  * @throws Error if user is not authenticated
  */
-export async function getUserIdentity(ctx: QueryCtx | MutationCtx) {
+export async function getUserIdentity(
+  ctx: QueryCtx | MutationCtx
+): Promise<{
+  subject: string;
+  email?: string | undefined;
+  name?: string | undefined;
+  [key: string]: unknown;
+}> {
   const identity = await ctx.auth.getUserIdentity();
-  
+
   if (!identity) {
     throw new Error("No autenticado");
   }
-  
+
   return identity;
 }
 

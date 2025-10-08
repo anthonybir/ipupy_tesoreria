@@ -6,7 +6,10 @@
         "-y",
         "convex@latest",
         "mcp",
-        "start"
+        "start",
+        "--dangerously-enable-production-deployments",
+        "--project-dir",
+        "/Users/anthonybir/Desktop/IPUPY_Tesoreria"
       ]
     }
   }
