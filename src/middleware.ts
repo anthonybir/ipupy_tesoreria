@@ -46,7 +46,14 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
     throw new Error("NEXTAUTH_SECRET is not configured");
   }
 
-  const token = await getToken({ req: request, secret });
+  const proto = request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol;
+  const secureCookie = proto?.includes("https") ?? false;
+
+  const token = await getToken({
+    req: request,
+    secret,
+    secureCookie,
+  });
 
   if (!token) {
     if (pathname.startsWith("/api/")) {
