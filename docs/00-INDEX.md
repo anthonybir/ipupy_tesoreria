@@ -1,10 +1,11 @@
-# Documentation Index - IPU PY Tesorería
+# 📚 Documentation Index - IPU PY Tesorería
 
-## 📚 Complete Documentation Map
+**Consolidated Documentation Structure** (October 2025)
 
-Welcome to the IPU PY Tesorería documentation. This index provides a complete navigation guide to all project documentation.
+Welcome to the IPU PY Tesorería documentation. This index provides navigation to all essential project documentation.
 
-> 📌 **Maintainers**: see [`_meta/DOCUMENTATION_STRUCTURE.md`](./_meta/DOCUMENTATION_STRUCTURE.md) for the directory map and upkeep guidelines.
+> 📦 **Archive**: Historical documentation (audits, migrations, status reports) moved to [`archive/`](./archive/README.md)
+> 🎯 **Focus**: 25 essential files for current development
 
 ---
 
@@ -12,250 +13,228 @@ Welcome to the IPU PY Tesorería documentation. This index provides a complete n
 
 ### Essential Reading (Start Here)
 
-1. **[README.md](../README.md)** - Project overview, quick start guide
-2. **[CLAUDE.md](../CLAUDE.md)** - Development guide for AI assistants
-3. **[CONTRIBUTING.md](../CONTRIBUTING.md)** - How to contribute to the project
-4. **[CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md)** - Community guidelines
+1. **[README.md](./README.md)** - Project overview & quick start
+2. **[QUICK_START.md](./QUICK_START.md)** - Setup guide for developers
+3. **[DEVELOPER_GUIDE.md](./DEVELOPER_GUIDE.md)** - Development patterns & best practices
 
 ---
 
-## 🏗️ Architecture & Design
+## 🏗️ Core Documentation
 
-### Design Philosophy
+### Architecture & System Design
 
-- **[BIRHAUS Principles](../design_philosophy/BIRHAUS_PRINCIPLES.md)** - 10 core design principles
-  - Form Serves Flow
-  - Honest Data Presentation
-  - One Clear Action
-  - Progressive Disclosure
-  - Undo Over Confirm
-  - Accessibility = Dignity
-  - Bilingual by Design
-  - Performance is UX
-  - Consistency via Tokens
-  - Auditability & Transparency
+- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Complete system architecture
+  - Next.js 15 + Convex + NextAuth v5
+  - OIDC bridge integration
+  - Real-time subscriptions
+  - Deployment architecture
 
-- **[BIRHAUS React Patterns](../design_philosophy/BIRHAUS_REACT_PATTERNS.md)** - Practical Next.js/React implementations
-  - Component patterns for each principle
-  - Server/Client component strategies
-  - TypeScript patterns
-  - Testing patterns
+- **[CONVEX_SCHEMA.md](./CONVEX_SCHEMA.md)** - Database schema (TypeScript-first)
+  - Document collections
+  - Indexes & queries
+  - Type safety patterns
+  - Legacy ID compatibility
 
-### Database
+- **[database/README.md](./database/README.md)** - Database guide
+  - Document database concepts
+  - Query patterns
+  - Authorization in code
 
-- **[Schema Reference](./database/SCHEMA_REFERENCE.md)** - Complete database documentation
-  - 45+ tables documented
-  - Relationships & foreign keys
-  - Indexes & performance
-  - Data types & conventions
-  - Migration history
-
-- **[RLS Policies](./database/RLS_POLICIES.md)** - Row Level Security documentation
-  - Session context system
-  - RLS helper functions
-  - Policy catalog (all tables)
-  - Role permission matrix
-  - Security best practices
-  - Troubleshooting guide
-
-- **[Business Logic](./database/BUSINESS_LOGIC.md)** - Workflows & data relationships
-  - Monthly report submission
+- **[database/BUSINESS_LOGIC.md](./database/BUSINESS_LOGIC.md)** - Business rules
+  - Monthly report workflows
   - Fund event planning
   - Transaction ledger
   - Provider registry
-  - User management
-  - Data integrity rules
 
 ---
 
 ## 💻 Development
 
-### Component Library
+### Development Guides
 
-- **[Components Guide](./COMPONENTS.md)** - Complete component documentation
-  - UI Foundation (shadcn/ui)
-  - Shared components
-  - Layout components
-  - Feature components
+- **[DEVELOPER_GUIDE.md](./DEVELOPER_GUIDE.md)** - Development patterns
+  - TypeScript strict mode
   - Component patterns
-  - Styling conventions
-  - Testing strategies
+  - API route patterns
+  - Convex function patterns
 
-### API Documentation
-
-- **[API Reference](./API_REFERENCE.md)** - REST API endpoints *(to be enhanced)*
-  - Authentication endpoints
-  - Report endpoints
-  - Fund endpoints
-  - Church endpoints
-  - Admin endpoints
-  - Request/response examples
-
-### Testing
-
-- **[Testing Strategy](./TESTING.md)** - Comprehensive testing guide
-  - Manual testing checklist
-  - Authentication & authorization tests
-  - RLS testing
-  - Financial operations testing
-  - Browser compatibility
-  - Future automated testing plans
-
-- **[Security Testing](./SECURITY_TESTING.md)** - Security test scenarios
-  - Authentication & authorization tests
-  - RLS bypass attempts
-  - Input validation (SQL injection, XSS)
-  - Session security
-  - Data exposure tests
-  - CSRF & CORS
-  - Penetration testing checklist
-
----
-
-## 🔒 Security
-
-### Security Documentation
-
-- **[Security Audit (Sept 28, 2025)](../SECURITY_AUDIT_2025-09-28.md)** - Latest security audit
-- **[RLS Policies](./database/RLS_POLICIES.md)** - Database-level security
-- **[Security Testing](./SECURITY_TESTING.md)** - Test scenarios & tools
-
-### Security Fixes
-
-- **RLS Fallback Vulnerability** (Oct 2025) - Fixed in `src/lib/db-context.ts`
-  - Changed `app_current_user_role()` default from `'viewer'` to `''`
-  - Prevents unauthenticated users from getting viewer-level access
-
----
-
-## 🚢 Operations
-
-### Deployment & CI/CD
-
-- **[CI/CD Pipeline](./CI_CD.md)** - Continuous integration & deployment
-  - Pre-commit hooks (Husky)
-  - GitHub Actions (planned)
-  - Vercel deployment
-  - Environment variables
-  - Rollback procedures
-
-### Monitoring & Performance
-
-- **[Performance Monitoring](./MONITORING.md)** - Performance guide
-  - Core Web Vitals targets
-  - Monitoring stack (Vercel, Supabase)
-  - Optimization strategies
-  - Database performance
-  - Frontend optimization
-  - Performance tools
-
-- **[Performance Optimization (Sept 28, 2025)](../PERFORMANCE_OPTIMIZATION_2025-09-28.md)** - Optimization report
-
-### Disaster Recovery
-
-- **[Disaster Recovery Plan](./DISASTER_RECOVERY.md)** - Backup & recovery procedures
-  - RTO/RPO targets
-  - Backup strategy
-  - Recovery scenarios
-  - Escalation procedures
-  - Communication plan
-  - Testing & drills
-
----
-
-## ♿ Accessibility
-
-- **[Accessibility Restoration Plan](./future-improvements/ACCESSIBILITY_RESTORATION_PLAN.md)** - WCAG 2.1 AA compliance
-  - Features removed (Sept 22, 2025)
-  - Restoration strategy (3 phases)
-  - Screen reader support
-  - Keyboard navigation
-  - Focus management
-  - Testing plan
-  - Implementation timeline
-
----
-
-## 📖 Additional Documentation
-
-### Migration Guides
-
-- **[Migration Guide](../MIGRATION_GUIDE.md)** - Database migration procedures
-  - Migration numbering system
-  - How to create migrations
-  - Testing migrations
-  - Rollback procedures
-
-### Type Safety
-
-- **[Type Safety Guide](./development/TYPE_SAFETY_GUIDE.md)** - TypeScript strict mode patterns
+- **[TYPE_SAFETY_GUIDE.md](./TYPE_SAFETY_GUIDE.md)** - TypeScript patterns
   - Common type errors & fixes
   - Strict mode configuration
   - Type definitions
   - Best practices
 
-### Historical Documents
+- **[COMMON_TASKS.md](./COMMON_TASKS.md)** - How-to guides
+  - Adding API routes
+  - Creating Convex functions
+  - Building UI components
+  - Testing features
 
-- **[Security Audit (Sept 28, 2025)](../SECURITY_AUDIT_2025-09-28.md)**
-- **[Performance Optimization (Sept 28, 2025)](../PERFORMANCE_OPTIMIZATION_2025-09-28.md)**
-- **[Fix Logs (various)](../fix_*.md)** - Historical bug fix documentation
+- **[TROUBLESHOOTING.md](./TROUBLESHOOTING.md)** - Common issues
+  - Convex auth errors
+  - TypeScript errors
+  - Real-time subscription issues
+  - Auth issues
+
+### Component Library
+
+- **[COMPONENTS.md](./COMPONENTS.md)** - UI component documentation
+  - shadcn/ui components
+  - Shared components
+  - Feature components
+  - Component patterns
+
+### API & Testing
+
+- **[API_REFERENCE.md](./API_REFERENCE.md)** - API documentation
+  - Convex functions
+  - REST API endpoints
+  - Request/response examples
+
+- **[TESTING.md](./TESTING.md)** - Testing guide
+  - Manual testing checklist
+  - Authorization testing
+  - Financial operations testing
+  - Browser compatibility
 
 ---
 
-## 📁 Documentation by Audience
+## 🔒 Security
 
-### For New Developers
+- **[SECURITY.md](./SECURITY.md)** - Complete security architecture
+  - NextAuth v5 + Google OAuth
+  - OIDC bridge for Convex
+  - Code-based authorization patterns
+  - Role-based access control (6 roles)
+  - Audit logging
+  - Security best practices
 
-**Start with:**
-1. [README.md](../README.md) - Project overview
-2. [CLAUDE.md](../CLAUDE.md) - Development setup
-3. [CONTRIBUTING.md](../CONTRIBUTING.md) - Contribution workflow
-4. [Components Guide](./COMPONENTS.md) - UI library
-5. [Database Schema](./database/SCHEMA_REFERENCE.md) - Data model
+---
 
-### For Backend Developers
+## 🚢 Operations
+
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Deployment guide
+  - Convex deployment
+  - Vercel deployment
+  - Environment variables
+  - Rollback procedures
+
+- **[CI_CD.md](./CI_CD.md)** - CI/CD pipeline
+  - Pre-commit hooks (Husky)
+  - GitHub Actions (planned)
+  - Automated testing
+
+- **[MONITORING.md](./MONITORING.md)** - Performance monitoring
+  - Core Web Vitals targets
+  - Monitoring stack (Vercel, Convex Dashboard)
+  - Optimization strategies
+
+- **[DISASTER_RECOVERY.md](./DISASTER_RECOVERY.md)** - Backup & recovery
+  - RTO/RPO targets
+  - Backup strategy
+  - Recovery scenarios
+  - Escalation procedures
+
+---
+
+## 🎯 Features
+
+- **[features/FUND_EVENTS.md](./features/FUND_EVENTS.md)** - Event budgeting system
+  - Budget planning with line items
+  - Actual income/expense tracking
+  - Treasurer approval workflow
+  - Variance analysis
+
+- **[features/MONTHLY_REPORTS.md](./features/MONTHLY_REPORTS.md)** - Financial reports
+  - Monthly report submission
+  - 10% national fund calculation
+  - Bank deposit tracking
+  - Report approval workflow
+
+- **[features/TRANSACTION_LEDGER.md](./features/TRANSACTION_LEDGER.md)** - Transaction system
+  - Multi-fund accounting
+  - Transaction categories
+  - Ledger queries
+  - Balance tracking
+
+- **[features/PROVIDER_REGISTRY.md](./features/PROVIDER_REGISTRY.md)** - Provider management
+  - Centralized provider database
+  - RUC validation
+  - Automatic deduplication
+
+---
+
+## 📦 Configuration
+
+- **[ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md)** - Configuration reference
+  - Required variables
+  - Convex configuration
+  - NextAuth configuration
+  - Google OAuth setup
+
+---
+
+## 📚 Historical Documentation
+
+### Archive
+
+- **[archive/README.md](./archive/README.md)** - Historical documentation index
+  - Audit reports (16 files)
+  - Migration docs (14 files)
+  - Project status reports (16 files)
+  - Convex migration (3 files)
+  - Planning docs (4 files)
+  - Deployment verification (6 files)
+  - Pre-Convex documentation
+
+**Note**: All historical docs preserved in `/docs/archive/` for reference
+
+---
+
+## 📁 Quick Navigation by Role
+
+### 👨‍💻 New Developers
+
+**Start here:**
+1. [README.md](./README.md) - Project overview
+2. [QUICK_START.md](./QUICK_START.md) - Setup guide
+3. [ARCHITECTURE.md](./ARCHITECTURE.md) - System architecture
+4. [CONVEX_SCHEMA.md](./CONVEX_SCHEMA.md) - Data model
+5. [DEVELOPER_GUIDE.md](./DEVELOPER_GUIDE.md) - Development patterns
+
+### 🔧 Backend Developers
 
 **Focus on:**
-1. [Database Schema](./database/SCHEMA_REFERENCE.md)
-2. [RLS Policies](./database/RLS_POLICIES.md)
-3. [Business Logic](./database/BUSINESS_LOGIC.md)
-4. [API Reference](./API_REFERENCE.md)
-5. [Security Testing](./SECURITY_TESTING.md)
+1. [CONVEX_SCHEMA.md](./CONVEX_SCHEMA.md) - Schema definitions
+2. [SECURITY.md](./SECURITY.md) - Authorization patterns
+3. [database/BUSINESS_LOGIC.md](./database/BUSINESS_LOGIC.md) - Workflows
+4. [API_REFERENCE.md](./API_REFERENCE.md) - API patterns
+5. [COMMON_TASKS.md](./COMMON_TASKS.md) - How-to guides
 
-### For Frontend Developers
-
-**Focus on:**
-1. [Components Guide](./COMPONENTS.md)
-2. [BIRHAUS React Patterns](../design_philosophy/BIRHAUS_REACT_PATTERNS.md)
-3. [Accessibility Restoration](./future-improvements/ACCESSIBILITY_RESTORATION_PLAN.md)
-4. [Performance Monitoring](./MONITORING.md)
-5. [Testing Strategy](./TESTING.md)
-
-### For DevOps/SRE
+### 🎨 Frontend Developers
 
 **Focus on:**
-1. [CI/CD Pipeline](./CI_CD.md)
-2. [Disaster Recovery](./DISASTER_RECOVERY.md)
-3. [Performance Monitoring](./MONITORING.md)
-4. [Security Testing](./SECURITY_TESTING.md)
-5. [Migration Guide](../MIGRATION_GUIDE.md)
+1. [COMPONENTS.md](./COMPONENTS.md) - UI components
+2. [TYPE_SAFETY_GUIDE.md](./TYPE_SAFETY_GUIDE.md) - TypeScript patterns
+3. [TESTING.md](./TESTING.md) - Testing guide
+4. [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) - Common issues
 
-### For Security Auditors
-
-**Focus on:**
-1. [Security Audit Report](../SECURITY_AUDIT_2025-09-28.md)
-2. [RLS Policies](./database/RLS_POLICIES.md)
-3. [Security Testing](./SECURITY_TESTING.md)
-4. [API Reference](./API_REFERENCE.md)
-5. [Code of Conduct](../CODE_OF_CONDUCT.md)
-
-### For Designers/UX
+### 🚀 DevOps/SRE
 
 **Focus on:**
-1. [BIRHAUS Principles](../design_philosophy/BIRHAUS_PRINCIPLES.md)
-2. [BIRHAUS React Patterns](../design_philosophy/BIRHAUS_REACT_PATTERNS.md)
-3. [Components Guide](./COMPONENTS.md)
-4. [Accessibility Restoration](./future-improvements/ACCESSIBILITY_RESTORATION_PLAN.md)
+1. [DEPLOYMENT.md](./DEPLOYMENT.md) - Deployment guide
+2. [CI_CD.md](./CI_CD.md) - CI/CD pipeline
+3. [MONITORING.md](./MONITORING.md) - Performance monitoring
+4. [DISASTER_RECOVERY.md](./DISASTER_RECOVERY.md) - Backup & recovery
+5. [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md) - Configuration
+
+### 🔒 Security Auditors
+
+**Focus on:**
+1. [SECURITY.md](./SECURITY.md) - Security architecture
+2. [API_REFERENCE.md](./API_REFERENCE.md) - API security
+3. [ENVIRONMENT_VARIABLES.md](./ENVIRONMENT_VARIABLES.md) - Configuration security
+4. [archive/audits/](./archive/audits/) - Historical audits
 
 ---
 
@@ -265,96 +244,54 @@ Welcome to the IPU PY Tesorería documentation. This index provides a complete n
 
 | Task | Documentation |
 |------|---------------|
-| **Setup dev environment** | [README.md](../README.md), [CLAUDE.md](../CLAUDE.md) |
-| **Create database migration** | [Migration Guide](../MIGRATION_GUIDE.md) |
-| **Add new component** | [Components Guide](./COMPONENTS.md) |
-| **Implement RLS policy** | [RLS Policies](./database/RLS_POLICIES.md) |
-| **Fix TypeScript errors** | [Type Safety Guide](./development/TYPE_SAFETY_GUIDE.md) |
-| **Deploy to production** | [CI/CD Pipeline](./CI_CD.md) |
-| **Investigate security issue** | [Security Testing](./SECURITY_TESTING.md) |
-| **Optimize performance** | [Performance Monitoring](./MONITORING.md) |
-| **Restore from backup** | [Disaster Recovery](./DISASTER_RECOVERY.md) |
-| **Make UI accessible** | [Accessibility Restoration](./future-improvements/ACCESSIBILITY_RESTORATION_PLAN.md) |
-
-### Key Principles
-
-| Principle | Documentation |
-|-----------|---------------|
-| **Type Safety** | Strict TypeScript mode ([Type Safety Guide](./development/TYPE_SAFETY_GUIDE.md)) |
-| **Security** | RLS enforcement ([RLS Policies](./database/RLS_POLICIES.md)) |
-| **Performance** | < 2s page load ([Performance Monitoring](./MONITORING.md)) |
-| **Accessibility** | WCAG 2.1 AA ([Accessibility Plan](./future-improvements/ACCESSIBILITY_RESTORATION_PLAN.md)) |
-| **Design** | BIRHAUS principles ([Design Philosophy](../design_philosophy/BIRHAUS_PRINCIPLES.md)) |
+| **Setup dev environment** | [QUICK_START.md](./QUICK_START.md) |
+| **Understand architecture** | [ARCHITECTURE.md](./ARCHITECTURE.md) |
+| **Add new component** | [COMPONENTS.md](./COMPONENTS.md) |
+| **Implement authorization** | [SECURITY.md](./SECURITY.md) |
+| **Fix TypeScript errors** | [TYPE_SAFETY_GUIDE.md](./TYPE_SAFETY_GUIDE.md) |
+| **Deploy to production** | [DEPLOYMENT.md](./DEPLOYMENT.md) |
+| **Optimize performance** | [MONITORING.md](./MONITORING.md) |
+| **Restore from backup** | [DISASTER_RECOVERY.md](./DISASTER_RECOVERY.md) |
+| **Troubleshoot issues** | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) |
 
 ---
 
 ## 📊 Documentation Statistics
 
-**Total Documentation Files**: 30+
-**Total Lines of Documentation**: ~15,000+
-**Last Major Update**: October 2025
+**Essential Files**: 25 files
+**Archived Files**: ~76 files (preserved in `/docs/archive/`)
+**Consolidation Date**: October 2025
+**Reduction**: 79% fewer files to maintain (119 → 25)
 
-### Coverage by Category
+### Current Structure
 
-| Category | Files | Status |
-|----------|-------|--------|
-| **Getting Started** | 4 | ✅ Complete |
-| **Design Philosophy** | 2 | ✅ Complete |
-| **Database** | 3 | ✅ Complete |
-| **Development** | 3 | 🟡 API needs enhancement |
-| **Security** | 3 | ✅ Complete |
-| **Operations** | 4 | ✅ Complete |
-| **Accessibility** | 1 | ✅ Complete |
-| **Historical** | 10+ | ✅ Archived |
-
----
-
-## 🔄 Documentation Maintenance
-
-### Update Schedule
-
-- **Weekly**: Fix logs, troubleshooting guides
-- **Monthly**: API reference, component guide
-- **Quarterly**: Security audit, performance review
-- **Annually**: Architecture review, major updates
-
-### Contributing to Documentation
-
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for:
-- Documentation standards
-- Markdown formatting
-- Code example guidelines
-- Review process
-
-### Reporting Issues
-
-Found an error or gap in documentation?
-1. Check if it's already documented
-2. Create GitHub issue with `documentation` label
-3. Tag with specific area (database, security, etc.)
-4. Provide specific page/section reference
+| Category | Files | Location |
+|----------|-------|----------|
+| **Core** | 7 | Root `/docs/` |
+| **Getting Started** | 3 | Root `/docs/` |
+| **Development** | 4 | Root `/docs/` |
+| **Features** | 4 | `/docs/features/` |
+| **Operations** | 4 | Root `/docs/` |
+| **Database** | 2 | `/docs/database/` |
+| **Archive** | 1 | `/docs/archive/` |
 
 ---
 
-## 📞 Support & Resources
+## 📞 Support
 
-### Internal Resources
-
-- **Technical Lead**: Anthony Birhouse
 - **Email**: administracion@ipupy.org.py
-- **Repository**: [GitHub](https://github.com/ipupy/tesoreria) *(if applicable)*
+- **Production**: https://ipupytesoreria.vercel.app
 
 ### External Resources
 
-- [Next.js 15 Documentation](https://nextjs.org/docs)
-- [Supabase Documentation](https://supabase.com/docs)
-- [TanStack Query](https://tanstack.com/query)
+- [Next.js 15 Docs](https://nextjs.org/docs)
+- [Convex Docs](https://docs.convex.dev)
+- [NextAuth Docs](https://authjs.dev)
 - [shadcn/ui](https://ui.shadcn.com)
 - [Tailwind CSS](https://tailwindcss.com)
-- [WCAG 2.1 Guidelines](https://www.w3.org/WAI/WCAG21/quickref/)
 
 ---
 
-**Documentation Version**: 2.0
+**Documentation Version**: 3.0 (Consolidated)
 **Last Updated**: October 2025
-**Maintained by**: Development Team
+**Maintained by**: IPU PY Development Team

@@ -4,28 +4,39 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**IPU PY Tesorería** is a modern treasury management system for the Iglesia Pentecostal Unida del Paraguay (United Pentecostal Church of Paraguay). Built with Next.js 15, TypeScript, and Supabase to manage financial operations for 22 local churches with centralized reporting.
+**IPU PY Tesorería** is a modern treasury management system for the Iglesia Pentecostal Unida del Paraguay (United Pentecostal Church of Paraguay). Built with Next.js 15, TypeScript, Convex, and NextAuth to manage financial operations for 22 local churches with centralized reporting.
 
-**Stack**: Next.js 15 (App Router) + React 19 + TypeScript + Supabase (PostgreSQL + Auth) + Tailwind CSS 4 + shadcn/ui
+**Stack**: Next.js 15 (App Router) + React 19 + TypeScript + Convex (Document Database + Real-time) + NextAuth v5 + Tailwind CSS 4 + shadcn/ui
 
 **Production**: https://ipupytesoreria.vercel.app
 
 ## Development Commands
 
 ```bash
-# Development
+# Development (requires both servers running)
+npx convex dev           # Convex backend server (run in separate terminal)
 npm run dev              # Next.js dev server (port 3000)
-npm run dev:turbo        # Dev with Turbopack
+npm run dev:turbo        # Dev with Turbopack (faster)
 
 # Production
-npm run build            # Build for production
+npm run build            # Build for production (includes TypeScript check)
 npm start                # Start production server
+npx convex deploy        # Deploy Convex backend to production
 
-# Quality
+# Quality & Type Safety
+npm run typecheck        # TypeScript compilation check (tsc --noEmit)
+npm run typecheck:watch  # Watch mode for development
 npm run lint             # ESLint check
+npm run lint:strict      # ESLint with zero warnings allowed
+npm run validate         # Run typecheck + lint:strict
+
+# Data Migration (Supabase → Convex)
+npm run export-supabase  # Export data from Supabase
+npm run transform-data   # Transform to Convex format
+npm run migrate-data     # Full migration pipeline
 ```
 
-**No separate typecheck script** - TypeScript checking happens during `npm run build`
+**IMPORTANT**: Development requires both `npx convex dev` AND `npm run dev` running simultaneously in separate terminals.
 
 ## Architecture
 
@@ -57,9 +68,9 @@ src/
 │   ├── Shared/               # Reusable UI components
 │   └── Layout/               # Layout components
 ├── lib/                      # Core utilities
-│   ├── supabase/             # Supabase client & middleware
-│   ├── db-context.ts         # RLS context management
-│   ├── db-admin.ts           # Admin database operations
+│   ├── auth.ts               # NextAuth configuration
+│   ├── convex-server.ts      # Server-side Convex client
+│   ├── convex-id-mapping.ts  # Legacy ID compatibility layer
 │   ├── auth-context.ts       # Auth context type definitions
 │   ├── cors.ts               # CORS configuration
 │   └── rate-limit.ts         # API rate limiting
@@ -70,94 +81,129 @@ src/
 ├── types/                    # TypeScript type definitions
 └── styles/                   # Global styles & CSS tokens
 
-migrations/                   # SQL migrations (28 total)
-scripts/                      # Utility scripts
+convex/                      # Convex backend functions
+├── schema.ts                # Database schema definition
+├── churches.ts              # Church queries and mutations
+├── reports.ts               # Report operations
+├── fundEvents.ts            # Fund events with approval workflow
+├── auth.config.ts           # OIDC bridge configuration
+└── _generated/             # Auto-generated API files
+
+scripts/                     # Utility scripts
 ```
 
 ## Database Architecture
 
-### ⚠️ Known Technical Debt
+### Convex Document Database
 
-**Database Access Pattern** (2025-10-05):
-- Currently uses **hybrid approach**: Supabase Auth + Direct PostgreSQL (`pg` library)
-- **Issue**: Connection timeouts on Vercel serverless (15s limit)
-- **Current workaround**: Using pgBouncer connection pooler (port 6543)
-- **Recommended migration**: Switch to Supabase JavaScript client exclusively
-- **Documentation**: See [docs/future-improvements/MIGRATE_TO_SUPABASE_CLIENT.md](docs/future-improvements/MIGRATE_TO_SUPABASE_CLIENT.md)
+The system uses **Convex** as its primary backend, providing:
+- TypeScript-first schema definition (`convex/schema.ts`)
+- Real-time reactive queries with automatic updates
+- Serverless functions (queries, mutations, actions)
+- Built-in authorization with `ctx.auth()`
 
-This hybrid approach works but is not optimal for serverless environments. Future migration to Supabase client will eliminate connection timeouts and simplify the codebase.
+### Legacy ID Compatibility
 
-### Core Tables
+To maintain backward compatibility with existing REST APIs, Convex documents include a `supabase_id` field:
+- All documents store their original PostgreSQL numeric ID
+- API responses map Convex `_id` to `id` for client compatibility
+- See `src/lib/convex-id-mapping.ts` for mapping utilities
 
-- **churches** - 22 pre-loaded IPU Paraguay churches with pastor information
-- **monthly_reports** - Financial reports (diezmos, ofrendas, fondo_nacional)
-- **profiles** - User profiles with simplified 6-role system (migration 023)
-- **system_configuration** - Admin-configurable settings
-- **fund_balances** - Fund balances by church
-- **fund_transactions** - Financial transaction ledger
-- **fund_events** - Event budgeting with approval workflow
+### Core Collections
+
+- **churches** - 22 IPU Paraguay churches with pastor information (includes `supabase_id`)
+- **monthlyReports** - Financial reports with church references
+- **profiles** - User profiles with 6-role system
+- **systemConfiguration** - Admin-configurable settings
+- **fundBalances** - Fund balances by church
+- **fundTransactions** - Financial transaction ledger
+- **fundEvents** - Event budgeting with approval workflow
 - **donors** - Donor registry
-- **user_activity** - Complete audit trail
-- **providers** - Centralized provider registry (migration 027)
+- **userActivity** - Complete audit trail
+- **providers** - Centralized provider registry
 
-### Row Level Security (RLS)
+### Authorization Pattern
 
-**CRITICAL**: All database operations MUST set session context before queries.
+**CRITICAL**: All Convex functions MUST verify authentication and authorization.
 
-The system uses PostgreSQL session variables for RLS enforcement:
-- `app.current_user_id`
-- `app.current_user_role`
-- `app.current_user_church_id`
+```typescript
+// Example authorization pattern
+export const approve = mutation({
+  handler: async (ctx, { id }) => {
+    // 1. Verify authentication
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
 
-See `src/lib/db-context.ts` for context management utilities.
+    // 2. Load user profile with role
+    const user = await ctx.db
+      .query("profiles")
+      .withIndex("by_email", (q) => q.eq("email", identity.email))
+      .unique();
 
-### Migration System
+    // 3. Check role permissions
+    if (!["admin", "treasurer"].includes(user.role)) {
+      throw new Error("Unauthorized");
+    }
 
-Migrations are numbered sequentially (000-037) and applied via Supabase. Key migrations:
+    // 4. Perform authorized operation
+    // ...
+  },
+});
+```
 
-- **010** - RLS implementation
-- **023** - Role simplification (8→6 roles)
-- **024** - RLS UUID fixes
-- **026** - Fund director events system
-- **027** - Provider registry with RUC deduplication
-- **037** - Role system fixes (church_manager permissions, get_role_level(), obsolete role cleanup)
+See `convex/` directory for authorization patterns in each function.
 
-To run migrations: Use Supabase dashboard or `scripts/migrate.js`
+### Schema Evolution
+
+The Convex schema is defined in `convex/schema.ts` and automatically deployed. Changes to the schema are version-controlled in git and deployed via `npx convex deploy`.
+
+**Migration from Supabase**: The original PostgreSQL migrations (000-037) are preserved in the `migrations/` directory for historical reference but are no longer actively used. Data was migrated to Convex with ID preservation.
 
 ## Authentication & Authorization
 
 ### Auth Provider
 
-**Supabase Auth** with Google OAuth
+**NextAuth v5** with Google OAuth + Convex OIDC Bridge
+- **Frontend**: NextAuth handles Google OAuth flow
+- **Backend**: Convex OIDC bridge validates JWT tokens
 - Domain restriction: `@ipupy.org.py` only
 - Admin: `administracion@ipupy.org.py`
-- Magic link fallback available
 
-### Role System (Simplified v2.2)
+#### Auth Flow
 
-6 hierarchical roles (migrations 023, 026, 037):
+1. User initiates Google OAuth via NextAuth (`/api/auth/signin`)
+2. Google returns JWT token with email/profile
+3. NextAuth creates session with user info
+4. Convex receives JWT via OIDC bridge
+5. Convex validates token and loads user profile from `profiles` collection
+6. Backend functions access user via `ctx.auth.getUserIdentity()`
 
-1. **admin** - Platform administrators (level 6)
-2. **fund_director** - Fund-specific management (level 5) *added in migration 026*
-3. **pastor** - Church leaders (level 4)
-4. **treasurer** - Church financial operations (level 3)
-5. **church_manager** - Church administration view-only (level 2)
-6. **secretary** - Church administrative support (level 1)
+### Role System
 
-**Migration History**:
-- **023**: Initial simplification (`super_admin` → `admin`, `church_admin` → `pastor`)
-- **026**: Added `fund_director` role and events system
-- **037**: Fixed permissions & hierarchy (church_manager perms, removed obsolete roles)
+The system uses a 6-role hierarchical model defined in the `profiles` collection:
 
-**Obsolete roles removed in 037**: `district_supervisor`, `member`
+1. **admin** - Platform administrators (highest level)
+2. **fund_director** - Fund-specific management
+3. **pastor** - Church leaders
+4. **treasurer** - Church financial operations
+5. **church_manager** - Church administration (view-only)
+6. **secretary** - Church administrative support (lowest level)
 
-### Auth Flow
+**Authorization Pattern in Convex**:
+```typescript
+// Always verify role in Convex functions
+const identity = await ctx.auth.getUserIdentity();
+if (!identity) throw new Error("Not authenticated");
 
-1. User authenticates via Supabase Auth (Google OAuth)
-2. `auth.callback` route handles OAuth response
-3. Middleware validates session on protected routes
-4. API routes use `getAuthFromCookies()` for user context
-5. Database queries use `setDatabaseContext()` for RLS
+const user = await ctx.db
+  .query("profiles")
+  .withIndex("by_email", (q) => q.eq("email", identity.email))
+  .unique();
+
+if (!["admin", "treasurer"].includes(user.role)) {
+  throw new Error("Unauthorized");
+}
+```
 
 ## Key System Features
 
@@ -205,22 +251,27 @@ To run migrations: Use Supabase dashboard or `scripts/migrate.js`
 }
 ```
 
-### Type Safety Enforcement (Pre-Commit Hooks)
+### Type Safety Enforcement
 
-**CRITICAL:** All commits are blocked by pre-commit hooks if:
-- ❌ TypeScript compilation errors exist (`tsc --noEmit`)
-- ❌ ESLint warnings exist (`eslint --max-warnings 0`)
-- ❌ `any` type is used without justification
-- ❌ Missing return types on exported functions
-- ❌ `useState()` called without explicit generic
+**Pre-commit Hooks** (`.husky/pre-commit`):
+- Runs `lint-staged` which checks TypeScript + ESLint on staged files
+- **IMPORTANT**: Pre-commit hooks currently check for legacy Supabase RLS bypass patterns (`pool.query()`)
+- These checks will be removed/updated as Convex migration completes
 
-**Scripts:**
-- `npm run typecheck` - Check TypeScript compilation
-- `npm run typecheck:watch` - Watch mode for development
-- `npm run lint:strict` - ESLint with zero warnings
-- `npm run validate` - Run both typecheck and lint
+**Type Safety Commands:**
+- `npm run typecheck` - Check TypeScript compilation without building
+- `npm run typecheck:watch` - Watch mode for continuous checking
+- `npm run lint:strict` - ESLint with zero warnings allowed
+- `npm run validate` - Run typecheck + lint:strict together
 
-**NEVER disable strict checks**. Fix types instead of loosening compiler.
+**Best Practices:**
+- ❌ Never use `any` without explicit justification comment
+- ❌ Never call `useState()` without explicit generic type
+- ✅ Always add return types to exported functions
+- ✅ Use optional chaining (`?.`) for nullable data
+- ✅ Define proper interfaces in `src/types/`
+
+**NEVER disable strict checks in tsconfig.json**. Fix types instead of loosening compiler.
 
 See [TYPE_SAFETY_GUIDE.md](./docs/TYPE_SAFETY_GUIDE.md) for detailed patterns and fixes.
 
@@ -232,49 +283,55 @@ Located in `src/components/ui/` - Radix UI primitives styled with Tailwind:
 - `button.tsx`, `dialog.tsx`, `select.tsx`, `input.tsx`, etc.
 - Use `cn()` utility from `src/lib/utils/cn.ts` for class merging
 
-### Data Fetching (TanStack Query v5)
+### Data Fetching
 
-Use custom hooks in `src/hooks/`:
+**Current State (Hybrid - Phase 5 in progress)**:
+- TanStack Query v5 hooks in `src/hooks/` (being migrated)
+- Convex React hooks being rolled out incrementally
 
 ```typescript
-// Church data
+// Current pattern (TanStack Query - being phased out)
 const { data: churches } = useChurches();
 
-// Reports with filters
-const { data: reports } = useReports({
-  churchId,
-  year,
-  month
-});
+// New pattern (Convex React - Phase 5)
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
-// Mutations
-const { mutate: updateChurch } = useChurchMutations();
+const churches = useQuery(api.churches.list);
 ```
 
+**Migration Status**: See [CONVEX_MIGRATION_PLAN.md](./docs/CONVEX_MIGRATION_PLAN.md) Phase 5 for details.
+
 ### API Routes Pattern
+
+REST API routes now call Convex functions as a compatibility layer:
 
 ```typescript
 // src/app/api/example/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthFromCookies } from '@/lib/auth-supabase';
-import { executeWithContext } from '@/lib/db-admin';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { ConvexHttpClient } from 'convex/browser';
+import { api } from '@/convex/_generated/api';
 
 export async function GET(req: NextRequest) {
-  const auth = await getAuthFromCookies();
+  // 1. Verify NextAuth session
+  const session = await getServerSession(authOptions);
 
-  if (!auth) {
+  if (!session?.user?.email) {
     return NextResponse.json(
       { error: 'No autenticado' },
       { status: 401 }
     );
   }
 
-  const result = await executeWithContext(auth, async (client) => {
-    // Database operations here with RLS context set
-    return await client.query('SELECT ...');
-  });
+  // 2. Initialize Convex HTTP client
+  const client = new ConvexHttpClient(process.env['CONVEX_URL']!);
 
-  return NextResponse.json(result.rows);
+  // 3. Call Convex function (auth handled by OIDC bridge)
+  const data = await client.query(api.example.list);
+
+  return NextResponse.json(data);
 }
 ```
 
@@ -283,21 +340,21 @@ export async function GET(req: NextRequest) {
 Required variables (see `.env.example`):
 
 ```bash
-# Supabase (Required)
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_KEY=
+# Convex (Required)
+CONVEX_DEPLOYMENT=prod:your-deployment
+NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
 
-# Database (Required for Vercel)
-DATABASE_URL=
+# NextAuth (Required)
+NEXTAUTH_URL=https://ipupytesoreria.vercel.app
+NEXTAUTH_SECRET=<generate-with-openssl-rand>
 
-# OAuth (Optional)
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
+# Google OAuth (Required)
+GOOGLE_CLIENT_ID=<from-google-console>
+GOOGLE_CLIENT_SECRET=<from-google-console>
 
 # Organization
-SYSTEM_OWNER_EMAIL=
-ORGANIZATION_NAME=
+SYSTEM_OWNER_EMAIL=administracion@ipupy.org.py
+ORGANIZATION_NAME=IPU PY
 
 # Environment
 NODE_ENV=production
@@ -314,14 +371,27 @@ NODE_ENV=production
 
 ## Security Best Practices
 
-1. **Always use RLS context**: Call `setDatabaseContext()` before queries
-2. **Never bypass RLS**: Use `executeWithContext()` wrapper
-3. **Validate auth on API routes**: Check `getAuthFromCookies()` result
+1. **Always verify auth in Convex functions**: Use `ctx.auth.getUserIdentity()` at start of every function
+2. **Check role permissions**: Load user profile and verify role before operations
+3. **Validate auth on API routes**: Use `getServerSession()` from NextAuth
 4. **CORS restrictions**: Only allow approved origins (see `src/lib/cors.ts`)
 5. **Rate limiting**: Applied on sensitive API routes
-6. **Audit logging**: User actions logged in `user_activity` table
+6. **Audit logging**: User actions logged in `userActivity` collection
 
 ## Development Best Practices
+
+### Critical Development Workflow ⚠️
+
+**ALWAYS run both development servers:**
+```bash
+# Terminal 1 - Convex backend
+npx convex dev
+
+# Terminal 2 - Next.js frontend
+npm run dev
+```
+
+If you only run `npm run dev`, Convex queries will fail with connection errors.
 
 ### Manual and Systematic Approach ⚠️
 
@@ -330,25 +400,29 @@ NODE_ENV=production
 1. **Avoid Bulk Automation Scripts** ❌
    - Scripts that modify multiple files or environment variables at once can mask issues
    - Automated fixes often miss edge cases or create new problems
-   - Example: `fix-vercel-env.sh` looked for `NEXT_PUBLIC_*` vars that didn't exist, silently skipped them
+   - Example: Bulk scripts that "fix" env vars without checking what actually exists
 
 2. **Manual Investigation First** ✅
    - Read error messages carefully and trace the root cause
-   - Check actual state (Vercel env vars, file contents, build output)
+   - Check actual state:
+     - Vercel: `vercel env ls` to see deployed variables
+     - TypeScript: `npm run typecheck` to see compilation errors
+     - Build: `npm run build` to catch production issues
    - Verify assumptions before applying fixes
-   - Example: Check `vercel env ls` to see what variables actually exist
+   - Use Convex dashboard to inspect database state
 
 3. **Fix One Thing at a Time** ✅
    - Make single, focused changes
    - Test each change before moving to the next
    - Commit each fix separately with clear messages
-   - Example: Fix env validation, then logger, then OAuth - each as separate commits
+   - Example: Fix type error → commit → fix ESLint warning → commit
 
 4. **Verify at Each Step** ✅
-   - TypeScript compilation: `npx tsc --noEmit`
-   - Build locally: `npm run build`
-   - Check deployment status after each change
-   - Test in browser before marking as complete
+   - TypeScript: `npm run typecheck` (or `npm run typecheck:watch` during dev)
+   - Linting: `npm run lint:strict`
+   - Build: `npm run build`
+   - Test in browser with Convex dev server running
+   - Check Convex dashboard for data/function logs
 
 ### Environment Variables - Critical Patterns
 
@@ -358,11 +432,11 @@ NODE_ENV=production
   ```typescript
   // ✅ Correct - inline access in object literal
   const config = {
-    url: process.env['NEXT_PUBLIC_SUPABASE_URL'] ?? ''
+    url: process.env['NEXT_PUBLIC_CONVEX_URL'] ?? ''
   };
 
   // ❌ Wrong - intermediate variable breaks replacement
-  const url = process.env['NEXT_PUBLIC_SUPABASE_URL'];
+  const url = process.env['NEXT_PUBLIC_CONVEX_URL'];
   const config = { url };
   ```
 
@@ -374,7 +448,7 @@ NODE_ENV=production
 **Vercel-Specific**:
 - Always verify variable names match between code and Vercel dashboard
 - Use `vercel env ls` to inspect actual variable names
-- Remember: `SUPABASE_URL` ≠ `NEXT_PUBLIC_SUPABASE_URL`
+- Remember: `CONVEX_URL` (server) ≠ `NEXT_PUBLIC_CONVEX_URL` (client)
 
 ### Client/Server Code Separation
 
@@ -424,18 +498,19 @@ if (typeof process !== 'undefined') {
 ### Adding a New API Route
 
 1. Create route file in `src/app/api/[name]/route.ts`
-2. Import `getAuthFromCookies()` and `executeWithContext()`
-3. Validate authentication
-4. Use `executeWithContext()` for database queries
+2. Import `getServerSession` from NextAuth
+3. Validate authentication with NextAuth session
+4. Initialize `ConvexHttpClient` to call Convex functions
 5. Add CORS headers if needed (see `src/lib/cors.ts`)
 
-### Adding a New Database Table
+### Adding a New Convex Function
 
-1. Create migration in `migrations/0XX_description.sql`
-2. Define table schema with RLS policies
-3. Add type definitions in `src/types/`
-4. Create database operations in `src/lib/db-*.ts`
-5. Create TanStack Query hooks in `src/hooks/`
+1. Create or update file in `convex/[feature].ts`
+2. Define schema in `convex/schema.ts` if adding new table
+3. Implement query, mutation, or action with proper auth checks
+4. Use `ctx.auth.getUserIdentity()` to verify authentication
+5. Load user profile and verify role permissions
+6. Add type definitions in `src/types/` if needed
 
 ### Adding a New UI Component
 
@@ -445,37 +520,132 @@ if (typeof process !== 'undefined') {
 4. Import from `@/components/ui` for base components
 5. Follow existing component patterns (props, state, queries)
 
+## Convex Migration Status
+
+**IMPORTANT**: The system is mid-migration from Supabase to Convex.
+
+**Current State:**
+- ✅ **Schema**: Fully migrated to Convex (`convex/schema.ts`)
+- ✅ **Backend Functions**: Core queries/mutations implemented in `convex/*.ts`
+- ✅ **Auth**: NextAuth v5 with Convex OIDC bridge active
+- ⚠️ **API Routes**: REST endpoints (`src/app/api/`) still call Convex via HTTP client
+- ⚠️ **Frontend**: Mix of TanStack Query hooks and Convex React hooks
+- ⚠️ **Data**: Legacy `supabase_id` fields preserved for compatibility
+
+**Known Migration Artifacts:**
+- Pre-commit hooks check for Supabase `pool.query()` patterns (will be removed)
+- Some API routes exist as compatibility wrappers over Convex functions
+- Migration scripts in `scripts/` for data export/transform
+
+**Next Steps:**
+- Phase 5: Replace TanStack Query hooks with Convex React hooks
+- Remove REST API compatibility layer where possible
+- Clean up Supabase references in comments/docs
+
+See migration scripts: `npm run export-supabase`, `npm run transform-data`
+
 ## Testing Strategy
 
 **No formal test suite currently**. Manual testing approach:
 
-1. Test in development with `npm run dev`
-2. Verify TypeScript with `npm run build`
-3. Check ESLint with `npm run lint`
-4. Manual testing of features in UI
-5. Database queries tested via Supabase dashboard
+1. Test in development with `npm run dev` + `npx convex dev`
+2. Verify TypeScript with `npm run typecheck` or `npm run build`
+3. Check ESLint with `npm run lint` or `npm run lint:strict`
+4. Manual testing of features in browser
+5. Database queries tested via Convex dashboard (https://dashboard.convex.dev)
 
-## Deployment (Vercel)
+**Pre-deployment validation:**
+```bash
+npm run validate  # Run typecheck + lint:strict together
+npm run build     # Full production build
+```
+
+## Deployment
+
+### Convex Backend
+
+```bash
+npx convex deploy
+```
+
+Monitors schema changes and deploys functions automatically.
+
+### Vercel Frontend
 
 1. Push to `main` branch
-2. Vercel auto-builds and deploys
+2. Vercel auto-builds and deploys Next.js app
 3. Environment variables managed in Vercel dashboard
-4. Migrations run via Supabase dashboard
-5. Monitor logs in Vercel dashboard
+4. Monitor logs in Vercel dashboard
 
 **Pre-deployment checklist**:
 - ✅ `npm run lint` passes
 - ✅ `npm run build` succeeds
-- ✅ Environment variables configured
-- ✅ Database migrations applied
+- ✅ Environment variables configured in Vercel
+- ✅ `npx convex deploy` completed successfully
+- ✅ Convex OIDC bridge configured for Google OAuth
+
+## Common Pitfalls & Quick Fixes
+
+### Convex Connection Errors
+**Symptom**: "Failed to fetch" or connection errors in browser console
+
+**Fix**:
+```bash
+# Make sure Convex dev server is running
+npx convex dev
+```
+You need BOTH `npx convex dev` AND `npm run dev` running simultaneously.
+
+### Environment Variable Not Found (Client Side)
+**Symptom**: `undefined` when accessing `process.env.NEXT_PUBLIC_*` in components
+
+**Fix**: Use inline access in object literals for Next.js static replacement:
+```typescript
+// ✅ Correct
+const config = {
+  url: process.env['NEXT_PUBLIC_CONVEX_URL'] ?? ''
+};
+
+// ❌ Wrong - breaks static replacement
+const url = process.env['NEXT_PUBLIC_CONVEX_URL'];
+const config = { url };
+```
+
+### TypeScript Errors After Pull
+**Symptom**: New type errors after pulling changes
+
+**Fix**:
+```bash
+npm install           # Update dependencies
+npm run typecheck     # See all errors
+npm run typecheck:watch  # Fix in watch mode
+```
+
+### Build Fails in Production but Works Locally
+**Symptom**: `npm run dev` works but `npm run build` fails
+
+**Common causes**:
+1. Missing environment variables (check Vercel dashboard)
+2. TypeScript errors in production-only code paths
+3. Client/server code separation issues
+
+**Fix**:
+```bash
+npm run build  # Reproduce locally first
+npm run validate  # Check types + lint
+```
 
 ## Troubleshooting
 
-### RLS Access Denied Errors
+### Convex Auth Errors
 
-**Symptom**: "new row violates row-level security policy"
+**Symptom**: "Not authenticated" or "Unauthorized" errors
 
-**Fix**: Ensure `setDatabaseContext()` called before query. Use `executeWithContext()`.
+**Fix**:
+1. Verify NextAuth session is active (check `/api/auth/session`)
+2. Ensure `NEXTAUTH_SECRET` is set correctly
+3. Check Convex OIDC bridge configuration in dashboard
+4. Verify Google OAuth credentials and redirect URLs
 
 ### TypeScript Errors
 
@@ -484,20 +654,55 @@ if (typeof process !== 'undefined') {
 - Use optional chaining (`?.`) for nullable data
 - Define proper interfaces in `src/types/`
 
+### Real-time Subscription Issues
+
+**Symptom**: UI not updating when data changes
+
+**Check**:
+1. Convex React provider is wrapping app (`ConvexProvider` in `providers.tsx`)
+2. Using `useQuery` from `convex/react` not TanStack Query
+3. Component subscribed to correct Convex function
+4. Convex dev server running (`npx convex dev`)
+
 ### Auth Issues
 
 Check:
-1. Supabase Auth configured correctly
+1. NextAuth configured correctly in `src/lib/auth.ts`
 2. Google OAuth credentials valid
 3. Redirect URLs match production domain
 4. Cookies enabled in browser
+5. OIDC bridge active in Convex dashboard
 
 ## Documentation References
 
-- [README.md](./README.md) - Project overview
-- [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md) - Database migrations
-- [SECURITY_AUDIT_2025-09-28.md](./SECURITY_AUDIT_2025-09-28.md) - Security review
-- [PERFORMANCE_OPTIMIZATION_2025-09-28.md](./PERFORMANCE_OPTIMIZATION_2025-09-28.md) - Performance analysis
+**Getting Started:**
+- [README.md](./README.md) - Project overview and features
+- [QUICK_START.md](./docs/QUICK_START.md) - Quick start guide
+- [DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md) - Development workflow
+
+**Architecture & Database:**
+- [ARCHITECTURE.md](./docs/ARCHITECTURE.md) - System architecture
+- [CONVEX_SCHEMA.md](./docs/CONVEX_SCHEMA.md) - Database schema reference
+- [MIGRATION_GUIDE.md](./docs/MIGRATION_GUIDE.md) - Migration guides
+
+**Operational:**
+- [DEPLOYMENT.md](./docs/DEPLOYMENT.md) - Deployment procedures
+- [ENVIRONMENT_VARIABLES.md](./docs/ENVIRONMENT_VARIABLES.md) - Environment configuration
+- [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) - Common issues and solutions
+- [MONITORING.md](./docs/MONITORING.md) - Monitoring and observability
+
+**Development:**
+- [TYPE_SAFETY_GUIDE.md](./docs/TYPE_SAFETY_GUIDE.md) - TypeScript patterns
+- [COMMON_TASKS.md](./docs/COMMON_TASKS.md) - Common development tasks
+- [TESTING.md](./docs/TESTING.md) - Testing strategy
+- [COMPONENTS.md](./docs/COMPONENTS.md) - Component architecture
+
+**Security & Compliance:**
+- [SECURITY.md](./docs/SECURITY.md) - Security best practices
+- [API_REFERENCE.md](./docs/API_REFERENCE.md) - API documentation
+
+**Full Index:**
+- [00-INDEX.md](./docs/00-INDEX.md) - Complete documentation index
 
 ## Support
 

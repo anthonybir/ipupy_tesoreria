@@ -7,6 +7,7 @@ export const toNumber = (value: RawNumeric, fallback = 0): number => {
 
 export type RawReportRecord = {
   id: number;
+  convex_id?: string | null;
   church_id: number;
   church_name: string;
   month: number;
@@ -45,6 +46,9 @@ export type RawReportRecord = {
   submission_type?: string | null;
   submitted_by?: string | null;
   submitted_at?: string | null;
+  processed_by?: string | null;
+  processed_at?: string | null;
+  transactions_created?: boolean;
   foto_informe?: string | null;
   foto_deposito?: string | null;
   created_at?: string | null;
@@ -59,6 +63,7 @@ export type RawReportRecord = {
 
 export type ReportRecord = {
   id: number;
+  convexId: string | null;
   churchId: number;
   churchName: string;
   month: number;
@@ -123,7 +128,10 @@ export type ReportRecord = {
       summary?: string | null;
       deposit?: string | null;
     };
+    processedBy?: string | null;
+    processedAt?: string | null;
   };
+  transactionsCreated: boolean;
 };
 
 export const normalizeReportRecord = (raw: RawReportRecord): ReportRecord => {
@@ -161,6 +169,7 @@ export const normalizeReportRecord = (raw: RawReportRecord): ReportRecord => {
 
   return {
     id: raw.id,
+    convexId: raw.convex_id ?? null,
     churchId: raw.church_id,
     churchName: raw.church_name,
     month: raw.month,
@@ -201,8 +210,11 @@ export const normalizeReportRecord = (raw: RawReportRecord): ReportRecord => {
       attachments: {
         summary: raw.foto_informe ?? null,
         deposit: raw.foto_deposito ?? null
-      }
-    }
+      },
+      processedBy: raw.processed_by ?? null,
+      processedAt: raw.processed_at ?? null
+    },
+    transactionsCreated: Boolean(raw.transactions_created)
   };
 };
 
@@ -228,6 +240,7 @@ export type RawPrimaryPastor = {
 
 export type RawChurchRecord = RawPrimaryPastor & {
   id: number;
+  convex_id?: string | null;
   name: string;
   city: string;
   pastor: string;
@@ -264,6 +277,7 @@ export type PastorRecord = {
 
 export type ChurchRecord = {
   id: number;
+  convexId: string | null;
   name: string;
   city: string;
   pastor: string;
@@ -325,6 +339,7 @@ const normalizePrimaryPastor = (raw: RawChurchRecord): PastorRecord | null => {
 
 export const normalizeChurchRecord = (raw: RawChurchRecord): ChurchRecord => ({
   id: raw.id,
+  convexId: raw.convex_id ?? null,
   name: raw.name,
   city: raw.city,
   pastor: raw.pastor || raw.primary_pastor_full_name || '',

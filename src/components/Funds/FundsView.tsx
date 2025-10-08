@@ -242,16 +242,8 @@ export default function FundsView(): JSX.Element {
       toast.error('No se pudo eliminar el fondo.');
     }
   };
-  const isLoading = fundsQuery.isLoading || fundsQuery.isPending;
+  const isLoading = fundsQuery.isLoading;
   const isError = fundsQuery.isError;
-  const lastUpdatedLabel = fundsQuery.dataUpdatedAt
-    ? new Intl.DateTimeFormat('es-PY', {
-        hour: '2-digit',
-        minute: '2-digit',
-        day: '2-digit',
-        month: 'short',
-      }).format(fundsQuery.dataUpdatedAt)
-    : '—';
 
   const metrics = [
     {
@@ -309,10 +301,7 @@ export default function FundsView(): JSX.Element {
             >
               Refrescar
             </Button>
-            <span>
-              Última actualización:{' '}
-              <span className="font-semibold text-[var(--absd-ink)]">{lastUpdatedLabel}</span>
-            </span>
+            <span>Datos sincronizados en tiempo real</span>
           </div>
         }
       >

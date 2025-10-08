@@ -1,0 +1,101 @@
+[
+  {
+    "id": 1,
+    "name": "Fondo Nacional",
+    "description": "Fondo Nacional - 10% de todas las iglesias",
+    "type": "national",
+    "current_balance": -20731119,
+    "created_at": "2025-09-20T02:34:05.363729+00:00",
+    "updated_at": "2025-09-28T13:40:08.630457+00:00",
+    "is_active": true,
+    "created_by": "system"
+  },
+  {
+    "id": 2,
+    "name": "Misiones",
+    "description": "Ofrenda de Misiones",
+    "type": "restricted",
+    "current_balance": 12181240,
+    "created_at": "2025-09-20T02:34:05.363729+00:00",
+    "updated_at": "2025-09-28T13:40:08.630457+00:00",
+    "is_active": true,
+    "created_by": "system"
+  },
+  {
+    "id": 3,
+    "name": "Lazos de Amor",
+    "description": "Ministerio de Damas",
+    "type": "restricted",
+    "current_balance": -7011456,
+    "created_at": "2025-09-20T02:34:05.363729+00:00",
+    "updated_at": "2025-09-28T13:40:08.630457+00:00",
+    "is_active": true,
+    "created_by": "system"
+  },
+  {
+    "id": 4,
+    "name": "Misión Posible",
+    "description": "Fondo Misión Posible - Proyectos misioneros especiales",
+    "type": "restricted",
+    "current_balance": 861952,
+    "created_at": "2025-09-20T02:34:05.363729+00:00",
+    "updated_at": "2025-09-28T13:40:08.630457+00:00",
+    "is_active": true,
+    "created_by": "system"
+  },
+  {
+    "id": 5,
+    "name": "Caballeros",
+    "description": "Aporte de Caballeros",
+    "type": "restricted",
+    "current_balance": 3612219,
+    "created_at": "2025-09-20T02:34:05.363729+00:00",
+    "updated_at": "2025-09-28T13:40:08.630457+00:00",
+    "is_active": true,
+    "created_by": "system"
+  },
+  {
+    "id": 6,
+    "name": "APY",
+    "description": "Asociación de Pastores y Líderes",
+    "type": "restricted",
+    "current_balance": 9432000,
+    "created_at": "2025-09-20T02:34:05.363729+00:00",
+    "updated_at": "2025-09-28T13:40:08.630457+00:00",
+    "is_active": true,
+    "created_by": "system"
+  },
+  {
+    "id": 7,
+    "name": "Instituto Bíblico",
+    "description": "Fondo IBA - Instituto Bíblico y educación teológica",
+    "type": "restricted",
+    "current_balance": 924293,
+    "created_at": "2025-09-20T02:34:05.363729+00:00",
+    "updated_at": "2025-09-28T13:40:08.630457+00:00",
+    "is_active": true,
+    "created_by": "system"
+  },
+  {
+    "id": 8,
+    "name": "Niños",
+    "description": "Fondo de Niños - Ministerio infantil",
+    "type": "restricted",
+    "current_balance": 3927753,
+    "created_at": "2025-09-20T03:12:43.553928+00:00",
+    "updated_at": "2025-09-28T13:40:08.630457+00:00",
+    "is_active": true,
+    "created_by": "system"
+  },
+  {
+    "id": 9,
+    "name": "Damas",
+    "description": "Fondo de Damas - Ministerio femenino",
+    "type": "restricted",
+    "current_balance": 15643690,
+    "created_at": "2025-09-20T03:12:43.553928+00:00",
+    "updated_at": "2025-09-28T13:40:08.630457+00:00",
+    "is_active": true,
+    "created_by": "system"
+  }
+]

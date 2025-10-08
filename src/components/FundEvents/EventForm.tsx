@@ -311,12 +311,10 @@ export function EventForm({ onSuccess, onCancel }: EventFormProps): JSX.Element 
         </Button>
       </div>
 
-      {createEvent.isError && (
+      {createEvent.error && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-md">
           <p className="text-sm text-red-600">
-            {createEvent.error instanceof Error
-              ? createEvent.error.message
-              : 'Error al crear el evento'}
+            {createEvent.error.message ?? 'Error al crear el evento'}
           </p>
         </div>
       )}

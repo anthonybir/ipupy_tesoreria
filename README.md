@@ -2,10 +2,10 @@
 
 [![Next.js](https://img.shields.io/badge/Next.js-15.5-black.svg)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue.svg)](https://www.typescriptlang.org/)
-[![Supabase](https://img.shields.io/badge/Supabase-Auth-green.svg)](https://supabase.com/)
+[![Convex](https://img.shields.io/badge/Convex-Backend-orange.svg)](https://convex.dev/)
 [![Vercel](https://img.shields.io/badge/Vercel-Deployed-black.svg)](https://vercel.com/)
 
-Sistema integral de gestión de tesorería para la **Iglesia Pentecostal Unida del Paraguay** (IPU PY). Plataforma moderna construida con Next.js 15 y Supabase para administrar las finanzas de 22 iglesias locales con reportes mensuales centralizados.
+Sistema integral de gestión de tesorería para la **Iglesia Pentecostal Unida del Paraguay** (IPU PY). Plataforma moderna construida con Next.js 15, Convex y NextAuth para administrar las finanzas de 22 iglesias locales con reportes mensuales centralizados.
 
 🌐 **Producción**: [ipupytesoreria.vercel.app](https://ipupytesoreria.vercel.app)
 
@@ -14,15 +14,15 @@ Sistema integral de gestión de tesorería para la **Iglesia Pentecostal Unida d
 - 📊 **Dashboard Centralizado** - Métricas financieras en tiempo real con visualizaciones
 - ⛪ **Gestión Multi-Iglesia** - Administración de 22 iglesias con información pastoral completa
 - 📈 **Reportes Mensuales** - Sistema integral de informes financieros
-- 🔐 **Autenticación Segura** - Google OAuth via Supabase para @ipupy.org.py
+- 🔐 **Autenticación Segura** - NextAuth v5 con Google OAuth para @ipupy.org.py
 - 📤 **Excel Compatible** - Importación/exportación con formatos existentes
 - 💰 **Cálculos Automáticos** - Fondo nacional (10%) y balances
 - 🏦 **Control Bancario** - Seguimiento de depósitos y transacciones
 - 📱 **Diseño Responsivo** - Optimizado para móviles y escritorio con touch targets
 - 👥 **Sistema de Roles** - 6 roles simplificados y jerárquicos
 - ⚙️ **Panel de Configuración** - Sistema administrable de configuración
-- 🔒 **Seguridad Mejorada** - RLS con contexto de usuario robusto
-- 📋 **Transacciones ACID** - Integridad de datos garantizada
+- 🔒 **Seguridad Mejorada** - Autorización en código con Convex
+- 📋 **Integridad de Datos** - Document transactions con Convex
 - 🎨 **Design System Moderno** - Tokens, animaciones, y componentes coherentes
 - ⌨️ **Navegación por Teclado** - 15+ atajos para usuarios avanzados
 - 📉 **Visualizaciones Ligeras** - Charts SVG sin dependencias pesadas (~5KB)
@@ -33,7 +33,7 @@ Sistema integral de gestión de tesorería para la **Iglesia Pentecostal Unida d
 ### Prerequisitos
 
 - Node.js 20+
-- Cuenta de Supabase
+- Cuenta de Convex (free tier: [convex.dev](https://convex.dev))
 - Cuenta de Google Cloud (para OAuth)
 - Cuenta de Vercel (para deployment)
 
@@ -49,12 +49,12 @@ npm install
 
 # Configurar variables de entorno
 cp .env.example .env.local
-# Editar .env.local con tus credenciales de Supabase
+# Editar .env.local con tus credenciales de Convex y Google OAuth
 
-# Ejecutar migraciones
-npm run db:migrate
+# Iniciar Convex desarrollo (en terminal separada)
+npx convex dev
 
-# Iniciar servidor de desarrollo
+# Iniciar servidor de desarrollo Next.js
 npm run dev
 ```
 
@@ -66,11 +66,11 @@ Visitar [http://localhost:3000](http://localhost:3000)
 
 - **Frontend**: Next.js 15 (App Router), React 19, TypeScript
 - **Styling**: Tailwind CSS 4, shadcn/ui, Radix UI
-- **Backend**: Next.js API Routes (Serverless)
-- **Database**: PostgreSQL via Supabase con custom pooling
-- **Auth**: Supabase Auth con Google OAuth + Magic Link
-- **Hosting**: Vercel
-- **State**: React State + Custom hooks, TanStack Query v5
+- **Backend**: Convex (TypeScript-first backend)
+- **Database**: Convex Document Database con real-time subscriptions
+- **Auth**: NextAuth v5 con Google OAuth + Convex OIDC Bridge
+- **Hosting**: Vercel (Frontend) + Convex Cloud (Backend)
+- **State**: Convex React hooks + TanStack Query v5 (transición)
 
 ### Estructura del Proyecto
 
@@ -78,14 +78,18 @@ Visitar [http://localhost:3000](http://localhost:3000)
 ipupy-tesoreria/
 ├── src/
 │   ├── app/              # Next.js 15 App Router
-│   │   ├── api/          # API routes serverless
+│   │   ├── api/          # API routes serverless (wrapper REST sobre Convex)
 │   │   ├── (routes)/     # Páginas de la aplicación
 │   │   └── layout.tsx    # Layout principal
 │   ├── components/       # Componentes React
 │   ├── lib/             # Utilidades y configuración
-│   │   └── supabase/    # Cliente Supabase
+│   │   ├── auth.ts      # NextAuth configuration
+│   │   └── convex-*.ts  # Convex client utilities
 │   └── types/           # TypeScript types
-├── migrations/          # SQL migrations
+├── convex/              # Convex backend functions
+│   ├── schema.ts        # Database schema
+│   ├── *.ts             # Queries, mutations, actions
+│   └── auth.config.ts   # OIDC bridge configuration
 ├── public/             # Assets estáticos
 └── docs/              # Documentación
 ```
@@ -94,7 +98,8 @@ ipupy-tesoreria/
 
 ### Sistema de Autenticación
 
-- **Provider**: Google OAuth via Supabase
+- **Provider**: NextAuth v5 con Google OAuth
+- **Backend Integration**: Convex OIDC Bridge
 - **Dominio Restringido**: Solo @ipupy.org.py
 - **Admin Principal**: administracion@ipupy.org.py
 
@@ -116,51 +121,60 @@ El sistema se ha simplificado de 8 a 6 roles jerárquicos:
 
 ### Seguridad
 
-- Row Level Security (RLS) con contexto de usuario mejorado
-- `executeWithContext` para queries seguras con RLS
-- Autenticación server-side con middleware
-- Cookies httpOnly para sesiones
-- CORS estricto con dominios permitidos
-- HTTPS obligatorio en producción
-- Rate limiting en API routes
-- Audit trail completo con `user_activity`
+- **Autorización en Código**: Convex authorization functions con `ctx.auth()`
+- **NextAuth Sessions**: Autenticación server-side con JWT tokens
+- **OIDC Integration**: Google tokens validados en Convex backend
+- **Role-Based Access**: Verificación de roles en cada query/mutation
+- **CORS Estricto**: Dominios permitidos configurados
+- **HTTPS Obligatorio**: En producción
+- **Rate Limiting**: En API routes REST
+- **Audit Trail**: Completo con tabla `userActivity`
 
 ## 📊 Base de Datos
 
-### Tablas Principales
+### Colecciones Principales (Convex)
 
-- `churches` - 22 iglesias con información pastoral
-- `monthly_reports` - Reportes financieros mensuales (expandido)
-- `profiles` - Perfiles de usuarios con 6 roles simplificados
-- `system_configuration` - Configuración administrable del sistema
-- `fund_balances` - Balances de fondos por iglesia
-- `fund_transactions` - Transacciones de fondos
-- `donors` - Registro de donantes
-- `user_activity` - Auditoría completa de actividades
-- `role_permissions` - Matriz de permisos por rol
+- **churches** - 22 iglesias con información pastoral (incluye `supabase_id` para compatibilidad)
+- **monthlyReports** - Reportes financieros mensuales con referencias a iglesias
+- **profiles** - Perfiles de usuarios con 6 roles simplificados
+- **systemConfiguration** - Configuración administrable del sistema
+- **fundBalances** - Balances de fondos por iglesia
+- **fundTransactions** - Transacciones de fondos con trazabilidad
+- **fundEvents** - Eventos con aprobación y presupuesto
+- **donors** - Registro de donantes
+- **userActivity** - Auditoría completa de actividades
+- **providers** - Registro centralizado de proveedores
 
-### Migraciones
+### Schema y Migraciones
 
-Las migraciones se ejecutan automáticamente via Supabase. Para ejecutar manualmente:
+El schema de Convex está definido en `convex/schema.ts`. Los IDs legados de Supabase se preservan en el campo `supabase_id` para compatibilidad con APIs REST existentes.
 
-```bash
-npm run db:migrate
-```
+**Migración desde Supabase**: Ver [CONVEX_MIGRATION_PLAN.md](./docs/CONVEX_MIGRATION_PLAN.md) para detalles de la estrategia de migración.
 
 ## 🚢 Deployment
 
 ### Vercel (Recomendado)
 
-1. Fork este repositorio
-2. Importar en Vercel
-3. Configurar variables de entorno:
-   - `NEXT_PUBLIC_SUPABASE_URL`
-   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_KEY`
-   - `DATABASE_URL`
-   - `GOOGLE_CLIENT_ID`
-   - `GOOGLE_CLIENT_SECRET`
-4. Deploy
+1. **Deploy Convex Backend**:
+   ```bash
+   npx convex deploy
+   ```
+
+2. **Configurar Vercel**:
+   - Fork este repositorio
+   - Importar en Vercel
+   - Configurar variables de entorno:
+     - `CONVEX_DEPLOYMENT` (prod:your-deployment)
+     - `NEXT_PUBLIC_CONVEX_URL` (https://your-deployment.convex.cloud)
+     - `NEXTAUTH_URL` (tu dominio de producción)
+     - `NEXTAUTH_SECRET` (generar con `openssl rand -base64 32`)
+     - `GOOGLE_CLIENT_ID`
+     - `GOOGLE_CLIENT_SECRET`
+   - Deploy
+
+3. **Configurar OIDC en Convex**:
+   - En Convex dashboard, configurar Google OAuth
+   - Verificar que el OIDC bridge está activo
 
 ### Variables de Entorno
 
@@ -204,11 +218,11 @@ Ver [`.env.example`](./.env.example) para la lista completa de variables requeri
 - **Configuración en DB**: Almacenamiento persistente con `system_configuration`
 - **Audit Trail**: Seguimiento completo de cambios de configuración
 
-### Arquitectura de Base de Datos Mejorada
-- **executeWithContext**: Ejecución segura con contexto RLS
-- **executeTransaction**: Transacciones ACID para operaciones complejas
-- **Connection Pool Health**: Monitoreo y recuperación automática de conexiones
-- **Retry Logic**: Recuperación automática con backoff exponencial
+### Migración a Convex Backend
+- **Document Database**: Schema TypeScript-first en lugar de SQL
+- **Real-time Subscriptions**: Actualizaciones automáticas sin polling
+- **Authorization in Code**: Verificación de permisos en funciones TypeScript
+- **Serverless Functions**: Queries, mutations y actions escalables
 
 ### Simplificación de Roles (Migration 023)
 - **6 Roles**: Simplificado desde 8 roles para mejor claridad
@@ -216,7 +230,8 @@ Ver [`.env.example`](./.env.example) para la lista completa de variables requeri
 - **Permission Matrix**: Documentación clara de permisos por rol
 
 ### Seguridad Reforzada
-- **RLS Context Fix**: Corrección crítica del fallback de autenticación
+- **NextAuth Integration**: Migración completa desde Supabase Auth
+- **OIDC Bridge**: Integración segura entre Google OAuth y Convex
 - **CORS Security**: Restricción estricta de orígenes permitidos
 - **Environment Validation**: Validación de variables críticas al inicio
 
@@ -229,12 +244,13 @@ Ver [`.env.example`](./.env.example) para la lista completa de variables requeri
 
 - [Guía de Inicio Rápido](./docs/QUICK_START.md)
 - [Arquitectura del Sistema](./docs/ARCHITECTURE.md)
-- **[Sistema de Configuración](./docs/CONFIGURATION.md)** ✨
-- **[Database Layer](./docs/DATABASE.md)** ✨
-- **[Seguridad y RLS](./docs/SECURITY.md)** ✨
+- **[Convex Schema Reference](./docs/CONVEX_SCHEMA.md)** ✨
+- **[Plan de Migración Convex](./docs/CONVEX_MIGRATION_PLAN.md)** 🚀
+- **[Arquitectura Propuesta](./docs/Arquitectura%20propuesta%20(Next.js%2015%20+%20Vercel%20+%20Convex).md)** 📐
+- **[Seguridad y Autorización](./docs/SECURITY.md)** ✨
 - [API Reference](./docs/API_REFERENCE.md)
 - [Guía de Desarrollo](./docs/DEVELOPER_GUIDE.md)
-- [Historial de Migraciones](./docs/MIGRATION_HISTORY.md)
+- [Sistema de Configuración](./docs/CONFIGURATION.md)
 
 ## 🛠 Desarrollo
 

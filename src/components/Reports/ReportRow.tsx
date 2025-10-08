@@ -27,7 +27,7 @@ type ReportRowProps = {
 };
 
 export function ReportRow({ report, onView }: ReportRowProps): JSX.Element {
-  const updateReport = useUpdateReport(report.id);
+  const updateReport = useUpdateReport();
   const deleteReport = useDeleteReport();
   const [isConfirming, setIsConfirming] = useState(false);
 
@@ -44,7 +44,11 @@ export function ReportRow({ report, onView }: ReportRowProps): JSX.Element {
     }
 
     try {
-      await updateReport.mutateAsync({ estado: nextStatus });
+      await updateReport.mutateAsync({
+        reportId: report.id,
+        convexId: report.convexId,
+        estado: nextStatus,
+      });
     } catch (error) {
       if (error instanceof Error) {
         toast.error(error.message);
@@ -60,7 +64,7 @@ export function ReportRow({ report, onView }: ReportRowProps): JSX.Element {
 
     setIsConfirming(true);
     try {
-      await deleteReport.mutateAsync({ reportId: report.id });
+      await deleteReport.mutateAsync({ reportId: report.id, convexId: report.convexId });
     } catch (error) {
       if (error instanceof Error) {
         toast.error(error.message);

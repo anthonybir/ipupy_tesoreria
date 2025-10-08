@@ -2,7 +2,7 @@
 
 ## Bienvenido al Desarrollo
 
-Esta guía está diseñada para desarrolladores que contribuirán al Sistema de Tesorería IPU PY. Aquí encontrará toda la información necesaria para configurar su entorno de desarrollo, entender la arquitectura y contribuir efectivamente al proyecto.
+Esta guía está diseñada para desarrolladores que contribuirán al Sistema de Tesorería IPU PY. Aquí encontrará toda la información necesaria para configurar su entorno de desarrollo, entender la arquitectura Convex, y contribuir efectivamente al proyecto.
 
 ## Configuración del Entorno de Desarrollo
 
@@ -19,15 +19,12 @@ git --version
 
 # Editor recomendado: VS Code
 code --version
-
-# PostgreSQL Client (opcional, para queries directas)
-psql --version
 ```
 
 #### Cuentas de Desarrollo
 - ✅ Cuenta GitHub con acceso al repositorio
-- ✅ Cuenta Supabase para base de datos de desarrollo
-- ✅ Cuenta Vercel para deploys de prueba
+- ✅ Cuenta Convex (https://convex.dev) para backend
+- ✅ Cuenta Vercel para deploys de frontend
 - ✅ Cuenta Google Cloud para OAuth testing
 
 ### Configuración Inicial
@@ -52,9 +49,12 @@ git config user.email "tu.email@ipupy.org.py"
 # Instalar dependencias del proyecto
 npm install
 
+# Instalar Convex CLI globalmente
+npm install -g convex
+
 # Verificar instalación
-npm run check
 npm run lint
+npx tsc --noEmit
 ```
 
 #### 3. Configurar Variables de Entorno
@@ -68,49 +68,62 @@ nano .env.local
 
 **Variables de desarrollo requeridas:**
 ```bash
-# Database (Supabase Development)
-SUPABASE_DB_URL=postgresql://postgres:[dev-password]@db.[dev-project].supabase.co:5432/postgres
-DATABASE_URL=postgresql://postgres:[dev-password]@db.[dev-project].supabase.co:5432/postgres
-SUPABASE_URL=https://[dev-project].supabase.co
-SUPABASE_SERVICE_KEY=[dev-service-key]
+# Convex Backend (Required)
+CONVEX_DEPLOYMENT=dev:your-deployment-name
+NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
 
-# JWT (usar secreto de desarrollo)
-JWT_SECRET=development_jwt_secret_at_least_32_characters_long
-JWT_EXPIRES_IN=24h
+# NextAuth v5 (Required)
+NEXTAUTH_SECRET=your-development-secret-min-32-chars
+NEXTAUTH_URL=http://localhost:3000
 
-# Google OAuth (configuración de desarrollo)
+# Google OAuth (Development)
 GOOGLE_CLIENT_ID=[dev-client-id].apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=[dev-client-secret]
 
 # Admin Development
-ADMIN_EMAIL=dev@ipupy.org.py
-ADMIN_PASSWORD=dev_password_123
+SYSTEM_OWNER_EMAIL=dev@ipupy.org.py
+ORGANIZATION_NAME="IPU Paraguay - Dev"
 
 # Development Settings
 NODE_ENV=development
-DEBUG=true
-LOG_LEVEL=debug
 ```
 
-#### 4. Configurar Base de Datos de Desarrollo
+#### 4. Configurar Convex Backend
 ```bash
-# Ejecutar migraciones en Supabase desarrollo
-npm run migrate
+# Inicializar Convex (primera vez)
+npx convex dev --once
 
-# Insertar datos de prueba
-npm run seed:dev
+# Esto creará tu deployment de desarrollo y te pedirá:
+# 1. Login con tu cuenta Convex
+# 2. Nombre del proyecto
+# 3. Nombre del deployment (usar "dev")
 
-# Configurar usuario administrador de desarrollo
-npm run setup:admin:quick
+# El comando actualizará .env.local automáticamente con:
+# - CONVEX_DEPLOYMENT
+# - NEXT_PUBLIC_CONVEX_URL
 ```
 
-#### 5. Iniciar Servidor de Desarrollo
+#### 5. Poblar Base de Datos (Primera Vez)
 ```bash
-# Modo desarrollo con hot reload
+# Importar datos iniciales (22 iglesias, usuarios demo)
+npx convex import --table churches convex-data/churches.jsonl
+npx convex import --table profiles convex-data/profiles.jsonl
+
+# Verificar importación
+npx convex run scripts:checkData
+```
+
+#### 6. Iniciar Servidores de Desarrollo
+```bash
+# Terminal 1: Convex backend (watch mode)
+npx convex dev
+
+# Terminal 2: Next.js frontend
 npm run dev
 
-# El servidor estará disponible en:
-# http://localhost:3000
+# El sistema estará disponible en:
+# - Frontend: http://localhost:3000
+# - Convex Dashboard: https://dashboard.convex.dev
 ```
 
 ## Estructura del Proyecto
@@ -118,209 +131,377 @@ npm run dev
 ### Arquitectura de Directorios
 ```
 ipupy-tesoreria/
-├── api/                    # 🚀 Serverless Functions (10)
-│   ├── auth.js            # Autenticación y autorización
-│   ├── churches.js        # CRUD de iglesias
-│   ├── church-transactions.js  # Transacciones por iglesia
-│   ├── dashboard.js       # Dashboard y métricas
-│   ├── export.js         # Exportación a Excel
-│   ├── families.js       # Gestión de familias
-│   ├── import.js         # Importación desde Excel
-│   ├── members.js        # Gestión de miembros
-│   ├── reports.js        # Reportes financieros
-│   └── transactions.js   # Transacciones generales
-├── src/                   # 🔧 Core Libraries
-│   ├── lib/              # Librerías compartidas
-│   │   ├── db.js         # Abstracción de base de datos
-│   │   ├── db-supabase.js # Implementación PostgreSQL
-│   │   └── cors.js       # Configuración CORS
-│   └── server.js         # Servidor de desarrollo Express
-├── public/               # 🌐 Frontend Assets
-│   ├── index.html        # Dashboard principal
-│   ├── css/             # Estilos CSS
-│   ├── js/              # JavaScript del cliente
-│   └── images/          # Assets estáticos
-├── migrations/           # 🗄️ Database Migrations
-│   ├── 001_initial_schema.sql
-│   ├── 002_member_management.sql
-│   └── ...
-├── scripts/             # 🛠️ Utility Scripts
-│   ├── migrate.js       # Ejecutor de migraciones
-│   ├── seed.js         # Datos de prueba
-│   └── utilities/      # Scripts de utilidad
-├── tests/              # 🧪 Test Suite
-│   ├── api/            # Tests de API
-│   ├── integration/    # Tests de integración
-│   └── utilities/      # Utilidades de testing
-├── docs/               # 📚 Documentation
-└── config/             # ⚙️ Configuration Files
+├── convex/                     # 🚀 Convex Backend Functions
+│   ├── schema.ts              # Database schema with TypeScript validators
+│   ├── auth.config.ts         # OIDC configuration for NextAuth
+│   ├── churches.ts            # Church queries & mutations
+│   ├── reports.ts             # Monthly reports logic
+│   ├── fundEvents.ts          # Event budgeting system
+│   ├── fundTransactions.ts    # Transaction ledger
+│   ├── funds.ts               # Fund management
+│   ├── providers.ts           # Provider registry
+│   ├── profiles.ts            # User profiles
+│   ├── userActivity.ts        # Audit logs
+│   └── _generated/            # Auto-generated API types
+├── src/                        # 🔧 Next.js Application
+│   ├── app/                   # Next.js 15 App Router
+│   │   ├── api/               # REST API compatibility layer
+│   │   │   ├── churches/      # Church endpoints
+│   │   │   ├── reports/       # Report endpoints
+│   │   │   ├── dashboard/     # Dashboard data
+│   │   │   └── auth/          # NextAuth endpoints
+│   │   ├── (routes)/          # Application pages
+│   │   │   ├── churches/      # Church management UI
+│   │   │   ├── reports/       # Monthly reports UI
+│   │   │   ├── funds/         # Fund management
+│   │   │   ├── transactions/  # Transaction ledger
+│   │   │   └── login/         # Login page
+│   │   ├── layout.tsx         # Root layout with ConvexProvider
+│   │   └── providers.tsx      # Client-side providers
+│   ├── components/            # React components
+│   │   ├── ui/                # shadcn/ui components
+│   │   ├── Auth/              # Authentication components
+│   │   ├── Churches/          # Church management
+│   │   ├── Reports/           # Report forms and views
+│   │   └── Shared/            # Reusable UI components
+│   ├── hooks/                 # React hooks
+│   │   ├── useChurches.ts     # Church data (TanStack Query - legacy)
+│   │   └── useReports.ts      # Report data (TanStack Query - legacy)
+│   ├── lib/                   # Core utilities
+│   │   ├── auth.ts            # NextAuth configuration
+│   │   ├── convex-server.ts   # Server-side Convex client
+│   │   └── utils/             # Utility functions
+│   ├── types/                 # TypeScript type definitions
+│   └── styles/                # Global styles & CSS tokens
+├── convex-data/               # 📊 Data Import Files
+│   ├── churches.jsonl         # 22 IPU Paraguay churches
+│   └── profiles.jsonl         # Demo user profiles
+├── scripts/                   # 🛠️ Utility Scripts
+│   ├── export-supabase.ts     # Legacy migration script
+│   └── transform-for-convex.ts # Data transformation
+├── docs/                      # 📚 Documentation
+│   ├── ARCHITECTURE.md        # System architecture
+│   ├── CONVEX_SCHEMA.md       # Database schema reference
+│   ├── API_REFERENCE.md       # API documentation
+│   └── SECURITY.md            # Security patterns
+└── migrations/                # 🗄️ Legacy SQL Migrations (deprecated)
 ```
 
 ### Convenciones de Código
 
 #### Naming Conventions
-```javascript
+```typescript
 // Variables y funciones: camelCase
 const monthlyReport = {};
 const calculateFondoNacional = () => {};
 
 // Constantes: UPPER_SNAKE_CASE
-const DATABASE_URL = process.env.DATABASE_URL;
 const MAX_FILE_SIZE = 10485760;
+const ALLOWED_ROLES = ['admin', 'treasurer'];
 
-// Clases: PascalCase
-class ReportService {}
-class ExcelExporter {}
+// Tipos e Interfaces: PascalCase
+type MonthlyReport = {};
+interface ReportFormData {}
 
-// Archivos: kebab-case
-church-transactions.js
-member-management.sql
+// Archivos Convex: camelCase.ts
+churches.ts
+fundEvents.ts
+monthlyReports.ts
+
+// Archivos React: PascalCase.tsx
+ChurchForm.tsx
+ReportsList.tsx
 ```
 
 #### Code Structure
-```javascript
-// Estructura estándar de función API
-module.exports = async function handler(req, res) {
-  // 1. Configurar CORS
-  setCORSHeaders(req, res);
-  if (handlePreflight(req, res)) return;
 
-  // 2. Validar autenticación
-  const user = await validateAuth(req);
-  if (!user) {
-    return res.status(401).json({ error: 'No autorizado' });
-  }
+**Convex Query Pattern:**
+```typescript
+// convex/churches.ts
+import { query } from "./_generated/server";
+import { v } from "convex/values";
 
-  // 3. Validar permisos
-  if (!hasPermission(user, req.query.action)) {
-    return res.status(403).json({ error: 'Sin permisos' });
-  }
+export const list = query({
+  args: {},
+  handler: async (ctx) => {
+    // 1. Verificar autenticación
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
 
-  // 4. Procesar según método HTTP
-  switch (req.method) {
-    case 'GET':
-      return handleGet(req, res, user);
-    case 'POST':
-      return handlePost(req, res, user);
-    case 'PUT':
-      return handlePut(req, res, user);
-    case 'DELETE':
-      return handleDelete(req, res, user);
-    default:
-      return res.status(405).json({ error: 'Método no permitido' });
-  }
-};
+    // 2. Cargar perfil de usuario
+    const user = await ctx.db
+      .query("profiles")
+      .withIndex("by_email", (q) => q.eq("email", identity.email))
+      .unique();
+
+    if (!user) {
+      throw new Error("User profile not found");
+    }
+
+    // 3. Filtrar datos según permisos
+    if (["admin", "national_treasurer"].includes(user.role)) {
+      // Ver todas las iglesias
+      return await ctx.db.query("churches").collect();
+    }
+
+    // Solo ver iglesia asignada
+    if (!user.churchId) {
+      return [];
+    }
+
+    const church = await ctx.db.get(user.churchId);
+    return church ? [church] : [];
+  },
+});
+```
+
+**Convex Mutation Pattern:**
+```typescript
+// convex/reports.ts
+import { mutation } from "./_generated/server";
+import { v } from "convex/values";
+
+export const create = mutation({
+  args: {
+    churchId: v.id("churches"),
+    month: v.number(),
+    year: v.number(),
+    diezmos: v.number(),
+    ofrendas: v.number(),
+  },
+  handler: async (ctx, args) => {
+    // 1. Verificar autenticación
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    // 2. Cargar perfil y verificar permisos
+    const user = await ctx.db
+      .query("profiles")
+      .withIndex("by_email", (q) => q.eq("email", identity.email))
+      .unique();
+
+    if (!user) {
+      throw new Error("User profile not found");
+    }
+
+    // 3. Verificar acceso a la iglesia
+    if (!["admin", "treasurer"].includes(user.role)) {
+      if (user.churchId !== args.churchId) {
+        throw new Error("Unauthorized: Can only create reports for your church");
+      }
+    }
+
+    // 4. Validar datos
+    if (args.month < 1 || args.month > 12) {
+      throw new Error("Month must be between 1 and 12");
+    }
+
+    if (args.diezmos < 0 || args.ofrendas < 0) {
+      throw new Error("Amounts cannot be negative");
+    }
+
+    // 5. Calcular fondo nacional (10%)
+    const total = args.diezmos + args.ofrendas;
+    const fondoNacional = Math.round(total * 0.10);
+
+    // 6. Crear reporte
+    const reportId = await ctx.db.insert("monthlyReports", {
+      churchId: args.churchId,
+      month: args.month,
+      year: args.year,
+      diezmos: args.diezmos,
+      ofrendas: args.ofrendas,
+      fondoNacional,
+      status: "draft",
+      createdBy: user._id,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    // 7. Registrar auditoría
+    await ctx.db.insert("userActivity", {
+      userId: user._id,
+      action: "report.create",
+      details: { reportId, churchId: args.churchId },
+      timestamp: Date.now(),
+    });
+
+    return await ctx.db.get(reportId);
+  },
+});
 ```
 
 ## Patterns y Arquitectura
 
-### Database Access Pattern
-```javascript
-// ✅ Patrón recomendado: Repository
-class ChurchRepository {
-  static async findById(id) {
-    const { rows } = await db.query(
-      'SELECT * FROM churches WHERE id = $1',
-      [id]
-    );
-    return rows[0] || null;
+### Authorization Helpers
+
+Crear funciones reutilizables para autorización:
+
+```typescript
+// convex/lib/auth.ts
+import { QueryCtx, MutationCtx } from "./_generated/server";
+
+export async function requireAuth(ctx: QueryCtx | MutationCtx) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    throw new Error("Not authenticated");
   }
 
-  static async findActive() {
-    const { rows } = await db.query(
-      'SELECT * FROM churches WHERE active = true ORDER BY name'
-    );
-    return rows;
+  const user = await ctx.db
+    .query("profiles")
+    .withIndex("by_email", (q) => q.eq("email", identity.email))
+    .unique();
+
+  if (!user) {
+    throw new Error("User profile not found");
   }
 
-  static async create(churchData) {
-    const { rows } = await db.query(
-      `INSERT INTO churches (name, city, pastor, phone)
-       VALUES ($1, $2, $3, $4)
-       RETURNING *`,
-      [churchData.name, churchData.city, churchData.pastor, churchData.phone]
-    );
-    return rows[0];
+  return user;
+}
+
+export async function requireRole(
+  ctx: QueryCtx | MutationCtx,
+  allowedRoles: string[]
+) {
+  const user = await requireAuth(ctx);
+
+  if (!allowedRoles.includes(user.role)) {
+    throw new Error(`Unauthorized: requires ${allowedRoles.join(", ")}`);
   }
+
+  return user;
+}
+
+export async function requireChurchAccess(
+  ctx: QueryCtx | MutationCtx,
+  churchId: string
+) {
+  const user = await requireAuth(ctx);
+
+  // Admin y tesoreros nacionales ven todas las iglesias
+  if (["admin", "national_treasurer"].includes(user.role)) {
+    return user;
+  }
+
+  // Otros roles solo su iglesia
+  if (user.churchId !== churchId) {
+    throw new Error("Unauthorized: Can only access your church");
+  }
+
+  return user;
 }
 ```
 
-### Service Layer Pattern
-```javascript
-// ✅ Lógica de negocio en servicios
-class ReportService {
-  static calculateFondoNacional(diezmos, ofrendas) {
-    const total = parseFloat(diezmos) + parseFloat(ofrendas);
-    return Math.round(total * 0.10);
+**Uso de helpers:**
+```typescript
+// convex/reports.ts
+import { requireAuth, requireChurchAccess } from "./lib/auth";
+
+export const getForChurch = query({
+  args: { churchId: v.id("churches") },
+  handler: async (ctx, { churchId }) => {
+    // Verificar autenticación y acceso en una línea
+    await requireChurchAccess(ctx, churchId);
+
+    // Query autorizado
+    return await ctx.db
+      .query("monthlyReports")
+      .withIndex("by_church", (q) => q.eq("churchId", churchId))
+      .collect();
+  },
+});
+```
+
+### Real-time Subscriptions Pattern
+
+```typescript
+// src/components/Reports/ReportsList.tsx
+"use client";
+
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
+
+export function ReportsList({ churchId }: { churchId: Id<"churches"> }) {
+  // Auto-actualiza cuando cambian los datos
+  const reports = useQuery(api.reports.listForChurch, { churchId });
+
+  if (reports === undefined) {
+    return <div>Cargando reportes...</div>;
   }
 
-  static validateMonthlyReport(reportData) {
-    const errors = [];
-
-    if (!reportData.church_id) {
-      errors.push('church_id es requerido');
-    }
-
-    if (reportData.month < 1 || reportData.month > 12) {
-      errors.push('Mes debe estar entre 1 y 12');
-    }
-
-    if (reportData.diezmos < 0) {
-      errors.push('Diezmos no puede ser negativo');
-    }
-
-    return errors;
+  if (reports.length === 0) {
+    return <div>No hay reportes</div>;
   }
 
-  static async generateMonthlyReport(churchId, month, year) {
-    // Lógica compleja de generación de reportes
-    const church = await ChurchRepository.findById(churchId);
-    const transactions = await TransactionRepository.findByPeriod(
-      churchId, month, year
-    );
-
-    return {
-      church,
-      period: { month, year },
-      summary: this.calculateSummary(transactions),
-      fondoNacional: this.calculateFondoNacional(
-        transactions.diezmos,
-        transactions.ofrendas
-      )
-    };
-  }
+  return (
+    <ul>
+      {reports.map((report) => (
+        <li key={report._id}>
+          {report.month}/{report.year} - ₲{report.diezmos + report.ofrendas}
+        </li>
+      ))}
+    </ul>
+  );
 }
 ```
 
 ### Error Handling Pattern
-```javascript
-// ✅ Manejo consistente de errores
-class APIError extends Error {
-  constructor(message, statusCode = 500, code = 'INTERNAL_ERROR') {
+
+```typescript
+// convex/lib/errors.ts
+export class AuthError extends Error {
+  constructor(message: string) {
     super(message);
-    this.statusCode = statusCode;
-    this.code = code;
-    this.name = 'APIError';
+    this.name = "AuthError";
   }
 }
 
-// Uso en funciones API
-const handleError = (error, res) => {
-  console.error('API Error:', error);
-
-  if (error instanceof APIError) {
-    return res.status(error.statusCode).json({
-      error: error.message,
-      code: error.code
-    });
+export class ValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ValidationError";
   }
+}
 
-  // Error no manejado
-  return res.status(500).json({
-    error: 'Error interno del servidor',
-    code: 'INTERNAL_ERROR'
-  });
-};
+export class PermissionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PermissionError";
+  }
+}
+
+// Uso en funciones
+export const approve = mutation({
+  handler: async (ctx, { reportId }) => {
+    const user = await requireAuth(ctx);
+
+    if (!["admin", "treasurer"].includes(user.role)) {
+      throw new PermissionError("Only treasurers can approve reports");
+    }
+
+    const report = await ctx.db.get(reportId);
+    if (!report) {
+      throw new ValidationError("Report not found");
+    }
+
+    if (report.status !== "submitted") {
+      throw new ValidationError("Can only approve submitted reports");
+    }
+
+    await ctx.db.patch(reportId, {
+      status: "approved",
+      approvedBy: user._id,
+      approvedAt: Date.now(),
+    });
+
+    return await ctx.db.get(reportId);
+  },
+});
 ```
 
 ## Testing
@@ -330,25 +511,19 @@ const handleError = (error, res) => {
 #### Estructura de Tests
 ```bash
 tests/
-├── api/                    # Tests de endpoints API
-│   ├── auth.test.js
-│   ├── churches.test.js
-│   └── reports.test.js
+├── convex/                 # Tests de funciones Convex
+│   ├── churches.test.ts
+│   ├── reports.test.ts
+│   └── auth.test.ts
 ├── integration/            # Tests de integración
-│   ├── database.test.js
-│   ├── excel-export.test.js
-│   └── full-workflow.test.js
-├── unit/                   # Tests unitarios
-│   ├── services/
-│   │   ├── ReportService.test.js
-│   │   └── ExcelService.test.js
-│   └── utils/
-│       ├── validators.test.js
-│       └── formatters.test.js
+│   ├── report-workflow.test.ts
+│   └── fund-events.test.ts
+├── components/             # Tests de componentes React
+│   ├── ChurchForm.test.tsx
+│   └── ReportsList.test.tsx
 └── fixtures/               # Datos de prueba
     ├── sample-churches.json
-    ├── sample-reports.json
-    └── sample-excel-files/
+    └── sample-reports.json
 ```
 
 #### Ejecutar Tests
@@ -356,102 +531,56 @@ tests/
 # Todos los tests
 npm test
 
-# Tests específicos
-npm run test:api
-npm run test:integration
-npm run test:unit
+# Tests en watch mode
+npm run test:watch
 
 # Tests con coverage
 npm run test:coverage
 
-# Tests en modo watch
-npm run test:watch
+# Lint y typecheck
+npm run lint
+npx tsc --noEmit
 ```
 
-#### Ejemplo de Test API
-```javascript
-// tests/api/churches.test.js
-const request = require('supertest');
-const app = require('../../src/server');
+#### Ejemplo de Test Convex
+```typescript
+// tests/convex/reports.test.ts
+import { convexTest } from "convex-test";
+import { expect, test } from "vitest";
+import schema from "../convex/schema";
+import { api } from "../convex/_generated/api";
 
-describe('Churches API', () => {
-  let authToken;
-  let testChurch;
+test("create report calculates fondo nacional", async () => {
+  const t = convexTest(schema);
 
-  beforeAll(async () => {
-    // Setup: obtener token de autenticación
-    const loginResponse = await request(app)
-      .post('/api/auth?action=login')
-      .send({
-        email: 'test@ipupy.org.py',
-        password: 'test_password'
-      });
-
-    authToken = loginResponse.body.token;
+  // Setup: crear iglesia y usuario
+  const churchId = await t.mutation(api.churches.create, {
+    name: "Test Church",
+    city: "Asunción",
+    pastor: "Pastor Test",
   });
 
-  describe('GET /api/churches', () => {
-    it('should return list of churches', async () => {
-      const response = await request(app)
-        .get('/api/churches')
-        .set('Authorization', `Bearer ${authToken}`)
-        .expect(200);
-
-      expect(response.body.success).toBe(true);
-      expect(Array.isArray(response.body.churches)).toBe(true);
-      expect(response.body.churches.length).toBeGreaterThan(0);
-    });
-
-    it('should require authentication', async () => {
-      await request(app)
-        .get('/api/churches')
-        .expect(401);
-    });
+  const userId = await t.mutation(api.profiles.create, {
+    email: "test@ipupy.org.py",
+    role: "treasurer",
+    churchId,
   });
 
-  describe('POST /api/churches', () => {
-    it('should create new church', async () => {
-      const newChurch = {
-        name: 'IPU Test Church',
-        city: 'Test City',
-        pastor: 'Pastor Test',
-        phone: '+595 21 123456'
-      };
+  // Autenticar
+  await t.withIdentity({ email: "test@ipupy.org.py" });
 
-      const response = await request(app)
-        .post('/api/churches')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send(newChurch)
-        .expect(201);
-
-      expect(response.body.success).toBe(true);
-      expect(response.body.church.name).toBe(newChurch.name);
-
-      testChurch = response.body.church;
-    });
-
-    it('should validate required fields', async () => {
-      const invalidChurch = {
-        city: 'Test City'
-        // Missing required 'name' field
-      };
-
-      await request(app)
-        .post('/api/churches')
-        .set('Authorization', `Bearer ${authToken}`)
-        .send(invalidChurch)
-        .expect(422);
-    });
+  // Test: crear reporte
+  const report = await t.mutation(api.reports.create, {
+    churchId,
+    month: 1,
+    year: 2025,
+    diezmos: 1000000,
+    ofrendas: 500000,
   });
 
-  afterAll(async () => {
-    // Cleanup: eliminar iglesia de prueba
-    if (testChurch) {
-      await request(app)
-        .delete(`/api/churches/${testChurch.id}`)
-        .set('Authorization', `Bearer ${authToken}`);
-    }
-  });
+  // Verificar cálculo 10%
+  expect(report.fondoNacional).toBe(150000);
+  expect(report.status).toBe("draft");
 });
 ```
 
@@ -490,85 +619,49 @@ test:     # Agregar tests
 chore:    # Tareas de mantenimiento
 
 # Ejemplos
-git commit -m "feat(api): agregar endpoint de familias"
-git commit -m "fix(auth): corregir validación de Google OAuth"
-git commit -m "docs(api): actualizar documentación de endpoints"
-git commit -m "test(reports): agregar tests para cálculo de fondo nacional"
+git commit -m "feat(convex): agregar query para dashboard"
+git commit -m "fix(auth): corregir validación de roles"
+git commit -m "docs(api): actualizar documentación de mutations"
+git commit -m "test(reports): agregar tests para cálculo de fondo"
 ```
 
-#### Deployment a Vercel
+### Deployment a Producción
+
+#### Convex Deployment
+```bash
+# Deploy a producción
+npx convex deploy --prod
+
+# Esto:
+# 1. Compila funciones TypeScript
+# 2. Valida schema
+# 3. Despliega a Convex Cloud
+# 4. Actualiza índices y migraciones
+```
+
+#### Vercel Deployment
 ```bash
 # Desarrollo: Deploy automático en PRs
-# Staging: Deploy automático en merge a main
-# Production: Deploy manual con tag
+# Production: Deploy automático en merge a main
 
-# Crear release
-git tag -a v2.1.0 -m "Release v2.1.0: Nuevas funcionalidades de familias"
-git push origin v2.1.0
-
-# Vercel despliega automáticamente el tag a producción
-```
-
-### Environment-Specific Configuration
-
-#### Desarrollo Local
-```javascript
-// config/development.js
-module.exports = {
-  database: {
-    pool: { min: 1, max: 5 },
-    debug: true
-  },
-  logging: {
-    level: 'debug',
-    console: true
-  },
-  cache: {
-    enabled: false
-  }
-};
-```
-
-#### Staging
-```javascript
-// config/staging.js
-module.exports = {
-  database: {
-    pool: { min: 2, max: 10 },
-    debug: false
-  },
-  logging: {
-    level: 'info',
-    console: true
-  },
-  cache: {
-    enabled: true,
-    ttl: 300 // 5 minutos
-  }
-};
-```
-
-#### Production
-```javascript
-// config/production.js
-module.exports = {
-  database: {
-    pool: { min: 5, max: 20 },
-    debug: false
-  },
-  logging: {
-    level: 'warn',
-    console: false,
-    file: true
-  },
-  cache: {
-    enabled: true,
-    ttl: 600 // 10 minutos
-  }
-};
+# Variables de entorno en Vercel:
+# - CONVEX_DEPLOYMENT=prod:your-project
+# - NEXT_PUBLIC_CONVEX_URL=https://your-project.convex.cloud
+# - NEXTAUTH_SECRET=<production-secret>
+# - GOOGLE_CLIENT_ID=<production-oauth>
+# - GOOGLE_CLIENT_SECRET=<production-oauth>
 ```
 
 ## Debugging y Troubleshooting
+
+### Convex Dashboard
+
+El dashboard de Convex (https://dashboard.convex.dev) es tu mejor herramienta de debugging:
+
+1. **Logs en Tiempo Real**: Ver todas las llamadas a funciones
+2. **Data Browser**: Explorar y editar documentos
+3. **Schema Inspector**: Verificar índices y validadores
+4. **Function Playground**: Probar funciones manualmente
 
 ### Debugging Local
 
@@ -579,91 +672,67 @@ module.exports = {
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug Server",
-      "type": "node",
+      "name": "Next.js: debug server-side",
+      "type": "node-terminal",
       "request": "launch",
-      "program": "${workspaceFolder}/src/server.js",
-      "env": {
-        "NODE_ENV": "development",
-        "DEBUG": "ipupy:*"
-      },
-      "console": "integratedTerminal",
-      "restart": true,
-      "runtimeArgs": ["--inspect"]
+      "command": "npm run dev"
     },
     {
-      "name": "Debug Tests",
-      "type": "node",
+      "name": "Next.js: debug client-side",
+      "type": "chrome",
       "request": "launch",
-      "program": "${workspaceFolder}/node_modules/.bin/jest",
-      "args": ["--runInBand", "--no-cache"],
-      "console": "integratedTerminal",
-      "env": {
-        "NODE_ENV": "test"
-      }
+      "url": "http://localhost:3000"
     }
   ]
 }
 ```
 
-#### Debug Logging
-```javascript
-// utils/logger.js
-const debug = require('debug');
+#### Console Logging en Convex
+```typescript
+// convex/reports.ts
+export const approve = mutation({
+  handler: async (ctx, { reportId }) => {
+    console.log("Approving report:", reportId);
 
-const logger = {
-  info: debug('ipupy:info'),
-  error: debug('ipupy:error'),
-  debug: debug('ipupy:debug'),
-  db: debug('ipupy:db'),
-  api: debug('ipupy:api')
-};
+    const user = await requireAuth(ctx);
+    console.log("User role:", user.role);
 
-// Uso en código
-logger.api('Processing request: %s %s', req.method, req.url);
-logger.db('Executing query: %s', query);
-logger.error('Error occurred: %O', error);
+    // Los logs aparecen en:
+    // 1. Terminal donde corre `npx convex dev`
+    // 2. Convex Dashboard > Logs tab
+  },
+});
 ```
 
 ### Herramientas de Desarrollo
 
-#### Database Debugging
+#### Convex CLI Commands
 ```bash
-# Conectar directamente a Supabase
-psql "postgresql://postgres:[password]@db.[project].supabase.co:5432/postgres"
+# Ver logs en tiempo real
+npx convex logs
 
-# Queries útiles para debugging
-\dt                           # Listar tablas
-\d churches                   # Describir tabla churches
-SELECT COUNT(*) FROM reports; # Contar reportes
+# Ejecutar función manualmente
+npx convex run reports:list
 
-# Ver queries lentas
-SELECT query, mean_time, calls
-FROM pg_stat_statements
-ORDER BY mean_time DESC LIMIT 10;
+# Exportar datos
+npx convex export
+
+# Importar datos
+npx convex import --table churches data.jsonl
+
+# Limpiar deployment de desarrollo
+npx convex data clear
 ```
 
-#### API Testing
+#### Testing API con curl
 ```bash
-# Usar curl para testing manual
-curl -X GET "http://localhost:3000/api/churches" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -H "Content-Type: application/json"
-
-# Usar Postman collection (incluida en repo)
-# tests/postman/IPU-Treasury-API.postman_collection.json
-```
-
-#### Performance Profiling
-```bash
-# Profiling con clinic.js
-npm install -g clinic
-clinic doctor -- node src/server.js
-clinic flame -- node src/server.js
-
-# Memory profiling
-node --inspect --inspect-brk src/server.js
-# Abrir chrome://inspect en Chrome
+# Queries no requieren autenticación en desarrollo
+curl "https://your-deployment.convex.cloud/api/query" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "path": "churches:list",
+    "args": {}
+  }'
 ```
 
 ## Contribución y Code Review
@@ -673,14 +742,14 @@ node --inspect --inspect-brk src/server.js
 #### Antes de Contribuir
 1. ✅ Leer esta guía completa
 2. ✅ Configurar entorno de desarrollo
-3. ✅ Ejecutar tests exitosamente
+3. ✅ Ejecutar `npm run lint` y `npx tsc --noEmit` exitosamente
 4. ✅ Revisar issues abiertos en GitHub
 5. ✅ Discutir cambios grandes en issues primero
 
 #### Pull Request Process
 1. **Fork** del repositorio
 2. **Crear rama** para feature/fix
-3. **Hacer cambios** siguiendo convenciones
+3. **Hacer cambios** siguiendo convenciones TypeScript
 4. **Agregar tests** para nueva funcionalidad
 5. **Documentar** cambios relevantes
 6. **Submit PR** con descripción detallada
@@ -697,18 +766,17 @@ Descripción clara de los cambios realizados.
 - [ ] Documentación (cambios solo en documentación)
 
 ## Testing
+- [ ] TypeScript compila sin errores (`npx tsc --noEmit`)
+- [ ] Lint pasa sin warnings (`npm run lint`)
 - [ ] Tests unitarios pasando
-- [ ] Tests de integración pasando
-- [ ] Funcionalidad probada manualmente
-- [ ] No hay regresiones detectadas
+- [ ] Funcionalidad probada manualmente en Convex dev
 
 ## Checklist
-- [ ] Código sigue las convenciones del proyecto
+- [ ] Código sigue las convenciones TypeScript del proyecto
 - [ ] Self-review realizado
 - [ ] Comentarios agregados en código complejo
 - [ ] Documentación actualizada
-- [ ] No hay warnings de linting
-- [ ] Variables de entorno documentadas (si aplica)
+- [ ] Schema validado en Convex Dashboard
 
 ## Screenshots (si aplica)
 Agregar capturas de pantalla para cambios de UI.
@@ -722,339 +790,169 @@ Related to #[issue_number]
 
 #### Como Reviewer
 1. **Funcionalidad**: ¿Los cambios hacen lo que dicen hacer?
-2. **Calidad**: ¿El código está bien escrito y es mantenible?
-3. **Performance**: ¿Los cambios afectan el rendimiento?
-4. **Seguridad**: ¿Hay vulnerabilidades introducidas?
-5. **Tests**: ¿Los tests son adecuados y exhaustivos?
+2. **Type Safety**: ¿Se usan tipos explícitos? ¿Se evita `any`?
+3. **Performance**: ¿Las queries están optimizadas con índices?
+4. **Seguridad**: ¿Se validan permisos correctamente?
+5. **Tests**: ¿Los tests cubren casos edge?
 6. **Documentación**: ¿Los cambios están documentados?
-
-#### Feedback Constructivo
-```markdown
-# ✅ Buen feedback
-Considerar usar async/await en lugar de callbacks para mejor legibilidad.
-Esta función podría beneficiarse de validación de entrada para evitar errores.
-
-# ❌ Mal feedback
-Este código está mal.
-No me gusta este approach.
-```
 
 ## Security Guidelines
 
-### Seguridad en Desarrollo
+### Authorization Best Practices
 
-#### Environment Variables
-```bash
-# ✅ Correcto: usar variables de entorno
-const jwtSecret = process.env.JWT_SECRET;
+#### Siempre Verificar Autenticación
+```typescript
+// ✅ Correcto: verificar en cada función
+export const sensitiveQuery = query({
+  handler: async (ctx) => {
+    const user = await requireAuth(ctx);
+    // ... resto de lógica
+  },
+});
 
-# ❌ Incorrecto: hardcodear secretos
-const jwtSecret = "mi_secreto_super_seguro";
+// ❌ Incorrecto: asumir autenticación
+export const sensitiveQuery = query({
+  handler: async (ctx) => {
+    // PELIGRO: cualquiera puede llamar esto
+    return await ctx.db.query("sensitiveData").collect();
+  },
+});
 ```
 
-#### SQL Injection Prevention
-```javascript
-// ✅ Correcto: usar parámetros
-const { rows } = await db.query(
-  'SELECT * FROM users WHERE email = $1',
-  [email]
-);
+#### Validación de Input
+```typescript
+// ✅ Usar validators de Convex
+export const create = mutation({
+  args: {
+    amount: v.number(),
+    email: v.string(),
+    churchId: v.id("churches"),
+  },
+  handler: async (ctx, args) => {
+    // Validación adicional
+    if (args.amount < 0) {
+      throw new Error("Amount cannot be negative");
+    }
 
-// ❌ Incorrecto: concatenar strings
-const { rows } = await db.query(
-  `SELECT * FROM users WHERE email = '${email}'`
-);
+    if (!args.email.includes("@")) {
+      throw new Error("Invalid email format");
+    }
+
+    // ... resto de lógica
+  },
+});
 ```
 
-#### Input Validation
-```javascript
-// ✅ Validación robusta
-const validateReportData = (data) => {
-  const schema = {
-    church_id: 'integer|required|min:1',
-    month: 'integer|required|min:1|max:12',
-    year: 'integer|required|min:2020|max:2030',
-    diezmos: 'number|required|min:0',
-    ofrendas: 'number|required|min:0'
-  };
+#### Evitar Exposición de Datos Sensibles
+```typescript
+// ✅ Filtrar campos sensibles
+export const getUserProfile = query({
+  handler: async (ctx, { userId }) => {
+    const user = await ctx.db.get(userId);
 
-  return validator.validate(data, schema);
-};
-```
-
-#### Authentication Headers
-```javascript
-// ✅ Verificar headers de seguridad
-const securityHeaders = {
-  'X-Content-Type-Options': 'nosniff',
-  'X-Frame-Options': 'DENY',
-  'X-XSS-Protection': '1; mode=block',
-  'Strict-Transport-Security': 'max-age=31536000',
-  'Referrer-Policy': 'strict-origin-when-cross-origin'
-};
+    // No exponer email a otros usuarios
+    return {
+      _id: user._id,
+      fullName: user.fullName,
+      role: user.role,
+      // Omitir: email, supabase_id
+    };
+  },
+});
 ```
 
 ## Performance Optimization
 
-### Database Optimization
+### Query Optimization
 
-#### Query Optimization
-```sql
--- ✅ Query optimizada con índices
-SELECT r.*, c.name as church_name
-FROM reports r
-JOIN churches c ON r.church_id = c.id
-WHERE r.year = $1 AND r.month = $2
-ORDER BY c.name;
+#### Usar Índices Correctamente
+```typescript
+// ✅ Query optimizada con índice
+export const getReportsForChurch = query({
+  args: { churchId: v.id("churches") },
+  handler: async (ctx, { churchId }) => {
+    // Usa índice "by_church" definido en schema
+    return await ctx.db
+      .query("monthlyReports")
+      .withIndex("by_church", (q) => q.eq("churchId", churchId))
+      .collect();
+  },
+});
 
--- Índice recomendado:
-CREATE INDEX idx_reports_year_month ON reports(year, month);
-```
-
-#### Connection Pooling
-```javascript
-// ✅ Pool de conexiones eficiente
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  min: 5,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000
+// ❌ Query sin índice (lenta)
+export const getReportsForChurch = query({
+  handler: async (ctx, { churchId }) => {
+    const allReports = await ctx.db.query("monthlyReports").collect();
+    return allReports.filter((r) => r.churchId === churchId);
+  },
 });
 ```
 
-### API Optimization
-
-#### Caching Strategy
-```javascript
-// ✅ Cache inteligente por endpoint
-const cache = new Map();
-
-const getCachedData = (key, fetchFn, ttl = 300000) => {
-  const cached = cache.get(key);
-
-  if (cached && Date.now() - cached.timestamp < ttl) {
-    return cached.data;
-  }
-
-  const data = fetchFn();
-  cache.set(key, { data, timestamp: Date.now() });
-
-  return data;
-};
-```
-
-#### Pagination
-```javascript
+#### Pagination para Grandes Datasets
+```typescript
 // ✅ Paginación eficiente
-const getPaginatedResults = async (table, page = 1, limit = 50) => {
-  const offset = (page - 1) * limit;
-
-  const [data, total] = await Promise.all([
-    db.query(`SELECT * FROM ${table} LIMIT $1 OFFSET $2`, [limit, offset]),
-    db.query(`SELECT COUNT(*) FROM ${table}`)
-  ]);
-
-  return {
-    data: data.rows,
-    pagination: {
-      page,
-      limit,
-      total: parseInt(total.rows[0].count),
-      pages: Math.ceil(total.rows[0].count / limit)
-    }
-  };
-};
+export const getReportsPaginated = query({
+  args: {
+    churchId: v.id("churches"),
+    paginationOpts: paginationOptsValidator,
+  },
+  handler: async (ctx, { churchId, paginationOpts }) => {
+    return await ctx.db
+      .query("monthlyReports")
+      .withIndex("by_church", (q) => q.eq("churchId", churchId))
+      .paginate(paginationOpts);
+  },
+});
 ```
-
-## Monitoring y Analytics
-
-### Application Monitoring
-
-#### Health Checks
-```javascript
-// api/health.js
-module.exports = async function handler(req, res) {
-  const health = {
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version,
-    environment: process.env.NODE_ENV,
-    uptime: process.uptime()
-  };
-
-  try {
-    // Test database connection
-    await db.query('SELECT 1');
-    health.database = 'connected';
-  } catch (error) {
-    health.database = 'error';
-    health.status = 'error';
-  }
-
-  const statusCode = health.status === 'ok' ? 200 : 503;
-  res.status(statusCode).json(health);
-};
-```
-
-#### Error Tracking
-```javascript
-// utils/errorTracker.js
-const trackError = (error, context = {}) => {
-  const errorInfo = {
-    message: error.message,
-    stack: error.stack,
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV,
-    context
-  };
-
-  // Log to console in development
-  if (process.env.NODE_ENV === 'development') {
-    console.error('Error tracked:', errorInfo);
-  }
-
-  // Send to external service in production
-  if (process.env.NODE_ENV === 'production') {
-    // Implementar integración con Sentry, LogRocket, etc.
-  }
-};
-```
-
-### Performance Metrics
-```javascript
-// utils/metrics.js
-const metrics = {
-  requestCount: 0,
-  responseTime: [],
-  errorCount: 0
-};
-
-const recordMetric = (type, value) => {
-  switch (type) {
-    case 'request':
-      metrics.requestCount++;
-      break;
-    case 'response_time':
-      metrics.responseTime.push(value);
-      break;
-    case 'error':
-      metrics.errorCount++;
-      break;
-  }
-};
-
-const getMetrics = () => {
-  const avgResponseTime = metrics.responseTime.length > 0
-    ? metrics.responseTime.reduce((a, b) => a + b) / metrics.responseTime.length
-    : 0;
-
-  return {
-    requests_total: metrics.requestCount,
-    avg_response_time: avgResponseTime,
-    errors_total: metrics.errorCount,
-    error_rate: metrics.requestCount > 0
-      ? (metrics.errorCount / metrics.requestCount) * 100
-      : 0
-  };
-};
-```
-
-## 2025 Updates · Manual Reports & Reconciliation
-
-### Schema Changes (Migration 021)
-| Columna | Tabla | Tipo | Descripción |
-|---------|-------|------|-------------|
-| `submission_source` | `reports` | `TEXT` (enum) | Origen normalizado del informe (`church_online`, `pastor_manual`, `admin_manual`, `admin_import`). |
-| `manual_report_source` | `reports` | `TEXT` (enum) | Medio por el cual llegó un informe manual (`paper`, `whatsapp`, `email`, `phone`, `in_person`, `other`). |
-| `manual_report_notes` | `reports` | `TEXT` | Detalles capturados por el tesorero (ej. “Pastor entregó en Congreso”). |
-| `entered_by` / `entered_at` | `reports` | `TEXT` / `TIMESTAMP` | Auditoría de quién registró el informe manual y cuándo. |
-
-> Las migraciones poblaron `submission_source` automáticamente según el histórico `submission_type`.
-
-### Report Submission Flow
-1. **Iglesia en línea** (`church_online`)
-   - `/api/reports` calcula 10% y distribuciones designadas.
-   - Requiere `aportantes` si `diezmos > 0`.
-2. **Tesorería (manual)** (`pastor_manual` / `admin_manual`)
-   - `ManualReportForm` envía `manual_report_source`, `manual_report_notes` y arreglo `aportantes`.
-   - El backend marca `estado = 'pendiente_admin'`, asigna `entered_by` y deja el reporte listo para aprobación.
-3. **Aprobación**
-   - `/api/admin/reports/approve` genera transacciones automáticas, marca `transactions_created = true` y graba `transactions_created_by`.
-
-Donor validation (tithers) es compartida entre la interfaz pastoral y el formulario manual mediante `replaceReportDonors`. Toda mutación elimina aportantes previos y recrea filas para garantizar integridad.
-
-### Libro Mensual Command Center
-- **Procesar informes**: Query `useAdminReports` + `approveReport`; usa conexión vía pool (`execute`) para evitar restricciones RLS y mostrar importaciones heredadas.
-- **Transacciones externas**: `ExternalTransactionForm` publica a `/api/admin/transactions`; la tabla muestra últimos 100 movimientos manuales.
-- **Conciliación**: `/api/admin/reconciliation` recalcula balances vs. `funds.current_balance`, etiqueta `balanced`/`review` y expone `last_transaction`.
-
-### Reconciliation Transactions (2024-12-31)
-Para igualar los saldos oficiales:
-```sql
-INSERT INTO transactions (fund_id, concept, amount_in, amount_out, date, created_by)
-VALUES
-  -- ejemplo APY
-  (6, 'Ajuste de saldo - Reconciliación Excel', 385000, 0, '2024-12-31', 'system-reconciliation'),
-  -- resto de fondos...
-;
-```
-Después de insertar, se ejecuta `UPDATE funds SET current_balance = ...` para recalcular saldos. Estos movimientos aparecen en el Libro Diario como `manual` y pueden filtrarse usando `created_by`.
-
-> El script completo de ajustes se documenta en `docs/planning/2024-12-31_reconciliation.md` para replicarlo en staging o producción cuando sea necesario.
 
 ## Recursos y Referencias
 
 ### Documentación Técnica
 - 📚 [API Reference](API_REFERENCE.md)
-- 🏗️ [System Architecture](architecture/SYSTEM_ARCHITECTURE.md)
-- 🚀 [Vercel Deployment](deployment/VERCEL_DEPLOYMENT.md)
-- 💾 [Database Schema](architecture/DATABASE_SCHEMA.md)
+- 🏗️ [Architecture](ARCHITECTURE.md)
+- 💾 [Convex Schema](CONVEX_SCHEMA.md)
+- 🔒 [Security](SECURITY.md)
 
 ### Herramientas Recomendadas
-- **Editor**: VS Code con extensiones ESLint, Prettier
-- **Database**: Supabase Studio, pgAdmin, DBeaver
-- **API Testing**: Postman, Insomnia, curl
-- **Monitoring**: Vercel Analytics, Supabase Dashboard
-- **Performance**: Lighthouse, WebPageTest
+- **Editor**: VS Code con extensiones ESLint, Prettier, Convex
+- **Database**: Convex Dashboard
+- **API Testing**: Convex Function Playground, Postman
+- **Monitoring**: Convex Dashboard Logs, Vercel Analytics
 
 ### Enlaces Útiles
-- [Node.js Documentation](https://nodejs.org/docs/)
-- [PostgreSQL Documentation](https://www.postgresql.org/docs/)
-- [Vercel Documentation](https://vercel.com/docs)
-- [Supabase Documentation](https://supabase.com/docs)
-- [Jest Testing Framework](https://jestjs.io/docs/)
+- [Convex Documentation](https://docs.convex.dev)
+- [NextAuth Documentation](https://authjs.dev)
+- [Next.js Documentation](https://nextjs.org/docs)
+- [TypeScript Documentation](https://www.typescriptlang.org/docs/)
 
 ### Comunidad y Soporte
 - **GitHub Issues**: [Reportar bugs y solicitar features](https://github.com/anthonybirhouse/ipupy-tesoreria/issues)
-- **Discussions**: [Discusiones técnicas](https://github.com/anthonybirhouse/ipupy-tesoreria/discussions)
 - **Email**: desarrollo@ipupy.org.py
-- **Slack**: #desarrollo-tesoreria (interno IPU)
 
 ---
 
 ## Conclusión
 
-Esta guía proporciona todo lo necesario para contribuir efectivamente al Sistema de Tesorería IPU PY. El proyecto está diseñado para ser mantenible, escalable y fácil de desarrollar.
+Esta guía proporciona todo lo necesario para contribuir efectivamente al Sistema de Tesorería IPU PY usando Convex como backend. El sistema está diseñado con type safety, real-time capabilities, y code-based authorization.
 
 ### Principios de Desarrollo
-1. **Código Limpio**: Escribir código que otros puedan entender
-2. **Testing First**: Escribir tests antes o junto con el código
-3. **Documentación**: Documentar decisiones y cambios importantes
-4. **Performance**: Considerar el rendimiento en cada cambio
-5. **Seguridad**: Nunca comprometer la seguridad por conveniencia
+1. **Type Safety**: TypeScript estricto en todo el stack
+2. **Authorization First**: Verificar permisos en cada función
+3. **Real-time by Default**: Aprovechar subscripciones de Convex
+4. **Documentación**: Documentar decisiones y cambios importantes
+5. **Performance**: Usar índices y paginación apropiadamente
 
 ### Siguientes Pasos
-1. Configurar entorno de desarrollo
-2. Explorar el código existente
-3. Ejecutar tests para familiarizarse
-4. Elegir un issue beginner-friendly
+1. Configurar entorno con `npx convex dev`
+2. Explorar schema en `convex/schema.ts`
+3. Revisar funciones existentes en `convex/`
+4. Probar funciones en Convex Dashboard
 5. Hacer primera contribución
 
 ¡Bienvenido al equipo de desarrollo del Sistema de Tesorería IPU PY! 🚀
 
 ---
 
-**Última actualización**: Septiembre 2025
-**Versión**: 3.0.1
+**Última actualización**: Enero 2025  
+**Versión**: 4.0.0 (Convex Migration)  
 **Autor**: Equipo Técnico IPU PY

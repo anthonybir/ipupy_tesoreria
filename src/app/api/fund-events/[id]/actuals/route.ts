@@ -1,192 +1,75 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth-supabase';
-import { executeWithContext } from '@/lib/db';
-import { firstOrNull, expectOne } from '@/lib/db-helpers';
-import { setCORSHeaders } from '@/lib/cors';
-import { canViewFundEvent, canMutateFundEvent } from '@/lib/fund-event-authz';
+import { getAuthenticatedConvexClient } from '@/lib/convex-server';
+import { api } from '../../../../../../convex/_generated/api';
+import { handleApiError, ValidationError } from '@/lib/api-errors';
+import type { Id } from '../../../../../../convex/_generated/dataModel';
 
-export const runtime = 'nodejs';
-
-export async function GET(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-): Promise<NextResponse> {
-  try {
-    const auth = await requireAuth(req);
-    const params = await context.params;
-    const eventId = params.id;
-
-    const eventCheck = await executeWithContext(auth, `
-      SELECT fund_id FROM fund_events WHERE id = $1
-    `, [eventId]);
-
-    const event = firstOrNull(eventCheck.rows);
-    if (!event) {
-      const response = NextResponse.json(
-        { error: 'Event not found' },
-        { status: 404 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
-
-    // Authorization check: prevent church-scoped roles from viewing national fund data
-    if (!canViewFundEvent(auth, event['fund_id'])) {
-      const response = NextResponse.json(
-        { error: 'No access to this event' },
-        { status: 403 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
-
-    const query = `
-      SELECT
-        a.*,
-        p.full_name as recorded_by_name
-      FROM fund_event_actuals a
-      LEFT JOIN profiles p ON p.id = a.recorded_by
-      WHERE a.event_id = $1
-      ORDER BY a.recorded_at DESC
-    `;
-
-    const result = await executeWithContext(auth, query, [eventId]);
-
-    const response = NextResponse.json({
-      success: true,
-      data: result.rows
-    });
-
-    setCORSHeaders(response);
-    return response;
-  } catch (error) {
-    console.error('Error fetching event actuals:', error);
-    const response = NextResponse.json(
-      {
-        error: 'Error fetching actuals',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
-    setCORSHeaders(response);
-    return response;
-  }
-}
+/**
+ * Fund Event Actuals API - Migrated to Convex
+ *
+ * Phase 4.9 - Fund Events Migration (2025-01-07)
+ *
+ * Manages actual income/expenses for events
+ */
 
 export async function POST(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
-    const auth = await requireAuth(req);
+    const client = await getAuthenticatedConvexClient();
     const params = await context.params;
     const eventId = params.id;
     const body = await req.json();
 
-    if (!body.line_type || !body.description || body.amount === undefined) {
-      const response = NextResponse.json(
-        { error: 'line_type, description, and amount are required' },
-        { status: 400 }
-      );
-      setCORSHeaders(response);
-      return response;
+    const { line_type, description, amount, receipt_url, notes } = body as {
+      line_type?: string;
+      description?: string;
+      amount?: number;
+      receipt_url?: string;
+      notes?: string;
+    };
+
+    // Validate required fields
+    if (!line_type) {
+      throw new ValidationError('line_type es requerido');
+    }
+    if (line_type !== 'income' && line_type !== 'expense') {
+      throw new ValidationError('line_type debe ser "income" o "expense"');
+    }
+    if (!description) {
+      throw new ValidationError('description es requerido');
+    }
+    if (amount === undefined) {
+      throw new ValidationError('amount es requerido');
     }
 
-    if (!['income', 'expense'].includes(body.line_type)) {
-      const response = NextResponse.json(
-        { error: 'line_type must be either "income" or "expense"' },
-        { status: 400 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
+    const actualArgs: {
+      event_id: Id<'fund_events'>;
+      line_type: 'income' | 'expense';
+      description: string;
+      amount: number;
+      receipt_url?: string;
+      notes?: string;
+    } = {
+      event_id: eventId as Id<'fund_events'>,
+      line_type: line_type as 'income' | 'expense',
+      description,
+      amount,
+    };
+    if (receipt_url) actualArgs.receipt_url = receipt_url;
+    if (notes) actualArgs.notes = notes;
 
-    if (body.amount < 0) {
-      const response = NextResponse.json(
-        { error: 'amount must be non-negative' },
-        { status: 400 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
+    const actual = await client.mutation(api.fundEvents.addActual, actualArgs);
 
-    const eventCheck = await executeWithContext(auth, `
-      SELECT created_by, fund_id, status FROM fund_events WHERE id = $1
-    `, [eventId]);
-
-    const event = firstOrNull(eventCheck.rows);
-    if (!event) {
-      const response = NextResponse.json(
-        { error: 'Event not found' },
-        { status: 404 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
-
-    // Authorization check: use centralized helper
-    if (!canMutateFundEvent(auth, event['fund_id'])) {
-      const response = NextResponse.json(
-        { error: 'No access to modify this event' },
-        { status: 403 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
-
-    // Fund directors can only add actuals to their own events
-    if (auth.role === 'fund_director' && event['created_by'] !== auth.userId) {
-      const response = NextResponse.json(
-        { error: 'Only the event creator can add actuals' },
-        { status: 403 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
-
-    const result = await executeWithContext(auth, `
-      INSERT INTO fund_event_actuals (
-        event_id, line_type, description, amount, receipt_url, notes, recorded_by
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING *
-    `, [
-      eventId,
-      body.line_type,
-      body.description,
-      body.amount,
-      body.receipt_url ?? null,
-      body.notes ?? null,
-      auth.userId
-    ]);
-
-    const response = NextResponse.json(
+    return NextResponse.json(
       {
         success: true,
-        data: expectOne(result.rows),
-        message: 'Actual recorded successfully'
+        data: actual,
       },
       { status: 201 }
     );
-
-    setCORSHeaders(response);
-    return response;
   } catch (error) {
-    console.error('Error creating event actual:', error);
-    const response = NextResponse.json(
-      {
-        error: 'Error creating actual',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
-    setCORSHeaders(response);
-    return response;
+    return handleApiError(error, req.headers.get('origin'), 'POST /api/fund-events/[id]/actuals');
   }
-}
-
-export async function OPTIONS(): Promise<NextResponse> {
-  const response = new NextResponse(null, { status: 200 });
-  setCORSHeaders(response);
-  return response;
 }

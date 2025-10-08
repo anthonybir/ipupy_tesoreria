@@ -1,23 +1,34 @@
 # Database Documentation - IPU PY Tesorería
 
-**Last Updated**: 2025-10-06
-**Database**: PostgreSQL 15+ via Supabase
-**Total Tables**: 48+
-**Current Migration**: 054
+**Last Updated**: 2025-01-08  
+**Database**: Convex Document Database  
+**Total Collections**: 15+  
+**Schema Version**: 4.0.0 (Post-Migration)
+
+---
+
+## ⚠️ MIGRATION NOTICE
+
+This system **migrated from Supabase PostgreSQL to Convex** in January 2025. Legacy documentation for PostgreSQL schema is archived in `docs/database/legacy/`.
+
+**Migration Status**: ✅ Complete  
+**Legacy SQL Migrations**: Available in `migrations/` (reference only)  
+**Current Schema**: Defined in `convex/schema.ts` (TypeScript)
 
 ---
 
 ## Overview
 
-The IPUPY_Tesoreria database is a comprehensive financial management system designed for a multi-church organization with centralized treasury operations. It implements Row Level Security (RLS) for data isolation and supports complex financial workflows.
+The IPUPY_Tesoreria database is a comprehensive financial management system designed for a multi-church organization with centralized treasury operations. It now runs on **Convex**, a TypeScript-first document database with real-time subscriptions and code-based authorization.
 
 ### Key Characteristics
 
-- **Multi-tenant**: Supports 22 churches with isolated data
+- **Multi-tenant**: Supports 22 churches with role-based access control
 - **Dual-scope**: National-level funds + Church-level operations
-- **ACID compliant**: Uses PostgreSQL transactions for data integrity
-- **RLS enforced**: All queries execute with user context
-- **Audit trail**: Complete history of all user actions
+- **ACID compliant**: Convex handles transactions automatically
+- **Code-based Authorization**: TypeScript functions replace PostgreSQL RLS
+- **Real-time**: All queries support live subscriptions
+- **Type-safe**: Full TypeScript integration from schema to UI
 
 ---
 
@@ -25,22 +36,21 @@ The IPUPY_Tesoreria database is a comprehensive financial management system desi
 
 ### Core Documentation
 
-1. **[SCHEMA_REFERENCE.md](./SCHEMA_REFERENCE.md)** - Complete table reference (48+ tables)
-2. **[RLS_POLICIES.md](./RLS_POLICIES.md)** - Security policies and enforcement
+1. **[CONVEX_SCHEMA.md](../CONVEX_SCHEMA.md)** - Complete schema reference (15+ collections)
+2. **[AUTHORIZATION.md](./AUTHORIZATION.md)** - Code-based authorization patterns
 3. **[BUSINESS_LOGIC.md](./BUSINESS_LOGIC.md)** - Workflows and data relationships
-4. **[INDEXES.md](./INDEXES.md)** - Performance indexes
-5. **[MIGRATIONS.md](../migrations/README.md)** - Migration guide (link)
+4. **[INDEXES.md](./INDEXES.md)** - Convex indexes for performance
+5. **[MIGRATION_FROM_SUPABASE.md](../CONVEX_MIGRATION_STATUS.md)** - Migration documentation
 
 ### By Topic
 
-- **Church Management**: churches, pastors, church_accounts
-- **Financial Reports**: reports (monthly_reports), report_status_history
-- **Fund Management**: funds, fund_balances, fund_transactions, fund_events
-- **User System**: profiles, role_permissions, user_activity
-- **Providers**: providers (centralized registry)
-- **Donors**: donors, member_contributions
-- **Analytics**: analytics_*, custom_reports
-- **Audit**: user_activity, fund_event_audit, report_status_history
+- **Church Management**: churches, profiles (church-scoped users)
+- **Financial Reports**: monthlyReports, reportStatusHistory
+- **Fund Management**: funds, fundBalances, fundTransactions, fundEvents
+- **User System**: profiles, userActivity (audit log)
+- **Providers**: providers (centralized vendor registry)
+- **Donors**: donors (tither/donor information)
+- **Audit**: userActivity, fundEventAudit
 
 ---
 
@@ -74,8 +84,8 @@ The IPUPY_Tesoreria database is a comprehensive financial management system desi
 │         │                    │                              │
 │         ↓                    ↓                              │
 │  ┌─────────────┐    ┌──────────────┐                      │
-│  │   Pastors   │    │   Providers  │                      │
-│  │ (leadership)│    │  (vendors)   │                      │
+│  │   Profiles  │    │   Providers  │                      │
+│  │  (pastors)  │    │  (vendors)   │                      │
 │  └─────────────┘    └──────────────┘                      │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
@@ -83,294 +93,401 @@ The IPUPY_Tesoreria database is a comprehensive financial management system desi
                   ┌──────────────────────────┐
                   │     AUDIT & SYSTEM       │
                   │                          │
-                  │  • user_activity         │
-                  │  • system_configuration  │
-                  │  • rate_limits           │
+                  │  • userActivity          │
+                  │  • systemConfiguration   │
                   └──────────────────────────┘
 ```
 
-### Table Categories
+### Collection Categories
 
-#### 1. Core Financial Tables (10 tables)
-- **reports** - Monthly financial reports from churches
+#### 1. Core Financial Collections (8 collections)
+- **monthlyReports** - Monthly financial reports from churches
 - **funds** - 9 national fund definitions
-- **fund_balances** - Current balance per fund
-- **fund_transactions** - Transaction ledger
-- **fund_events** - Event budgeting and planning
-- **fund_event_budget_items** - Line items for events
-- **fund_event_actuals** - Actual income/expenses post-event
+- **fundBalances** - Current balance per fund per church
+- **fundTransactions** - Transaction ledger
+- **fundEvents** - Event budgeting and planning
+- **fundEventBudgetItems** - Line items for events
+- **fundEventActuals** - Actual income/expenses post-event
 - **providers** - Centralized vendor registry
-- **donors** - Donor information
-- **transactions** - Church-level transaction history
 
-#### 2. Church Management Tables (8 tables)
+#### 2. Church Management Collections (2 collections)
 - **churches** - 22 IPU Paraguay churches
-- **pastors** - Pastor information and assignments
-- **church_accounts** - Bank accounts per church
-- **church_account_balances** - Account balances
-- **church_transactions** - Church financial transactions
-- **church_events** - Church events and activities
-- **church_budgets** - Budget planning
-- **church_financial_goals** - Financial targets
+- **profiles** - User profiles with church assignments
 
-#### 3. Member & Family Tables (7 tables)
-- **members** - Church membership records
-- **families** - Family groupings
-- **member_attendance** - Worship attendance tracking
-- **member_contributions** - Individual giving records
-- **member_ministries** - Ministry assignments
-- **worship_records** - Worship service details
-- **worship_contributions** - Per-service contribution details
-
-#### 4. User & Security Tables (6 tables)
-- **profiles** - User profiles (linked to Supabase Auth)
-- **role_permissions** - Permission matrix (5 roles x ~10 perms each)
-- **user_activity** - Complete audit trail
-- **system_configuration** - Admin-configurable settings
-- **rate_limits** - API rate limiting
-- **fund_director_assignments** - Fund access assignments
-
-#### 5. Analytics & Reporting Tables (6 tables)
-- **analytics_events** - Event tracking
-- **analytics_kpis** - Key performance indicators
-- **analytics_trends** - Trend analysis
-- **analytics_insights** - AI-generated insights
-- **analytics_benchmarks** - Performance benchmarks
-- **custom_reports** - User-defined reports
-
-#### 6. Supporting Tables (11 tables)
-- **report_notifications** - Report submission notifications
-- **report_status_history** - Report approval workflow history
-- **report_tithers** - Tither tracking per report
-- **fund_event_audit** - Event change audit trail
-- **fund_movements** - Fund transfer tracking (legacy)
-- **fund_movements_enhanced** - Enhanced fund movements
-- **fund_categories** - Fund categorization
-- **church_transaction_categories** - Transaction categories
-- **expense_records** - Detailed expense tracking
-- **event_registrations** - Event participation
-- **ministries** - Ministry definitions
-
-#### 7. System Tables (3 tables)
-- **migration_history** - Applied migrations tracking
-- **users** - Legacy user table (may be deprecated)
-- **audit.log** - System-level audit log
+#### 3. Audit & System Collections (5 collections)
+- **userActivity** - Complete audit trail
+- **systemConfiguration** - Admin-configurable settings
+- **fundEventAudit** - Event change tracking
+- **reportStatusHistory** - Report approval workflow
+- **donors** - Donor/tither information
 
 ---
 
-## Database Schema Overview
+## Convex Document Database
 
-### Total Tables: 48+
+### Key Differences from PostgreSQL
 
-| Category | Count | Key Tables |
-|----------|-------|------------|
-| Financial | 10 | reports, funds, fund_balances, fund_transactions |
-| Church Management | 8 | churches, pastors, church_accounts |
-| Members | 7 | members, families, member_contributions |
-| Security | 6 | profiles, role_permissions, user_activity |
-| Analytics | 6 | analytics_events, analytics_kpis |
-| Supporting | 11 | providers, donors, report_notifications |
-| System | 3 | migration_history, system_configuration |
+| Feature | PostgreSQL (Old) | Convex (New) |
+|---------|------------------|--------------|
+| **Schema** | SQL DDL migrations | TypeScript validators |
+| **IDs** | UUIDs | Convex IDs (`Id<"collection">`) |
+| **Relationships** | Foreign keys | Document references |
+| **Authorization** | Row Level Security (RLS) | Code-based functions |
+| **Queries** | SQL strings | TypeScript functions |
+| **Real-time** | Manual polling | Built-in subscriptions |
+| **Transactions** | BEGIN/COMMIT | Automatic |
 
-### Key Relationships
+### Schema Definition Pattern
 
+```typescript
+// convex/schema.ts
+import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
+
+export default defineSchema({
+  churches: defineTable({
+    name: v.string(),
+    city: v.string(),
+    pastor: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    active: v.boolean(),
+    
+    // Legacy compatibility
+    supabase_id: v.optional(v.string()),
+    
+    // Timestamps (Unix milliseconds)
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+  .index("by_supabase_id", ["supabase_id"])
+  .index("by_active", ["active"]),
+  
+  // ... other collections
+});
 ```
-profiles (users)
-  ├─→ churches (via church_id)
-  ├─→ role_permissions (via role)
-  └─→ user_activity (logs all actions)
 
-churches
-  ├─→ reports (monthly financial reports)
-  ├─→ pastors (current pastor assignment)
-  ├─→ church_accounts (bank accounts)
-  └─→ members (church membership)
+### Document ID Pattern
 
-reports
-  ├─→ churches (parent church)
-  ├─→ profiles (created_by, approved_by)
-  └─→ report_status_history (approval workflow)
+```typescript
+// Convex auto-generates IDs
+const reportId: Id<"monthlyReports"> = await ctx.db.insert("monthlyReports", {
+  churchId: "jd7xyz...", // Id<"churches">
+  month: 1,
+  year: 2025,
+  // ...
+});
 
-funds
-  ├─→ fund_balances (current balance per church)
-  ├─→ fund_transactions (ledger entries)
-  └─→ fund_events (event budgets)
+// Reading with ID
+const report = await ctx.db.get(reportId);
 
-fund_events
-  ├─→ funds (target fund)
-  ├─→ fund_event_budget_items (budget line items)
-  ├─→ fund_event_actuals (post-event actuals)
-  └─→ profiles (created_by, approved_by)
-
-providers
-  └─→ No foreign keys (centralized registry)
+// Legacy compatibility: preserve supabase_id
+const church = await ctx.db
+  .query("churches")
+  .withIndex("by_supabase_id", (q) => 
+    q.eq("supabase_id", "550e8400-e29b-41d4-a716-446655440000")
+  )
+  .unique();
 ```
 
 ---
 
-## Row Level Security (RLS)
+## Authorization Model
 
-**All tables with user data have RLS enabled**. Queries automatically filter based on:
+### From RLS to Code-Based Authorization
 
-### Session Context Variables
-
+**Old (PostgreSQL RLS)**:
 ```sql
--- Set for every database query
-SET LOCAL app.current_user_id = '<uuid>';
-SET LOCAL app.current_user_role = 'treasurer';
-SET LOCAL app.current_user_church_id = '<church_id>';
+CREATE POLICY "Users can view own church reports"
+ON reports FOR SELECT
+USING (church_id = app_current_user_church_id());
 ```
 
-### RLS Helper Functions
+**New (Convex TypeScript)**:
+```typescript
+// convex/reports.ts
+export const listForChurch = query({
+  args: { churchId: v.id("churches") },
+  handler: async (ctx, { churchId }) => {
+    // 1. Verify authentication
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
 
-```sql
--- Check if user can access specific fund
-has_fund_access(fund_id) RETURNS BOOLEAN
+    // 2. Load user profile
+    const user = await ctx.db
+      .query("profiles")
+      .withIndex("by_email", (q) => q.eq("email", identity.email))
+      .unique();
 
--- Get user's church ID
-app_current_user_church_id() RETURNS UUID
+    // 3. Check permissions
+    if (!["admin", "national_treasurer"].includes(user.role)) {
+      if (user.churchId !== churchId) {
+        throw new Error("Unauthorized: Can only view your church");
+      }
+    }
 
--- Get user's role
-app_current_user_role() RETURNS TEXT
-
--- Get role permission level (1-7)
-get_role_level(role TEXT) RETURNS INTEGER
+    // 4. Return authorized data
+    return await ctx.db
+      .query("monthlyReports")
+      .withIndex("by_church", (q) => q.eq("churchId", churchId))
+      .collect();
+  },
+});
 ```
 
-### Role Hierarchy (5 Roles)
+### Role Hierarchy (7 Roles)
 
-| Level | Role | Scope | Table Access |
-|-------|------|-------|-------------|
-| 7 | admin | ALL | Full access to all tables |
-| 6 | treasurer | ALL (national) | All funds, all reports, all churches |
-| 5 | fund_director | assigned_funds | Only assigned funds + events |
-| 4 | pastor | own_church | Own church data only |
-| 2 | church_manager | own_church | Own church (read-only) |
-| 1 | secretary | own_church | Limited church data |
+| Level | Role | Scope | Access Pattern |
+|-------|------|-------|----------------|
+| 6 | admin | ALL | Full access to all collections |
+| 5 | national_treasurer | ALL (national) | All funds, all reports, all churches |
+| 4 | fund_director | assigned_funds | Only assigned funds + events |
+| 3 | pastor | own_church | Own church data only |
+| 2 | treasurer | own_church | Own church financial data |
+| 1 | church_manager | own_church | Own church (view-only) |
+| 0 | secretary | own_church | Limited church data |
 
-**Note**: Church-scoped roles (pastor, church_manager, secretary) removed in migration 053-054. Only admin and treasurer remain as active operational roles.
+**Authorization Helpers**:
+```typescript
+// convex/lib/auth.ts
+export async function requireAuth(ctx) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) throw new Error("Not authenticated");
+  
+  const user = await ctx.db
+    .query("profiles")
+    .withIndex("by_email", (q) => q.eq("email", identity.email))
+    .unique();
+  
+  if (!user) throw new Error("User profile not found");
+  return user;
+}
 
-See **[RLS_POLICIES.md](./RLS_POLICIES.md)** for complete policy documentation.
+export async function requireRole(ctx, allowedRoles: string[]) {
+  const user = await requireAuth(ctx);
+  if (!allowedRoles.includes(user.role)) {
+    throw new Error(`Unauthorized: requires ${allowedRoles.join(", ")}`);
+  }
+  return user;
+}
+```
+
+See **[AUTHORIZATION.md](./AUTHORIZATION.md)** for complete authorization patterns.
 
 ---
 
 ## Data Integrity
 
-### Constraints
+### Validators (Type Safety)
 
-1. **Unique Constraints**: Prevent duplicate records
-   - `profiles(auth_user_id)` - One profile per Supabase user
-   - `providers(ruc)` - One provider per RUC (tax ID)
-   - `reports(church_id, month, year)` - One report per church per month
-   - `fund_balances(fund_id, church_id)` - One balance per fund per church
+Convex uses TypeScript validators instead of database constraints:
 
-2. **Foreign Key Constraints**: Maintain referential integrity
-   - All tables reference `churches(id)` for church-scoped data
-   - All tables reference `profiles(id)` for user tracking
-   - `fund_transactions` → `funds(id)` for fund integrity
+```typescript
+// convex/schema.ts
+monthlyReports: defineTable({
+  churchId: v.id("churches"),          // Must be valid church ID
+  month: v.number(),                    // Validated in mutation
+  year: v.number(),                     // Validated in mutation
+  diezmos: v.number(),                  // Validated >= 0 in mutation
+  ofrendas: v.number(),                 // Validated >= 0 in mutation
+  fondoNacional: v.number(),            // Calculated automatically
+  
+  status: v.union(
+    v.literal("draft"),
+    v.literal("submitted"),
+    v.literal("approved"),
+    v.literal("rejected")
+  ),                                     // Enum validation
+  
+  createdBy: v.id("profiles"),          // Must be valid profile ID
+  createdAt: v.number(),                // Unix timestamp
+  updatedAt: v.number(),                // Unix timestamp
+})
+.index("by_church", ["churchId"])
+.index("by_church_date", ["churchId", "year", "month"])
+.index("by_status", ["status"]);
+```
 
-3. **Check Constraints**: Validate data values
-   - `profiles.role` IN (5 valid roles)
-   - `reports.month` BETWEEN 1 AND 12
-   - `reports.year` >= 2024
-   - Fund amounts >= 0 (non-negative)
+### Unique Constraints
 
-4. **Not Null Constraints**: Required fields
-   - All `created_at` timestamps
-   - All foreign key references
-   - Core business fields (name, amounts, dates)
+```typescript
+// Enforce uniqueness in mutations
+export const create = mutation({
+  args: {
+    churchId: v.id("churches"),
+    month: v.number(),
+    year: v.number(),
+    // ...
+  },
+  handler: async (ctx, args) => {
+    // Check for existing report
+    const existing = await ctx.db
+      .query("monthlyReports")
+      .withIndex("by_church_date", (q) =>
+        q.eq("churchId", args.churchId)
+         .eq("year", args.year)
+         .eq("month", args.month)
+      )
+      .unique();
+
+    if (existing) {
+      throw new Error("Report already exists for this month");
+    }
+
+    // Create report...
+  },
+});
+```
+
+### Referential Integrity
+
+```typescript
+// Check parent exists before creating child
+export const createReport = mutation({
+  handler: async (ctx, args) => {
+    // Verify church exists
+    const church = await ctx.db.get(args.churchId);
+    if (!church) {
+      throw new Error("Church not found");
+    }
+
+    // Create report with valid reference
+    return await ctx.db.insert("monthlyReports", {
+      churchId: args.churchId,
+      // ...
+    });
+  },
+});
+```
 
 ---
 
 ## Performance Optimization
 
-### Indexes (Migration 045)
+### Indexes
 
-```sql
--- Report lookups
-CREATE INDEX idx_reports_church_year_month ON reports(church_id, year, month);
-CREATE INDEX idx_reports_status ON reports(status);
+Convex indexes are defined in schema:
 
--- Fund transactions
-CREATE INDEX idx_fund_transactions_date ON fund_transactions(transaction_date);
-CREATE INDEX idx_fund_transactions_fund ON fund_transactions(fund_id);
-
--- User activity audit
-CREATE INDEX idx_user_activity_user_date ON user_activity(user_id, created_at DESC);
-
--- Fund events
-CREATE INDEX idx_fund_events_fund_date ON fund_events(fund_id, event_date);
-CREATE INDEX idx_fund_events_status ON fund_events(status);
+```typescript
+// convex/schema.ts
+monthlyReports: defineTable({
+  // ... fields
+})
+.index("by_church", ["churchId"])                      // Filter by church
+.index("by_church_date", ["churchId", "year", "month"]) // Compound index
+.index("by_status", ["status"])                        // Filter by status
+.index("by_created", ["createdAt"]);                   // Sort by date
 ```
 
 ### Query Patterns
 
 **Optimal patterns**:
-```sql
--- ✅ Use indexed columns in WHERE
-SELECT * FROM reports WHERE church_id = $1 AND year = $2 AND month = $3;
+```typescript
+// ✅ Use indexed columns
+const reports = await ctx.db
+  .query("monthlyReports")
+  .withIndex("by_church_date", (q) =>
+    q.eq("churchId", churchId).eq("year", 2025).eq("month", 1)
+  )
+  .unique();
 
--- ✅ Use indexed columns for sorting
-SELECT * FROM fund_transactions ORDER BY transaction_date DESC LIMIT 100;
+// ✅ Use pagination for large results
+const reports = await ctx.db
+  .query("monthlyReports")
+  .withIndex("by_church", (q) => q.eq("churchId", churchId))
+  .paginate(paginationOpts);
 
--- ✅ Use covering indexes when possible
-SELECT id, name, status FROM fund_events WHERE fund_id = $1;
+// ✅ Use order for sorting with index
+const recent = await ctx.db
+  .query("userActivity")
+  .withIndex("by_created", (q) => q.eq("userId", userId))
+  .order("desc")
+  .take(50);
 ```
 
 **Anti-patterns**:
-```sql
--- ❌ Function on indexed column
-SELECT * FROM reports WHERE EXTRACT(YEAR FROM created_at) = 2024;
+```typescript
+// ❌ Collect all then filter (slow)
+const allReports = await ctx.db.query("monthlyReports").collect();
+const filtered = allReports.filter(r => r.churchId === churchId);
 
--- ❌ Non-selective query
-SELECT * FROM user_activity; -- Returns thousands of rows
+// ❌ No pagination for large results
+const allActivity = await ctx.db.query("userActivity").collect();
 
--- ❌ OR conditions (doesn't use index efficiently)
-SELECT * FROM reports WHERE church_id = $1 OR status = 'approved';
+// ✅ Use indexed query instead
+const reports = await ctx.db
+  .query("monthlyReports")
+  .withIndex("by_church", (q) => q.eq("churchId", churchId))
+  .collect();
 ```
 
 See **[INDEXES.md](./INDEXES.md)** for complete index documentation.
 
 ---
 
-## Migration System
+## Real-time Subscriptions
 
-### Current State
+Convex provides automatic real-time updates:
 
-- **Total Migrations**: 54 (000-054)
-- **Latest**: Migration 054 (Treasurer role consolidation data fix)
-- **Pending**: None
-- **Failed**: None
+```typescript
+// Client component
+"use client";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
-### Key Migrations
+export function ReportsList({ churchId }) {
+  // Automatically re-renders when data changes
+  const reports = useQuery(api.reports.listForChurch, { churchId });
 
-| Migration | Description | Impact |
-|-----------|-------------|--------|
-| 001 | Initial schema | Created core tables |
-| 010 | Implement RLS | Added security policies |
-| 023 | Simplify roles | 8 roles → 6 roles |
-| 026 | Fund director events | Added event system |
-| 027 | Provider registry | Centralized providers |
-| 037 | Fix role inconsistencies | Cleaned up role system |
-| 040 | National treasurer role | Added treasurer role |
-| 042 | Generated columns | Auto-calculate report totals |
-| 045 | Performance indexes | Optimized queries |
-| 053-054 | Treasurer consolidation | 6 roles → 5 roles |
+  if (reports === undefined) return <div>Loading...</div>;
+
+  return (
+    <ul>
+      {reports.map((report) => (
+        <li key={report._id}>
+          {report.month}/{report.year} - ₲{report.diezmos + report.ofrendas}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+---
+
+## Migration from Supabase
+
+### Data Preservation
+
+All legacy data preserved with `supabase_id` fields:
+
+```typescript
+// Every collection has optional supabase_id
+churches: defineTable({
+  name: v.string(),
+  // ... other fields
+  supabase_id: v.optional(v.string()),
+})
+.index("by_supabase_id", ["supabase_id"]);
+
+// Query by legacy ID
+const church = await ctx.db
+  .query("churches")
+  .withIndex("by_supabase_id", (q) => 
+    q.eq("supabase_id", legacyUUID)
+  )
+  .unique();
+```
 
 ### Migration Process
 
-```bash
-# View migration status
-npm run db:status
+1. **Export from Supabase**: `scripts/export-supabase.ts`
+2. **Transform data**: `scripts/transform-for-convex.ts`
+3. **Import to Convex**: `npx convex import --table churches data.jsonl`
+4. **Verify data**: Compare record counts and spot-check critical data
 
-# Apply pending migrations
-npm run db:migrate
+### Migration Status
 
-# Rollback last migration (if needed)
-npm run db:rollback
-```
-
-See **[../migrations/README.md](../migrations/README.md)** for detailed migration documentation.
+See **[CONVEX_MIGRATION_STATUS.md](../CONVEX_MIGRATION_STATUS.md)** for detailed migration documentation.
 
 ---
 
@@ -378,166 +495,139 @@ See **[../migrations/README.md](../migrations/README.md)** for detailed migratio
 
 ### Get User Church Data
 
-```sql
--- RLS automatically filters by church_id
-SELECT * FROM reports
-WHERE year = 2024 AND month = 10;
--- Returns only reports for user's church
+```typescript
+// Authorization handled in function
+export const getMyReports = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireAuth(ctx);
+    
+    // User's church reports only
+    return await ctx.db
+      .query("monthlyReports")
+      .withIndex("by_church", (q) => q.eq("churchId", user.churchId))
+      .collect();
+  },
+});
 ```
 
 ### Get National Fund Summary
 
-```sql
--- Admin/treasurer can see all funds
-SELECT
-  f.name,
-  SUM(fb.balance) as total_balance,
-  COUNT(DISTINCT fb.church_id) as church_count
-FROM funds f
-LEFT JOIN fund_balances fb ON f.id = fb.fund_id
-GROUP BY f.id, f.name
-ORDER BY f.name;
+```typescript
+// Admin/treasurer can see all funds
+export const getFundSummary = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireRole(ctx, ["admin", "national_treasurer"]);
+
+    const funds = await ctx.db.query("funds").collect();
+    
+    const summary = await Promise.all(
+      funds.map(async (fund) => {
+        const balances = await ctx.db
+          .query("fundBalances")
+          .withIndex("by_fund", (q) => q.eq("fundId", fund._id))
+          .collect();
+
+        const totalBalance = balances.reduce((sum, b) => sum + b.balance, 0);
+
+        return {
+          fundName: fund.name,
+          totalBalance,
+          churchCount: balances.length,
+        };
+      })
+    );
+
+    return summary;
+  },
+});
 ```
 
 ### Audit User Actions
 
-```sql
--- Get recent user activity
-SELECT
-  ua.action,
-  ua.details,
-  ua.created_at,
-  p.full_name
-FROM user_activity ua
-JOIN profiles p ON ua.user_id = p.id
-WHERE ua.user_id = $1
-ORDER BY ua.created_at DESC
-LIMIT 50;
-```
+```typescript
+export const getUserActivity = query({
+  args: { userId: v.id("profiles"), limit: v.optional(v.number()) },
+  handler: async (ctx, { userId, limit = 50 }) => {
+    await requireAuth(ctx);
 
-### Monthly Report with Calculations
-
-```sql
--- Get report with auto-calculated totals (generated columns)
-SELECT
-  r.church_id,
-  c.name as church_name,
-  r.month,
-  r.year,
-  r.total_entradas,  -- Auto-calculated
-  r.total_salidas,   -- Auto-calculated
-  r.fondo_nacional,  -- 10% of (diezmos + ofrendas)
-  r.status
-FROM reports r
-JOIN churches c ON r.church_id = c.id
-WHERE r.year = 2024 AND r.month = 10
-ORDER BY c.name;
+    return await ctx.db
+      .query("userActivity")
+      .withIndex("by_user_date", (q) => q.eq("userId", userId))
+      .order("desc")
+      .take(limit);
+  },
+});
 ```
 
 ---
 
 ## Backup & Recovery
 
-### Backup Strategy
+### Convex Automatic Backups
 
-1. **Supabase Automatic Backups**:
-   - Daily backups (last 7 days)
-   - Point-in-time recovery (last 7 days)
-   - Managed by Supabase
+- **Point-in-time recovery**: Last 7 days (Pro plan)
+- **Data export**: `npx convex export` (JSONL format)
+- **Managed by Convex**: No manual backup configuration needed
 
-2. **Manual Exports**:
-   ```bash
-   # Export specific table
-   pg_dump -h <host> -U <user> -t reports > reports_backup.sql
+### Manual Exports
 
-   # Export entire database
-   pg_dump -h <host> -U <user> ipupy_db > full_backup.sql
-   ```
+```bash
+# Export all data
+npx convex export
 
-3. **CSV Exports** (via application):
-   - Admin panel → Export → Select tables
-   - Automated monthly exports
+# Export specific collection
+npx convex export --table churches > churches-backup.jsonl
 
-### Recovery Procedures
-
-See **[../deployment/DISASTER_RECOVERY.md](../deployment/DISASTER_RECOVERY.md)** for complete recovery procedures.
+# Import data
+npx convex import --table churches churches-backup.jsonl
+```
 
 ---
 
 ## Development Guidelines
 
-### Working with the Database
+### Working with Convex
 
-1. **Always use RLS context**:
+1. **Always verify authentication**:
    ```typescript
-   import { executeWithContext } from '@/lib/db-admin';
-
-   const result = await executeWithContext(auth, async (client) => {
-     return await client.query('SELECT * FROM reports WHERE ...');
+   export const sensitiveQuery = query({
+     handler: async (ctx) => {
+       const user = await requireAuth(ctx);
+       // ... authorized operations
+     },
    });
    ```
 
-2. **Use transactions for multi-step operations**:
+2. **Use TypeScript validators**:
    ```typescript
-   import { executeTransaction } from '@/lib/db-admin';
-
-   await executeTransaction(auth, async (client) => {
-     // Step 1: Insert report
-     await client.query('INSERT INTO reports ...');
-
-     // Step 2: Update fund balance
-     await client.query('UPDATE fund_balances ...');
-
-     // Step 3: Log activity
-     await client.query('INSERT INTO user_activity ...');
+   export const create = mutation({
+     args: {
+       amount: v.number(),
+       email: v.string(),
+       churchId: v.id("churches"),
+     },
+     handler: async (ctx, args) => {
+       // Validate business rules
+       if (args.amount < 0) {
+         throw new Error("Amount cannot be negative");
+       }
+       // ...
+     },
    });
    ```
 
-3. **Never bypass RLS**:
-   ```sql
-   -- ❌ NEVER DO THIS
-   SELECT * FROM reports; -- Bypasses RLS, security risk
-
-   -- ✅ Always set context first
-   -- (handled automatically by executeWithContext)
+3. **Leverage real-time subscriptions**:
+   ```typescript
+   // Client component automatically updates
+   const reports = useQuery(api.reports.listForChurch, { churchId });
    ```
 
-4. **Test with different roles**:
-   ```bash
-   # Test as admin
-   curl -H "Authorization: Bearer <admin_token>" /api/reports
-
-   # Test as treasurer
-   curl -H "Authorization: Bearer <treasurer_token>" /api/reports
-
-   # Test as pastor
-   curl -H "Authorization: Bearer <pastor_token>" /api/reports
-   ```
-
-### Creating Migrations
-
-```bash
-# 1. Create migration file
-touch migrations/055_description.sql
-
-# 2. Write migration SQL
--- Migration 055: Description
-BEGIN;
-  -- Your changes here
-  ALTER TABLE ...;
-COMMIT;
-
-# 3. Test locally
-psql -h localhost -U postgres -f migrations/055_description.sql
-
-# 4. Apply to Supabase
-npm run db:migrate
-
-# 5. Verify
-psql -h <supabase_host> -U postgres -c "SELECT * FROM migration_history ORDER BY id DESC LIMIT 1;"
-```
-
-See **[../migrations/README.md](../migrations/README.md)** for detailed guide.
+4. **Test with Convex Dashboard**:
+   - Navigate to https://dashboard.convex.dev
+   - Use Function Playground to test queries/mutations
+   - Monitor real-time logs
 
 ---
 
@@ -545,63 +635,63 @@ See **[../migrations/README.md](../migrations/README.md)** for detailed guide.
 
 ### Common Issues
 
-#### 1. RLS Access Denied
+#### 1. Authentication Errors
 
-**Error**: `new row violates row-level security policy`
+**Error**: `Not authenticated`
 
-**Cause**: Session context not set or incorrect role
+**Cause**: No valid session or OIDC token
 
 **Fix**:
 ```typescript
-// Ensure using executeWithContext
-const result = await executeWithContext(auth, async (client) => {
-  return await client.query('...');
-});
+// Ensure NextAuth session exists
+const session = await getServerSession(authOptions);
+
+// Convex uses session.user.email for OIDC lookup
 ```
 
-#### 2. Foreign Key Constraint Violation
+#### 2. Unauthorized Access
 
-**Error**: `foreign key constraint "fk_name" fails`
+**Error**: `Unauthorized: Can only access your church`
 
-**Cause**: Referenced record doesn't exist
+**Cause**: User trying to access data outside their scope
 
 **Fix**:
-```sql
--- Check if parent record exists
-SELECT id FROM churches WHERE id = <church_id>;
-
--- Insert parent record first, then child
+```typescript
+// Check user's role and church assignment
+const user = await requireAuth(ctx);
+console.log("User role:", user.role);
+console.log("User churchId:", user.churchId);
 ```
 
-#### 3. Unique Constraint Violation
+#### 3. Invalid ID References
 
-**Error**: `duplicate key value violates unique constraint`
+**Error**: `Document not found`
 
-**Cause**: Attempting to insert duplicate record
+**Cause**: Using wrong ID type or non-existent document
 
 **Fix**:
-```sql
--- Use INSERT ... ON CONFLICT
-INSERT INTO providers (ruc, name, ...)
-VALUES (...)
-ON CONFLICT (ruc) DO UPDATE SET ...;
+```typescript
+// Verify document exists before referencing
+const church = await ctx.db.get(churchId);
+if (!church) {
+  throw new Error("Church not found");
+}
 ```
 
-#### 4. Performance Issues
+#### 4. Index Not Found
 
-**Symptom**: Slow queries (> 1 second)
+**Error**: `No index found for query`
 
-**Diagnosis**:
-```sql
--- Check query plan
-EXPLAIN ANALYZE SELECT * FROM reports WHERE ...;
+**Cause**: Query uses field without index
 
--- Look for "Seq Scan" (bad) vs "Index Scan" (good)
+**Fix**:
+```typescript
+// Add index to schema.ts
+churches: defineTable({ /* ... */ })
+  .index("by_city", ["city"]); // Add missing index
+
+// Run: npx convex dev (auto-applies schema changes)
 ```
-
-**Fix**: Add missing indexes (see [INDEXES.md](./INDEXES.md))
-
-See **[../development/TROUBLESHOOTING.md](../development/TROUBLESHOOTING.md)** for more issues.
 
 ---
 
@@ -609,17 +699,18 @@ See **[../development/TROUBLESHOOTING.md](../development/TROUBLESHOOTING.md)** f
 
 ### Documentation Links
 
-- **[Supabase Documentation](https://supabase.com/docs)**
-- **[PostgreSQL Documentation](https://www.postgresql.org/docs/15/)**
-- **[Row Level Security Guide](https://www.postgresql.org/docs/15/ddl-rowsecurity.html)**
-- **[PostgreSQL Indexes](https://www.postgresql.org/docs/15/indexes.html)**
+- **[Convex Documentation](https://docs.convex.dev)**
+- **[Convex React Integration](https://docs.convex.dev/client/react)**
+- **[Convex Schema Guide](https://docs.convex.dev/database/schemas)**
+- **[Convex Authentication](https://docs.convex.dev/auth)**
 
 ### Related Project Docs
 
-- **[../migrations/README.md](../migrations/README.md)** - Migration system
-- **[RLS_POLICIES.md](./RLS_POLICIES.md)** - Security policies
+- **[CONVEX_SCHEMA.md](../CONVEX_SCHEMA.md)** - Complete schema reference
+- **[AUTHORIZATION.md](./AUTHORIZATION.md)** - Authorization patterns
 - **[BUSINESS_LOGIC.md](./BUSINESS_LOGIC.md)** - Business workflows
-- **[../../CLAUDE.md](../../CLAUDE.md)** - Development guide
+- **[CONVEX_MIGRATION_STATUS.md](../CONVEX_MIGRATION_STATUS.md)** - Migration docs
+- **[DEVELOPER_GUIDE.md](../DEVELOPER_GUIDE.md)** - Development guide
 
 ---
 
@@ -627,11 +718,12 @@ See **[../development/TROUBLESHOOTING.md](../development/TROUBLESHOOTING.md)** f
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0 | 2025-10-06 | Initial database documentation created |
+| 4.0.0 | 2025-01-08 | Complete rewrite for Convex migration |
+| 1.0 | 2025-10-06 | Initial PostgreSQL documentation (archived) |
 
 ---
 
-**Maintained By**: Technical Documentation Team
-**Last Review**: 2025-10-06
-**Next Review**: 2025-11-06
-**Status**: ✅ Current
+**Maintained By**: Technical Documentation Team  
+**Last Review**: 2025-01-08  
+**Next Review**: 2025-02-08  
+**Status**: ✅ Current (Post-Convex Migration)

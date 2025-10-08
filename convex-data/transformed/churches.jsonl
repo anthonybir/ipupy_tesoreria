@@ -1,0 +1,38 @@
+{"supabase_id":1,"name":"IPU LAMBARÉ","city":"Lambaré","pastor":"Joseph Anthony Bir","pastor_cedula":"2370941","pastor_grado":"ORDENADO","pastor_posicion":"Obispo Consejero","active":true,"created_at":1758279366695}
+{"supabase_id":2,"name":"IPU EDELIRA KM 48","city":"Edelira","pastor":"Venancio Vázquez Benítez","pastor_cedula":"2122970","pastor_grado":"ORDENADO","pastor_posicion":"Diácono","active":true,"created_at":1758279366695}
+{"supabase_id":3,"name":"IPU MARAMBURÉ","city":"Maramburé","pastor":"Ricardo Martínez","pastor_cedula":"1795191","pastor_grado":"ORDENADO","pastor_posicion":"Presidente","active":true,"created_at":1758279366695}
+{"supabase_id":4,"name":"IPU LUQUE","city":"Luque","pastor":"Gregorio Chaparro","pastor_cedula":"1001860","pastor_grado":"ORDENADO","pastor_posicion":"Vice-Presidente","active":true,"created_at":1758279366695}
+{"supabase_id":5,"name":"IPU VILLA HAYES PAÑETE","city":"Villa Hayes","pastor":"Juan Gómez","pastor_cedula":"2447195","pastor_grado":"ORDENADO","pastor_posicion":"Director de Misiones","active":true,"created_at":1758279366695}
+{"supabase_id":6,"name":"IPU ITAUGUÁ","city":"Itauguá","pastor":"Ricardo Ramón Ybañez Martínez","pastor_cedula":"3262368","pastor_grado":"ORDENADO","pastor_posicion":"Secretario","active":true,"created_at":1758279366695}
+{"supabase_id":7,"name":"IPU ANAHÍ","city":"Anahí","pastor":"Isidoro Ramírez Ayala","pastor_cedula":"3592507","pastor_grado":"ORDENADO","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":8,"name":"IPU CAACUPÉ","city":"Caacupé","pastor":"Abel Ortiz Yrigoyen","pastor_cedula":"2669610","pastor_grado":"GENERAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":9,"name":"IPU BARBEROS","city":"Barberos","pastor":"Hugo Javier Sosa Escobar","pastor_cedula":"3395880","pastor_grado":"ORDENADO","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":10,"name":"IPU CAPIATÁ","city":"Capiatá","pastor":"Narciso Armoa Palacios","pastor_cedula":"1232089","pastor_grado":"GENERAL","pastor_posicion":"Director de Caballeros","active":true,"created_at":1758279366695}
+{"supabase_id":11,"name":"IPU ITÁ","city":"Itá","pastor":"Ramón Alberto Bogarín Lezcano","pastor_cedula":"4548452","pastor_grado":"GENERAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":12,"name":"IPU CAAGUAZÚ","city":"Caaguazú","pastor":"Christian Antonio Bareiro","pastor_cedula":"21787099","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":13,"name":"IPU HERNANDARIAS","city":"Hernandarias","pastor":"Ramón Jara Santacruz","pastor_cedula":"5853477","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":14,"name":"IPU CONCEPCIÓN","city":"Concepción","pastor":"Vicente Ayala Stumpjs","pastor_cedula":"1361882","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":15,"name":"IPU ÑEMBY","city":"Ñemby","pastor":"Eliezer Jara Ortiz","pastor_cedula":"4882109","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":16,"name":"IPU ASUNCIÓN","city":"Asunción","pastor":"Daves James Linares Silva","pastor_cedula":"8609861","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":17,"name":"IPU CDE PRIMAVERA","city":"Ciudad del Este","pastor":"Johny Quintana","pastor_cedula":"3707449","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":18,"name":"IPU CDE REMANSITO","city":"Ciudad del Este","pastor":"Eddie Yepez","pastor_cedula":"22430074","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":19,"name":"IPU YUQUYRY","city":"Yuquyry","pastor":"Julian Ortiz","pastor_cedula":"640904","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":20,"name":"IPU PILAR","city":"Pilar","pastor":"Alexis Escurra","pastor_cedula":"5808509","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":21,"name":"IPU EDELIRA KM 28","city":"Edelira","pastor":"Adelio Raúl Barreto","pastor_cedula":"4768440","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":22,"name":"IPU PINDOLO","city":"Píndolo","pastor":"Nilton Sotelo","pastor_grado":"GENERAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":23,"name":"IPU CHINO CUE","city":"Chino Cue","pastor":"Por asignar","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":24,"name":"IPU ENCARNACIÓN","city":"Encarnación","pastor":"Por asignar","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":25,"name":"IPU LA COLMENA","city":"La Colmena","pastor":"Por asignar","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":26,"name":"IPU VILLA HAYES SAN JORGE","city":"Villa Hayes","pastor":"Por asignar","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":27,"name":"IPU J. AUGUSTO SALDÍVAR","city":"J. Augusto Saldívar","pastor":"Por asignar","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":28,"name":"IPU ITACURUBÍ DE ROSARIO","city":"Itacurubí de Rosario","pastor":"Por asignar","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":true,"created_at":1758279366695}
+{"supabase_id":29,"name":"IPU BOLIVIA","city":"Bolivia","pastor":"Por asignar","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":false,"created_at":1758279366695}
+{"supabase_id":30,"name":"IPU SANTANÍ","city":"Santaní","pastor":"Por asignar","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":false,"created_at":1758279366695}
+{"supabase_id":31,"name":"IPU GENÉRICO","city":"Nacional","pastor":"Registro histórico","pastor_grado":"ADMIN","pastor_posicion":"Sistema","active":false,"created_at":1758279366695}
+{"supabase_id":32,"name":"IPU GENÉRICO 2","city":"Nacional","pastor":"Registro histórico","pastor_grado":"ADMIN","pastor_posicion":"Sistema","active":false,"created_at":1758279366695}
+{"supabase_id":33,"name":"IPU PY - CUOTAS SOCIALES","city":"Nacional","pastor":"Administración Nacional","pastor_grado":"ADMIN","pastor_posicion":"Sistema","active":true,"created_at":1758279366695}
+{"supabase_id":34,"name":"IPU PY - VENTA DE LIBROS","city":"Nacional","pastor":"Administración Nacional","pastor_grado":"ADMIN","pastor_posicion":"Sistema","active":true,"created_at":1758279366695}
+{"supabase_id":35,"name":"PASTORES IPU PY","city":"Nacional","pastor":"Administración Nacional","pastor_grado":"ADMIN","pastor_posicion":"Sistema","active":true,"created_at":1758279366695}
+{"supabase_id":37,"name":"IPU EDELIRA","city":"Edelira","pastor":"Venancio Vázquez Benítez","pastor_cedula":"2122970","pastor_grado":"ORDENADO","pastor_posicion":"Diácono","active":false,"created_at":1758324577442}
+{"supabase_id":43,"name":"IPU CAACUPE","city":"Caacupé","pastor":"Abel Ortiz Yrigoyen","pastor_cedula":"2669610","pastor_grado":"GENERAL","pastor_posicion":"Pastor","active":false,"created_at":1758324577442}
+{"supabase_id":56,"name":"IPU EDELIRA KM 28 (DUPLICADO)","city":"Edelira","pastor":"Adelio Raúl Barreto","pastor_cedula":"4768440","pastor_grado":"LOCAL","pastor_posicion":"Pastor","active":false,"created_at":1758324577442}

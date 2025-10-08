@@ -15,7 +15,10 @@
     "typecheck:watch": "tsc --noEmit --watch",
     "validate": "npm run typecheck && npm run lint:strict",
     "postinstall": "node scripts/postinstall/fix-math-intrinsics.cjs",
-    "prepare": "husky"
+    "prepare": "husky",
+    "export-supabase": "tsx scripts/export-supabase.ts",
+    "transform-data": "tsx scripts/transform-for-convex.ts",
+    "migrate-data": "npm run export-supabase && npm run transform-data"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.8",
@@ -32,6 +35,7 @@
     "bcryptjs": "^3.0.2",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "convex": "^1.27.4",
     "date-fns": "^4.1.0",
     "google-auth-library": "^10.3.0",
     "jsonwebtoken": "^9.0.2",
@@ -46,6 +50,7 @@
     "lucide-react": "^0.412.0",
     "math-intrinsics": "^1.0.0",
     "next": "^15.5.3",
+    "next-auth": "^5.0.0-beta.29",
     "pg": "^8.16.3",
     "react": "19.1.0",
     "react-dom": "19.1.0",
@@ -65,12 +70,14 @@
     "@types/pg": "^8.15.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotenv": "^17.2.3",
     "eslint": "^9",
     "eslint-config-next": "15.5.3",
     "has-symbols": "^1.1.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.3",
     "tailwindcss": "^4",
+    "tsx": "^4.20.6",
     "typescript": "^5"
   },
   "engines": {

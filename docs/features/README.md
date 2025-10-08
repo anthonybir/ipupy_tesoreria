@@ -1,6 +1,16 @@
 # Feature Documentation Index
 
+**Last Updated**: 2025-01-08  
+**Architecture**: Next.js 15 + Convex + NextAuth v5  
+**Status**: ✅ Current (Post-Convex Migration)
+
+---
+
+## Overview
+
 This directory contains comprehensive feature guides for the IPUPY_Tesoreria treasury management system. Each guide provides user-facing documentation covering workflows, permissions, technical details, and troubleshooting.
+
+**Note**: Technical references in individual feature documents may reference legacy PostgreSQL/Supabase patterns. Current implementation uses **Convex** document database with code-based authorization.
 
 ## Core Features
 
@@ -167,11 +177,18 @@ graph TB
 
 ## Related Documentation
 
-- [API Reference](../API_REFERENCE.md) - Complete API endpoint documentation
-- [Architecture Overview](../ARCHITECTURE.md) - System architecture and design patterns
-- [Database Schema](../DATABASE_SCHEMA.md) - Database tables and relationships
-- [Security Model](../SECURITY_AUDIT_2025-09-28.md) - RLS policies and authorization
-- [User Management Guide](../guides/USER_MANAGEMENT_GUIDE.md) - User administration procedures
+### Current Architecture (Convex)
+- [API Reference](../API_REFERENCE.md) - Convex functions and REST API compatibility layer
+- [Architecture Overview](../ARCHITECTURE.md) - System architecture with Convex backend
+- [Convex Schema](../CONVEX_SCHEMA.md) - Database collections and validators
+- [Security Model](../SECURITY.md) - Code-based authorization patterns
+- [Developer Guide](../DEVELOPER_GUIDE.md) - Development workflows with Convex
+- [Environment Variables](../ENVIRONMENT_VARIABLES.md) - Configuration reference
+
+### Legacy Documentation (Archived)
+- [Database Schema (Legacy)](../database/legacy/SCHEMA_REFERENCE.md) - PostgreSQL schema (historical)
+- [RLS Policies (Legacy)](../database/legacy/RLS_POLICIES.md) - Row Level Security (historical)
+- [Security Audit 2025-09-28](../SECURITY_AUDIT_2025-09-28.md) - Pre-migration security review
 
 ## Terminology Reference
 
@@ -196,6 +213,6 @@ For questions or feedback about these feature guides:
 
 ---
 
-**Last Updated:** October 6, 2025
-**Documentation Version:** 1.0
-**System Version:** IPUPY_Tesoreria v2.2
+**Last Updated:** January 8, 2025  
+**Documentation Version:** 2.0 (Post-Convex Migration)  
+**System Version:** IPUPY_Tesoreria v4.0

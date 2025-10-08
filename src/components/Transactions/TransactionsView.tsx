@@ -135,10 +135,7 @@ export default function TransactionsView(): JSX.Element {
     [filters, offset],
   );
 
-  const transactionsQuery = useTransactions(queryFilters, {
-    staleTime: 45 * 1000,
-    placeholderData: (previous) => previous ?? undefined,
-  });
+  const transactionsQuery = useTransactions(queryFilters);
   const fundsQuery = useFunds({ includeInactive: true }, { staleTime: 5 * 60 * 1000 });
   const churchesQuery = useChurches();
 
@@ -149,9 +146,9 @@ export default function TransactionsView(): JSX.Element {
     setOffset(0);
   }, [filters.fundId, filters.churchId, filters.month, filters.year, filters.limit]);
 
-  const totals = transactionsQuery.data?.totals;
-  const pagination = transactionsQuery.data?.pagination;
-  const transactions = transactionsQuery.data?.records ?? [];
+  const totals = transactionsQuery.data.totals;
+  const pagination = transactionsQuery.data.pagination;
+  const transactions = transactionsQuery.data.records;
 
   const handleOpenCreate = () => {
     setFormMode('create');
@@ -354,7 +351,7 @@ export default function TransactionsView(): JSX.Element {
       },
     ];
   }, []);
-  const isLoading = transactionsQuery.isLoading || transactionsQuery.isPending;
+  const isLoading = transactionsQuery.isLoading;
   const isError = transactionsQuery.isError;
 
   const hasPreviousPage = Boolean(pagination && pagination.offset > 0);

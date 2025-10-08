@@ -28,51 +28,50 @@ Before submitting any PR, developers must test:
 
 #### 1. Authentication & Authorization
 
-- [ ] **Google OAuth Login**
+- [ ] **Google OAuth Login (NextAuth v5)**
   - Domain restriction: Only `@ipupy.org.py` emails allowed
   - Redirects to dashboard after successful login
   - Error shown for non-authorized domains
-
-- [ ] **Magic Link Login**
-  - Email sent to valid address
-  - Link expires after use
-  - Redirects to dashboard
+  - OIDC bridge validates tokens with Convex
 
 - [ ] **Session Management**
   - Session persists across page reloads
   - Logout clears session completely
   - Protected routes redirect to login when not authenticated
+  - JWT tokens stored in httpOnly cookies
 
 - [ ] **Role-Based Access Control (RBAC)**
   - Admin: Full platform access
-  - District Supervisor: Multi-church oversight
-  - Pastor: Church management
-  - Treasurer: Financial operations
-  - Secretary: Data entry
-  - Member: Read-only access
+  - Fund Director: Fund-specific management
+  - Pastor: Church leadership
+  - Treasurer: National treasury operations (all churches, all funds)
+  - Church Manager: Church administration (view-only)
+  - Secretary: Administrative support
 
-#### 2. Row Level Security (RLS)
+#### 2. Code-Based Authorization (Convex)
 
 - [ ] **Church Data Isolation**
   - Users only see data from their assigned church
   - Admin can view all churches
-  - District supervisors see assigned churches only
+  - Authorization checked in each Convex function
 
 - [ ] **Fund Access Control**
   - Fund directors limited to assigned funds
-  - Treasurers access all church funds
+  - Treasurers access all church funds (national scope)
   - Cross-church fund access denied
 
-- [ ] **Context Validation**
+- [ ] **Authorization Validation**
   ```typescript
-  // Test that executeWithContext() sets proper session variables
-  // Verify app.current_user_id, app.current_user_role, app.current_user_church_id
+  // Test that Convex functions verify:
+  // 1. ctx.auth.getUserIdentity() returns valid user
+  // 2. User profile loaded from profiles collection
+  // 3. Role permissions checked before operations
   ```
 
 - [ ] **Unauthenticated Access**
-  - Unauthenticated queries return empty results
-  - No 'viewer' fallback role (security fix)
-  - API routes return 401 for missing auth
+  - Unauthenticated queries throw "Not authenticated" error
+  - API routes return 401 for missing NextAuth session
+  - Convex functions reject requests without valid OIDC token
 
 #### 3. Financial Operations
 

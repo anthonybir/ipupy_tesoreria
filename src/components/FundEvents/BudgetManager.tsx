@@ -105,7 +105,6 @@ export function BudgetManager({ eventId, canEdit }: BudgetManagerProps): JSX.Ele
           eventId,
           budgetItemId: editingItem.id,
           data: {
-            category: formState.category,
             description: formState.description.trim(),
             projected_amount: formState.projected_amount,
             notes: formState.notes?.trim() || '',

@@ -1,178 +1,72 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { getAuthContext } from '@/lib/auth-context';
-import { executeWithContext } from '@/lib/db';
-import { firstOrNull } from '@/lib/db-helpers';
+import { getAuthenticatedConvexClient } from '@/lib/convex-server';
+import { api } from '../../../../../../../convex/_generated/api';
+import { handleApiError } from '@/lib/api-errors';
+import type { Id } from '../../../../../../../convex/_generated/dataModel';
 
-export async function PUT(
+/**
+ * Fund Event Budget Item Detail API - Migrated to Convex
+ *
+ * Phase 4.9 - Fund Events Migration (2025-01-07)
+ */
+
+export async function PATCH(
   req: NextRequest,
-  context: { params: Promise<{ id: string; budgetItemId: string }> }
+  context: { params: Promise<{ budgetItemId: string }> }
 ): Promise<NextResponse> {
   try {
-    const auth = await getAuthContext(req);
-
-    if (!auth || !auth.userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const body = await req.json();
-    const { category, description, projected_amount, notes } = body;
-
-    if (!description?.trim() || projected_amount === null || projected_amount === undefined || projected_amount < 0) {
-      return NextResponse.json(
-        { error: 'Description and non-negative amount are required' },
-        { status: 400 }
-      );
-    }
-
+    const client = await getAuthenticatedConvexClient();
     const params = await context.params;
-    const eventId = params.id;
-    const budgetItemId = params.budgetItemId;
+    const itemId = params.budgetItemId;
+    const body = await req.json();
 
-    const eventResult = await executeWithContext(
-      auth,
-      `SELECT fe.*, fe.created_by, fe.status, fe.fund_id
-       FROM fund_events fe
-       WHERE fe.id = $1`,
-      [eventId]
-    );
+    const { description, projected_amount, notes } = body as {
+      description?: string;
+      projected_amount?: number;
+      notes?: string;
+    };
 
-    const event = firstOrNull(eventResult.rows);
-    if (!event) {
-      return NextResponse.json(
-        { error: 'Event not found' },
-        { status: 404 }
-      );
-    }
+    const updateArgs: {
+      id: Id<'fund_event_budget_items'>;
+      description?: string;
+      projected_amount?: number;
+      notes?: string;
+    } = {
+      id: itemId as Id<'fund_event_budget_items'>,
+    };
+    if (description !== undefined) updateArgs.description = description;
+    if (projected_amount !== undefined) updateArgs.projected_amount = projected_amount;
+    if (notes !== undefined) updateArgs.notes = notes;
 
-    if (!['draft', 'pending_revision'].includes(event['status'])) {
-      return NextResponse.json(
-        { error: 'Can only edit budget items for draft or pending_revision events' },
-        { status: 400 }
-      );
-    }
+    const item = await client.mutation(api.fundEvents.updateBudgetItem, updateArgs);
 
-    const isFundDirector = auth.role === 'fund_director';
-    const isAdmin = auth.role === 'admin';
-    const isNationalTreasurer = auth.role === 'treasurer';
-    const isTreasurer = auth.role === 'treasurer';
-
-    if (isFundDirector) {
-      if (event['created_by'] !== auth.userId) {
-        return NextResponse.json(
-          { error: 'Fund directors can only edit their own events' },
-          { status: 403 }
-        );
-      }
-    } else if (!isAdmin && !isNationalTreasurer && !isTreasurer) {
-      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
-    }
-
-    const result = await executeWithContext(
-      auth,
-      `UPDATE fund_event_budget_items
-       SET category = $2, description = $3, projected_amount = $4, notes = $5, updated_at = now()
-       WHERE id = $1 AND event_id = $6
-       RETURNING *`,
-      [budgetItemId, category, description, projected_amount, notes || null, eventId]
-    );
-
-    const budgetItem = firstOrNull(result.rows);
-    if (!budgetItem) {
-      return NextResponse.json({ error: 'Budget item not found' }, { status: 404 });
-    }
-
-    await executeWithContext(
-      auth,
-      `UPDATE fund_events SET updated_at = now() WHERE id = $1`,
-      [eventId]
-    );
-
-    return NextResponse.json({ success: true, data: budgetItem });
+    return NextResponse.json({
+      success: true,
+      data: item,
+    });
   } catch (error) {
-    console.error('Error updating budget item:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error, req.headers.get('origin'), 'PATCH /api/fund-events/[id]/budget/[budgetItemId]');
   }
 }
 
 export async function DELETE(
   req: NextRequest,
-  context: { params: Promise<{ id: string; budgetItemId: string }> }
+  context: { params: Promise<{ budgetItemId: string }> }
 ): Promise<NextResponse> {
   try {
-    const auth = await getAuthContext(req);
-
-    if (!auth || !auth.userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
+    const client = await getAuthenticatedConvexClient();
     const params = await context.params;
-    const eventId = params.id;
-    const budgetItemId = params.budgetItemId;
+    const itemId = params.budgetItemId;
 
-    const eventResult = await executeWithContext(
-      auth,
-      `SELECT fe.*, fe.created_by, fe.status, fe.fund_id
-       FROM fund_events fe
-       WHERE fe.id = $1`,
-      [eventId]
-    );
+    await client.mutation(api.fundEvents.deleteBudgetItem, {
+      id: itemId as Id<'fund_event_budget_items'>,
+    });
 
-    const event = firstOrNull(eventResult.rows);
-    if (!event) {
-      return NextResponse.json(
-        { error: 'Event not found' },
-        { status: 404 }
-      );
-    }
-
-    if (!['draft', 'pending_revision'].includes(event['status'])) {
-      return NextResponse.json(
-        { error: 'Can only delete budget items from draft or pending_revision events' },
-        { status: 400 }
-      );
-    }
-
-    const isFundDirector = auth.role === 'fund_director';
-    const isAdmin = auth.role === 'admin';
-    const isNationalTreasurer = auth.role === 'treasurer';
-    const isTreasurer = auth.role === 'treasurer';
-
-    if (isFundDirector) {
-      if (event['created_by'] !== auth.userId) {
-        return NextResponse.json(
-          { error: 'Fund directors can only delete items from their own events' },
-          { status: 403 }
-        );
-      }
-    } else if (!isAdmin && !isNationalTreasurer && !isTreasurer) {
-      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
-    }
-
-    const result = await executeWithContext(
-      auth,
-      `DELETE FROM fund_event_budget_items WHERE id = $1 AND event_id = $2 RETURNING id`,
-      [budgetItemId, eventId]
-    );
-
-    if (result.rows.length === 0) {
-      return NextResponse.json({ error: 'Budget item not found' }, { status: 404 });
-    }
-
-    await executeWithContext(
-      auth,
-      `UPDATE fund_events SET updated_at = now() WHERE id = $1`,
-      [eventId]
-    );
-
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      message: 'Ítem presupuestario eliminado',
+    });
   } catch (error) {
-    console.error('Error deleting budget item:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error, req.headers.get('origin'), 'DELETE /api/fund-events/[id]/budget/[budgetItemId]');
   }
 }

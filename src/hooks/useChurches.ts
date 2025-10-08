@@ -1,24 +1,36 @@
 'use client';
 
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { api } from '../../convex/_generated/api';
 
-import { fetchJson } from '@/lib/api-client';
-import { type ChurchRecord, type RawChurchRecord, normalizeChurchRecord } from '@/types/api';
+import { mapChurchDocumentToRaw, type ConvexChurchDocument } from '@/lib/convex-adapters';
+import { normalizeChurchRecord, type ChurchRecord } from '@/types/api';
+import { useConvexQueryState, type ConvexQueryState } from '@/hooks/useConvexQueryState';
 
-type Options = Pick<UseQueryOptions<ChurchRecord[], Error>, 'enabled'>;
-
-const fetchChurches = async (): Promise<ChurchRecord[]> => {
-  const data = await fetchJson<RawChurchRecord[]>('/api/churches');
-  return data
-    .map(normalizeChurchRecord)
-    .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+type Options = {
+  enabled?: boolean;
 };
 
-export function useChurches(options?: Options): UseQueryResult<ChurchRecord[], Error> {
-  return useQuery({
-    queryKey: ['churches'],
-    queryFn: fetchChurches,
-    staleTime: 5 * 60 * 1000,
-    ...options
-  });
+type UseChurchesResult = ConvexQueryState<ChurchRecord[]> & { data: ChurchRecord[] };
+
+const mapChurches = (raw: Array<ReturnType<typeof mapChurchDocumentToRaw>>): ChurchRecord[] =>
+  raw
+    .map(normalizeChurchRecord)
+    .sort((a, b) => a.name.localeCompare(b.name, 'es'));
+
+export function useChurches(options?: Options): UseChurchesResult {
+  const queryResult = useConvexQueryState(
+    api.churches.list,
+    [],
+    (churches: Array<ConvexChurchDocument>) =>
+      mapChurches(churches.map(mapChurchDocumentToRaw)),
+    { enabled: options?.enabled ?? true }
+  );
+
+  const data = useMemo(() => queryResult.data ?? [], [queryResult.data]);
+
+  return {
+    ...queryResult,
+    data,
+  };
 }

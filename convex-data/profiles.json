@@ -1,0 +1,40 @@
+[
+  {
+    "id": "e7bb2c8b-459a-4331-a67b-9ee2587d427b",
+    "email": "administracion@ipupy.org.py",
+    "role": "admin",
+    "church_id": null,
+    "created_at": "2025-09-20T02:03:05.584122+00:00",
+    "updated_at": "2025-09-25T05:47:56.533107+00:00",
+    "full_name": "Administrador IPUPY",
+    "phone": null,
+    "avatar_url": "https://lh3.googleusercontent.com/a/ACg8ocKTba1p41DzqzjVG1yXQk6yG48QtDqx2JWKnclxKTkWc70bjg=s96-c",
+    "last_seen_at": "2025-09-23T21:25:11.541643+00:00",
+    "preferred_language": "es",
+    "permissions": {},
+    "role_assigned_at": "2025-09-23T16:36:09.872308+00:00",
+    "role_assigned_by": null,
+    "profile_completed_at": null,
+    "onboarding_step": 0,
+    "is_active": true
+  },
+  {
+    "id": "5f9be82a-66ed-45a6-a79a-8165100d835e",
+    "email": "administracion@ipupy.org.py",
+    "role": "admin",
+    "church_id": null,
+    "created_at": "2025-09-23T21:25:11.556311+00:00",
+    "updated_at": "2025-10-05T20:15:57.902142+00:00",
+    "full_name": null,
+    "phone": null,
+    "avatar_url": null,
+    "last_seen_at": "2025-10-07T13:37:27.746527+00:00",
+    "preferred_language": "es",
+    "permissions": {},
+    "role_assigned_at": null,
+    "role_assigned_by": null,
+    "profile_completed_at": null,
+    "onboarding_step": 0,
+    "is_active": false
+  }
+]

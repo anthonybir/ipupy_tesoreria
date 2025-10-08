@@ -1,297 +1,239 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { getAuthContext } from "@/lib/auth-context";
-import { createClient } from "@/lib/supabase/server";
-import { setCORSHeaders } from "@/lib/cors";
-import { fetchFundBalances } from "@/lib/db-admin";
-import { handleApiError, ValidationError } from "@/lib/api-errors";
+import { type NextRequest, NextResponse } from 'next/server';
 
+import { getAuthenticatedConvexClient } from '@/lib/convex-server';
+import { api } from '../../../../../convex/_generated/api';
+import { handleApiError, ValidationError } from '@/lib/api-errors';
+import { getFundConvexId } from '@/lib/convex-id-mapping';
+import { mapFundsListResponse } from '@/lib/convex-adapters';
+import { normalizeFundsResponse } from '@/types/financial';
 
-interface FundCreateInput {
-  name: string;
-  description?: string;
-  type?: string;
-  initial_balance?: number;
-  is_active?: boolean;
-}
+/**
+ * Fund API Routes - Migrated to Convex
+ *
+ * Phase 4.5 - Fund Routes Migration (2025-01-07)
+ *
+ * This route now uses Convex functions instead of direct Supabase queries.
+ * Authorization is handled by Convex functions (requireAdmin for mutations).
+ *
+ * IMPORTANT: Uses authenticated Convex client with Google ID token from NextAuth.
+ * Each request creates a new client with the current user's Google ID token.
+ */
 
-interface FundUpdateInput extends Partial<FundCreateInput> {
-  current_balance?: number;
-}
-
-// GET /api/financial/funds - Get all funds
-async function handleGet(req: NextRequest) {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
-    const { searchParams } = new URL(req.url);
-    const includeInactive = searchParams.get("include_inactive") === "true";
-    const type = searchParams.get("type");
+    // Get authenticated Convex client with user's session token
+    const client = await getAuthenticatedConvexClient();
+    const { searchParams } = new URL(request.url);
 
-    // Require auth context for RLS - financial data should not be public
-    const { requireAuth } = await import('@/lib/auth-context');
-    const auth = await requireAuth(req);
+    // Parse query parameters
+    const includeInactive = searchParams.get('include_inactive') === 'true';
+    const type = searchParams.get('type');
 
-    const fundRows = await fetchFundBalances(auth, { includeInactive, type });
+    // Build query args
+    const queryArgs: {
+      type?: string;
+      include_inactive?: boolean;
+    } = {};
 
-    const fundsWithBalances = fundRows.map((row) => ({
-      id: row.id,
-      name: row.name,
-      description: row.description,
-      type: row.type,
-      current_balance: row.calculated_balance,
-      is_active: row.is_active,
-      created_at: row.created_at,
-      updated_at: row.updated_at,
-      created_by: row.created_by,
-      total_in: row.total_in,
-      total_out: row.total_out
-    }));
+    if (type) queryArgs.type = type;
+    if (includeInactive) queryArgs.include_inactive = true;
 
-    const totalBalance = fundRows.reduce((sum, row) => sum + Number(row.calculated_balance || 0), 0);
-    const activeFunds = fundRows.filter((row) => row.is_active).length;
+    // Call Convex query - returns { data: FundWithStats[], totals: {...} }
+    const convexResult = await client.query(api.funds.list, queryArgs);
+    const payload = mapFundsListResponse(convexResult);
+    const fundsCollection = normalizeFundsResponse(payload);
 
-    const totals = {
-      total_funds: fundRows.length,
-      active_funds: activeFunds,
-      total_balance: totalBalance,
-      total_target: 0
-    };
-
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: true,
-      data: fundsWithBalances,
-      totals
+      data: fundsCollection.records,
+      totals: fundsCollection.totals,
     });
-
-    setCORSHeaders(response);
-    return response;
   } catch (error) {
-    return handleApiError(error, req.headers.get('origin'), 'GET /api/financial/funds');
+    return handleApiError(error, request.headers.get('origin'), 'GET /api/financial/funds');
   }
 }
 
-// POST /api/financial/funds - Create a new fund
-async function handlePost(req: NextRequest) {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const user = await getAuthContext(req);
-    if (!user) {
-      const response = NextResponse.json({ error: "Authentication required" }, { status: 401 });
-      setCORSHeaders(response);
-      return response;
-    }
-
-    // TODO(fund-director): Restore when fund_director role is added to migration-023
-    // if ((user.role as any) === 'fund_director') {
-    //   const response = NextResponse.json({ error: "Fund directors have read-only access" }, { status: 403 });
-    //   setCORSHeaders(response);
-    //   return response;
-    // }
-
-    const body: FundCreateInput = await req.json();
+    const client = await getAuthenticatedConvexClient();
+    const body = await request.json();
 
     // Validate required fields
-    if (!body.name) {
-      throw new ValidationError("Fund name is required");
+    if (!body['name']) {
+      throw new ValidationError('name es requerido');
     }
 
-    // Check for duplicate name
-    const supabase = await createClient();
-    const { data: existing } = await supabase
-      .from('funds')
-      .select('id')
-      .ilike('name', body.name);
+    // Build mutation args
+    const args: {
+      name: string;
+      description?: string;
+      type?: string;
+      initial_balance?: number;
+      is_active?: boolean;
+    } = {
+      name: body['name'],
+    };
 
-    if (existing && existing.length > 0) {
-      const response = NextResponse.json({ error: "A fund with this name already exists" }, { status: 409 });
-      setCORSHeaders(response);
-      return response;
+    // Optional fields
+    if (body['description']) args.description = body['description'];
+    if (body['type']) args.type = body['type'];
+    if (body['initial_balance'] !== undefined) {
+      args.initial_balance = Number(body['initial_balance']);
+    }
+    if (body['is_active'] !== undefined) {
+      args.is_active = body['is_active'];
     }
 
-    const { data: newFund, error: insertError } = await supabase
-      .from('funds')
-      .insert({
-        name: body.name,
-        description: body.description || "",
-        type: body.type || "general",
-        current_balance: body.initial_balance || 0,
-        is_active: body.is_active !== false,
-        created_by: user.email
-      })
-      .select()
-      .single();
+    // Create via Convex (includes duplicate name check)
+    type CreateFundArgs = typeof api.funds.create._args;
+    const convexFund = await client.mutation(
+      api.funds.create,
+      args as CreateFundArgs
+    );
 
-    if (insertError) throw insertError;
+    if (!convexFund) {
+      throw new Error('Fund creation failed');
+    }
 
-    const response = NextResponse.json({
-      success: true,
-      data: newFund,
-      message: "Fund created successfully"
-    }, { status: 201 });
+    // Map to expected contract shape
+    const createdAtIso = new Date(convexFund.created_at).toISOString();
+    const updatedAtIso = convexFund.updated_at
+      ? new Date(convexFund.updated_at).toISOString()
+      : createdAtIso;
 
-    setCORSHeaders(response);
-    return response;
+    const fund = {
+      id: convexFund.supabase_id || 0,
+      name: convexFund.name,
+      description: convexFund.description || '',
+      type: convexFund.type || 'general',
+      current_balance: convexFund.current_balance,
+      is_active: convexFund.is_active,
+      created_at: createdAtIso,
+      updated_at: updatedAtIso,
+      created_by: convexFund.created_by || 'system',
+    };
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: fund,
+        message: 'Fondo creado exitosamente',
+      },
+      { status: 201 }
+    );
   } catch (error) {
-    return handleApiError(error, req.headers.get('origin'), 'POST /api/financial/funds');
+    return handleApiError(error, request.headers.get('origin'), 'POST /api/financial/funds');
   }
 }
 
-// PUT /api/financial/funds?id=X - Update a fund
-async function handlePut(req: NextRequest) {
+export async function PUT(request: NextRequest): Promise<NextResponse> {
   try {
-    const user = await getAuthContext(req);
-    if (!user) {
-      const response = NextResponse.json({ error: "Authentication required" }, { status: 401 });
-      setCORSHeaders(response);
-      return response;
+    const client = await getAuthenticatedConvexClient();
+    const searchParams = request.nextUrl.searchParams;
+    const fundIdParam = searchParams.get('id');
+
+    if (!fundIdParam) {
+      throw new ValidationError('ID de fondo es requerido');
     }
 
-    // TODO(fund-director): Restore when fund_director role is added to migration-023
-    // if ((user.role as any) === 'fund_director') {
-    //   const response = NextResponse.json({ error: "Fund directors have read-only access" }, { status: 403 });
-    //   setCORSHeaders(response);
-    //   return response;
-    // }
-
-    const { searchParams } = new URL(req.url);
-    const fundId = searchParams.get("id");
-
-    if (!fundId) {
-      throw new ValidationError("Fund ID is required");
+    // Convert numeric Supabase ID to Convex ID
+    const numericId = parseInt(fundIdParam);
+    const convexId = await getFundConvexId(client, numericId);
+    if (!convexId) {
+      throw new ValidationError(`Fund ID ${numericId} not found`);
     }
 
-    const body: FundUpdateInput = await req.json();
+    const body = await request.json();
 
-    if (!body.name && !body.description && body.type === undefined &&
-        body.current_balance === undefined && body.is_active === undefined) {
-      throw new ValidationError("No fields to update");
+    // Build updates object (only include defined fields)
+    const updates: {
+      name?: string;
+      description?: string;
+      type?: string;
+      current_balance?: number;
+      is_active?: boolean;
+    } = {};
+
+    if (body['name'] !== undefined) updates.name = body['name'];
+    if (body['description'] !== undefined) updates.description = body['description'];
+    if (body['type'] !== undefined) updates.type = body['type'];
+    if (body['current_balance'] !== undefined) {
+      updates.current_balance = Number(body['current_balance']);
+    }
+    if (body['is_active'] !== undefined) updates.is_active = body['is_active'];
+
+    if (Object.keys(updates).length === 0) {
+      throw new ValidationError('No hay campos para actualizar');
     }
 
-    // Build update object for Supabase
-    const updateData: Record<string, unknown> = {};
-    if (body['name'] !== undefined) updateData['name'] = body['name'];
-    if (body['description'] !== undefined) updateData['description'] = body['description'];
-    if (body['type'] !== undefined) updateData['type'] = body['type'];
-    if (body['current_balance'] !== undefined) updateData['current_balance'] = body['current_balance'];
-    if (body['is_active'] !== undefined) updateData['is_active'] = body['is_active'];
+    // Update via Convex
+    type UpdateFundArgs = typeof api.funds.update._args;
+    const convexFund = await client.mutation(api.funds.update, {
+      id: convexId,
+      ...updates,
+    } satisfies UpdateFundArgs);
 
-    const supabase = await createClient();
-    const { data: updatedFund, error: updateError } = await supabase
-      .from('funds')
-      .update(updateData)
-      .eq('id', fundId)
-      .select()
-      .single();
-
-    if (updateError) {
-      if (updateError.code === 'PGRST116') {
-        const response = NextResponse.json({ error: "Fund not found" }, { status: 404 });
-        setCORSHeaders(response);
-        return response;
-      }
-      throw updateError;
+    if (!convexFund) {
+      throw new Error('Fund update failed');
     }
 
-    const response = NextResponse.json({
+    // Map to expected contract shape
+    const createdAtIso = new Date(convexFund.created_at).toISOString();
+    const updatedAtIso = convexFund.updated_at
+      ? new Date(convexFund.updated_at).toISOString()
+      : createdAtIso;
+
+    const fund = {
+      id: convexFund.supabase_id || 0,
+      name: convexFund.name,
+      description: convexFund.description || '',
+      type: convexFund.type || 'general',
+      current_balance: convexFund.current_balance,
+      is_active: convexFund.is_active,
+      created_at: createdAtIso,
+      updated_at: updatedAtIso,
+      created_by: convexFund.created_by || 'system',
+    };
+
+    return NextResponse.json({
       success: true,
-      data: updatedFund,
-      message: "Fund updated successfully"
+      data: fund,
+      message: 'Fondo actualizado exitosamente',
+    });
+  } catch (error) {
+    return handleApiError(error, request.headers.get('origin'), 'PUT /api/financial/funds');
+  }
+}
+
+export async function DELETE(request: NextRequest): Promise<NextResponse> {
+  try {
+    const client = await getAuthenticatedConvexClient();
+    const searchParams = request.nextUrl.searchParams;
+    const fundIdParam = searchParams.get('id');
+
+    if (!fundIdParam) {
+      throw new ValidationError('ID de fondo es requerido');
+    }
+
+    // Convert numeric Supabase ID to Convex ID
+    const numericId = parseInt(fundIdParam);
+    const convexId = await getFundConvexId(client, numericId);
+    if (!convexId) {
+      throw new ValidationError(`Fund ID ${numericId} not found`);
+    }
+
+    // Delete via Convex (handles soft/hard delete based on transactions)
+    const result = await client.mutation(api.funds.archive, {
+      id: convexId,
     });
 
-    setCORSHeaders(response);
-    return response;
+    return NextResponse.json({
+      success: true,
+      message: result.deleted
+        ? 'Fondo eliminado permanentemente'
+        : 'Fondo desactivado (tiene transacciones)',
+    });
   } catch (error) {
-    return handleApiError(error, req.headers.get('origin'), 'PUT /api/financial/funds');
+    return handleApiError(error, request.headers.get('origin'), 'DELETE /api/financial/funds');
   }
-}
-
-// DELETE /api/financial/funds?id=X - Delete a fund (soft delete)
-async function handleDelete(req: NextRequest) {
-  try {
-    const user = await getAuthContext(req);
-    if (!user) {
-      const response = NextResponse.json({ error: "Authentication required" }, { status: 401 });
-      setCORSHeaders(response);
-      return response;
-    }
-
-    // TODO(fund-director): Restore when fund_director role is added to migration-023
-    // if ((user.role as any) === 'fund_director') {
-    //   const response = NextResponse.json({ error: "Fund directors have read-only access" }, { status: 403 });
-    //   setCORSHeaders(response);
-    //   return response;
-    // }
-
-    const { searchParams } = new URL(req.url);
-    const fundId = searchParams.get("id");
-
-    if (!fundId) {
-      throw new ValidationError("Fund ID is required");
-    }
-
-    const supabase = await createClient();
-
-    // Check if fund has transactions
-    const { data: transactions, error: txError } = await supabase
-      .from('transactions')
-      .select('id')
-      .eq('fund_id', fundId)
-      .limit(1);
-
-    if (txError) throw txError;
-
-    if (transactions.length > 0) {
-      // Soft delete - just deactivate
-      const { error: updateError } = await supabase
-        .from('funds')
-        .update({ is_active: false, updated_at: new Date().toISOString() })
-        .eq('id', fundId);
-
-      if (updateError) throw updateError;
-
-      const response = NextResponse.json({
-        success: true,
-        message: "Fund deactivated (has transactions)"
-      });
-      setCORSHeaders(response);
-      return response;
-    } else {
-      // Hard delete - no transactions
-      const { error: deleteError } = await supabase
-        .from('funds')
-        .delete()
-        .eq('id', fundId);
-
-      if (deleteError) throw deleteError;
-
-      const response = NextResponse.json({
-        success: true,
-        message: "Fund deleted permanently"
-      });
-      setCORSHeaders(response);
-      return response;
-    }
-  } catch (error) {
-    return handleApiError(error, req.headers.get('origin'), 'DELETE /api/financial/funds');
-  }
-}
-
-// OPTIONS handler for CORS
-export async function OPTIONS(): Promise<NextResponse> {
-  const response = new NextResponse(null, { status: 200 });
-  setCORSHeaders(response);
-  return response;
-}
-
-export async function GET(req: NextRequest): Promise<NextResponse> {
-  return handleGet(req);
-}
-
-export async function POST(req: NextRequest): Promise<NextResponse> {
-  return handlePost(req);
-}
-
-export async function PUT(req: NextRequest): Promise<NextResponse> {
-  return handlePut(req);
-}
-
-export async function DELETE(req: NextRequest): Promise<NextResponse> {
-  return handleDelete(req);
 }

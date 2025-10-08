@@ -1,138 +1,47 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { requireAuth, hasFundAccess } from '@/lib/auth-supabase';
-import { executeWithContext, executeTransaction } from '@/lib/db';
-import { firstOrNull, expectOne } from '@/lib/db-helpers';
-import { setCORSHeaders } from '@/lib/cors';
-import { canViewFundEvent } from '@/lib/fund-event-authz';
+import { getAuthenticatedConvexClient } from '@/lib/convex-server';
+import { api } from '../../../../../convex/_generated/api';
+import { handleApiError, ValidationError } from '@/lib/api-errors';
+import type { Id } from '../../../../../convex/_generated/dataModel';
+import { createReverseLookupMaps, mapEventToSupabaseShape } from '@/lib/convex-id-mapping';
 
-export const runtime = 'nodejs';
-
-type EventRow = Record<string, unknown>;
-
-type EventMeta = {
-  status: string | null;
-  fundId: number | null;
-  createdBy: string | null;
-};
-
-const toStringOrNull = (value: unknown): string | null =>
-  typeof value === 'string' && value.trim().length > 0 ? value : null;
-
-const toNumberOrNull = (value: unknown): number | null =>
-  typeof value === 'number' && Number.isFinite(value) ? value : null;
-
-const getEventMeta = (row: EventRow | null | undefined): EventMeta => ({
-  status: toStringOrNull(row?.['status']),
-  fundId: toNumberOrNull(row?.['fund_id']),
-  createdBy: toStringOrNull(row?.['created_by'])
-});
+/**
+ * Fund Event Detail API Routes - Migrated to Convex
+ *
+ * Phase 4.9 - Fund Events Migration (2025-01-07)
+ *
+ * Handles individual event operations:
+ * - GET: Fetch event with full details (budget items, actuals)
+ * - PATCH: Update event details OR workflow actions (submit, approve, reject)
+ * - DELETE: Delete event (draft only)
+ *
+ * NOTE: All responses mirror the legacy shape by exposing the Convex `_id`
+ *       as the `id` field (string) and translating related IDs back to the
+ *       numeric Supabase identifiers expected by the UI.
+ */
 
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
-    const auth = await requireAuth(req);
+    const client = await getAuthenticatedConvexClient();
     const params = await context.params;
     const eventId = params.id;
 
-    const query = `
-      SELECT
-        fe.*,
-        f.name as fund_name,
-        c.name as church_name,
-        p.full_name as created_by_name,
-        pa.full_name as approved_by_name,
-        COALESCE((
-          SELECT json_agg(
-            json_build_object(
-              'id', id,
-              'category', category,
-              'description', description,
-              'projected_amount', projected_amount,
-              'notes', notes
-            )
-          )
-          FROM fund_event_budget_items
-          WHERE event_id = fe.id
-        ), '[]'::json) as budget_items,
-        COALESCE((
-          SELECT json_agg(
-            json_build_object(
-              'id', id,
-              'line_type', line_type,
-              'description', description,
-              'amount', amount,
-              'receipt_url', receipt_url,
-              'notes', notes,
-              'recorded_at', recorded_at
-            )
-          )
-          FROM fund_event_actuals
-          WHERE event_id = fe.id
-        ), '[]'::json) as actuals,
-        COALESCE((
-          SELECT json_agg(
-            json_build_object(
-              'id', id,
-              'previous_status', previous_status,
-              'new_status', new_status,
-              'comment', comment,
-              'changed_at', changed_at
-            )
-            ORDER BY changed_at DESC
-          )
-          FROM fund_event_audit
-          WHERE event_id = fe.id
-        ), '[]'::json) as audit_trail
-      FROM fund_events fe
-      LEFT JOIN funds f ON f.id = fe.fund_id
-      LEFT JOIN churches c ON c.id = fe.church_id
-      LEFT JOIN profiles p ON p.id = fe.created_by
-      LEFT JOIN profiles pa ON pa.id = fe.approved_by
-      WHERE fe.id = $1
-    `;
-
-    const result = await executeWithContext(auth, query, [eventId]);
-    const event = firstOrNull(result.rows);
-
-    if (!event) {
-      const response = NextResponse.json(
-        { error: 'Event not found' },
-        { status: 404 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
-
-    const { fundId: eventFundId } = getEventMeta(event as EventRow);
-    if (eventFundId && !canViewFundEvent(auth, eventFundId)) {
-      const response = NextResponse.json(
-        { error: 'No access to this event' },
-        { status: 403 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
-
-    const response = NextResponse.json({
-      success: true,
-      data: event
+    // Call Convex query - returns event with budget_items and actuals
+    const event = await client.query(api.fundEvents.get, {
+      id: eventId as Id<'fund_events'>,
     });
 
-    setCORSHeaders(response);
-    return response;
+    const lookupMaps = await createReverseLookupMaps(client);
+
+    return NextResponse.json({
+      success: true,
+      data: mapEventToSupabaseShape(event, lookupMaps),
+    });
   } catch (error) {
-    console.error('Error fetching event:', error);
-    const response = NextResponse.json(
-      {
-        error: 'Error fetching event',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
-    setCORSHeaders(response);
-    return response;
+    return handleApiError(error, req.headers.get('origin'), 'GET /api/fund-events/[id]');
   }
 }
 
@@ -141,275 +50,107 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
-    const auth = await requireAuth(req);
+    const client = await getAuthenticatedConvexClient();
     const params = await context.params;
-    const eventId = params.id;
+    const eventId = params.id as Id<'fund_events'>;
     const body = await req.json();
-    const { action, ...data } = body;
 
-    const eventCheck = await executeWithContext(auth, `
-      SELECT created_by, fund_id, status FROM fund_events WHERE id = $1
-    `, [eventId]);
+    const { action, ...data } = body as {
+      action?: 'submit' | 'approve' | 'reject';
+      name?: string;
+      description?: string;
+      event_date?: string;
+      church_id?: string;
+      rejection_reason?: string;
+    };
 
-    const eventRow = firstOrNull(eventCheck.rows) as EventRow | null;
-    if (!eventRow) {
-      const response = NextResponse.json(
-        { error: 'Event not found' },
-        { status: 404 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
-
-    const { status: eventStatus, fundId: eventFundId, createdBy: eventCreatedBy } = getEventMeta(eventRow);
-
+    // Handle workflow actions
     if (action === 'submit') {
-      if (auth.role === 'fund_director') {
-        if (!eventFundId || !hasFundAccess(auth, eventFundId) || !eventCreatedBy || eventCreatedBy !== auth.userId) {
-          const response = NextResponse.json(
-            { error: 'Only the event creator can submit' },
-            { status: 403 }
-          );
-          setCORSHeaders(response);
-          return response;
-        }
-      }
-
-      if (eventStatus !== 'draft' && eventStatus !== 'pending_revision') {
-        const response = NextResponse.json(
-          { error: `Cannot submit event with status: ${eventStatus ?? 'unknown'}` },
-          { status: 400 }
-        );
-        setCORSHeaders(response);
-        return response;
-      }
-
-      // Use executeTransaction for atomic status update + audit
-      await executeTransaction(auth, async (client) => {
-        await client.query(`
-          UPDATE fund_events
-          SET status = 'submitted', submitted_at = now(), updated_at = now()
-          WHERE id = $1
-        `, [eventId]);
-
-        await client.query(`
-          INSERT INTO fund_event_audit (event_id, previous_status, new_status, changed_by, comment)
-          VALUES ($1, $2, 'submitted', $3, 'Enviado para aprobación')
-        `, [eventId, eventStatus, auth.userId]);
+      const event = await client.mutation(api.fundEvents.submit, {
+        id: eventId,
       });
-
-      const response = NextResponse.json({
+      if (!event) {
+        throw new ValidationError('Evento no encontrado después de la mutación');
+      }
+      const lookupMaps = await createReverseLookupMaps(client);
+      return NextResponse.json({
         success: true,
-        message: 'Event submitted for approval'
+        data: mapEventToSupabaseShape(event, lookupMaps),
+        message: 'Evento enviado para aprobación',
       });
-
-      setCORSHeaders(response);
-      return response;
     }
 
     if (action === 'approve') {
-      // Only admin and treasurer can approve events (migration 053)
-      // treasurer is NATIONAL-scoped role
-      if (!['admin', 'treasurer'].includes(auth.role)) {
-        const response = NextResponse.json(
-          { error: 'Insufficient permissions to approve events' },
-          { status: 403 }
-        );
-        setCORSHeaders(response);
-        return response;
-      }
-
-      if (eventStatus !== 'submitted') {
-        const response = NextResponse.json(
-          { error: `Cannot approve event with status: ${eventStatus ?? 'unknown'}` },
-          { status: 400 }
-        );
-        setCORSHeaders(response);
-        return response;
-      }
-
-      // Use executeTransaction for atomic approval + audit
-      const ledgerResult = await executeTransaction(auth, async (client) => {
-        const approvalResult = await client.query(`
-          SELECT process_fund_event_approval($1, $2) as result
-        `, [eventId, auth.userId]);
-
-        const approvalRow = expectOne(approvalResult.rows);
-        const result = approvalRow.result;
-
-        await client.query(`
-          INSERT INTO fund_event_audit (event_id, previous_status, new_status, changed_by, comment)
-          VALUES ($1, 'submitted', 'approved', $2, $3)
-        `, [eventId, auth.userId, data.comment || 'Evento aprobado y transacciones creadas']);
-
-        return result;
+      const event = await client.mutation(api.fundEvents.approve, {
+        id: eventId,
       });
-
-      const response = NextResponse.json({
+      if (!event) {
+        throw new ValidationError('Evento no encontrado después de la mutación');
+      }
+      const lookupMaps = await createReverseLookupMaps(client);
+      return NextResponse.json({
         success: true,
-        message: 'Event approved and transactions created',
-        ledger_result: ledgerResult
+        data: mapEventToSupabaseShape(event, lookupMaps),
+        message: 'Evento aprobado',
       });
-
-      setCORSHeaders(response);
-      return response;
     }
 
     if (action === 'reject') {
-      if (!['admin', 'treasurer'].includes(auth.role)) {
-        const response = NextResponse.json(
-          { error: 'Insufficient permissions to reject events' },
-          { status: 403 }
-        );
-        setCORSHeaders(response);
-        return response;
-      }
-
-      if (eventStatus !== 'submitted') {
-        const response = NextResponse.json(
-          { error: `Cannot reject event with status: ${eventStatus ?? 'unknown'}` },
-          { status: 400 }
-        );
-        setCORSHeaders(response);
-        return response;
-      }
-
       if (!data.rejection_reason) {
-        const response = NextResponse.json(
-          { error: 'rejection_reason is required' },
-          { status: 400 }
-        );
-        setCORSHeaders(response);
-        return response;
+        throw new ValidationError('rejection_reason es requerido');
       }
-
-      // Use executeTransaction for atomic rejection + audit
-      await executeTransaction(auth, async (client) => {
-        await client.query(`
-          UPDATE fund_events
-          SET status = 'pending_revision', rejection_reason = $2, updated_at = now()
-          WHERE id = $1
-        `, [eventId, data.rejection_reason]);
-
-        await client.query(`
-          INSERT INTO fund_event_audit (event_id, previous_status, new_status, changed_by, comment)
-          VALUES ($1, 'submitted', 'pending_revision', $2, $3)
-        `, [eventId, auth.userId, data.rejection_reason]);
+      const event = await client.mutation(api.fundEvents.reject, {
+        id: eventId,
+        reason: data.rejection_reason,
       });
-
-      const response = NextResponse.json({
+      if (!event) {
+        throw new ValidationError('Evento no encontrado después de la mutación');
+      }
+      const lookupMaps = await createReverseLookupMaps(client);
+      return NextResponse.json({
         success: true,
-        message: 'Event returned for revision'
+        data: mapEventToSupabaseShape(event, lookupMaps),
+        message: 'Evento rechazado',
       });
-
-      setCORSHeaders(response);
-      return response;
     }
 
-    const response = NextResponse.json(
-      { error: 'Invalid action. Must be one of: submit, approve, reject' },
-      { status: 400 }
-    );
-    setCORSHeaders(response);
-    return response;
-  } catch (error) {
-    console.error('Error updating event:', error);
-    const response = NextResponse.json(
-      {
-        error: 'Error updating event',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
-    setCORSHeaders(response);
-    return response;
-  }
-}
+    // Handle regular update
+    const updates: {
+      name?: string;
+      description?: string;
+      event_date?: number;
+      church_id?: Id<'churches'>;
+    } = {};
 
-export async function PUT(
-  req: NextRequest,
-  context: { params: Promise<{ id: string }> }
-): Promise<NextResponse> {
-  try {
-    const auth = await requireAuth(req);
-    const params = await context.params;
-    const eventId = params.id;
-    const body = await req.json();
-
-    const eventCheck = await executeWithContext(auth, `
-      SELECT created_by, fund_id, status FROM fund_events WHERE id = $1
-    `, [eventId]);
-
-    const eventRow = firstOrNull(eventCheck.rows) as EventRow | null;
-    if (!eventRow) {
-      const response = NextResponse.json(
-        { error: 'Event not found' },
-        { status: 404 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
-
-    const { status: eventStatus, fundId: eventFundId, createdBy: eventCreatedBy } = getEventMeta(eventRow);
-
-    if (eventStatus !== 'draft' && eventStatus !== 'pending_revision') {
-      const response = NextResponse.json(
-        { error: `Cannot edit event with status: ${eventStatus ?? 'unknown'}` },
-        { status: 400 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
-
-    if (auth.role === 'fund_director') {
-      if (!eventFundId || !hasFundAccess(auth, eventFundId) || !eventCreatedBy || eventCreatedBy !== auth.userId) {
-        const response = NextResponse.json(
-          { error: 'No access to edit this event' },
-          { status: 403 }
-        );
-        setCORSHeaders(response);
-        return response;
+    if (data.name) updates.name = data.name;
+    if (data.description !== undefined) updates.description = data.description;
+    if (data.event_date) {
+      const timestamp = Date.parse(data.event_date);
+      if (Number.isNaN(timestamp)) {
+        throw new ValidationError('event_date inválida');
       }
+      updates.event_date = timestamp;
+    }
+    if (data.church_id) {
+      updates.church_id = data.church_id as Id<'churches'>;
     }
 
-    // Use executeTransaction for atomic update
-    await executeTransaction(auth, async (client) => {
-      await client.query(`
-        UPDATE fund_events
-        SET
-          name = COALESCE($2, name),
-          description = COALESCE($3, description),
-          event_date = COALESCE($4, event_date),
-          church_id = COALESCE($5, church_id),
-          updated_at = now()
-        WHERE id = $1
-      `, [
-        eventId,
-        body.name,
-        body.description,
-        body.event_date,
-        body.church_id
-      ]);
+    const event = await client.mutation(api.fundEvents.update, {
+      id: eventId,
+      ...updates,
     });
+    if (!event) {
+      throw new ValidationError('Evento no encontrado después de la mutación');
+    }
 
-    const response = NextResponse.json({
+    const lookupMaps = await createReverseLookupMaps(client);
+
+    return NextResponse.json({
       success: true,
-      message: 'Event updated successfully'
+      data: mapEventToSupabaseShape(event, lookupMaps),
     });
-
-    setCORSHeaders(response);
-    return response;
   } catch (error) {
-    console.error('Error updating event:', error);
-    const response = NextResponse.json(
-      {
-        error: 'Error updating event',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
-    setCORSHeaders(response);
-    return response;
+    return handleApiError(error, req.headers.get('origin'), 'PATCH /api/fund-events/[id]');
   }
 }
 
@@ -418,73 +159,19 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   try {
-    const auth = await requireAuth(req);
+    const client = await getAuthenticatedConvexClient();
     const params = await context.params;
     const eventId = params.id;
 
-    const eventCheck = await executeWithContext(auth, `
-      SELECT created_by, fund_id, status FROM fund_events WHERE id = $1
-    `, [eventId]);
-
-    const eventRow = firstOrNull(eventCheck.rows) as EventRow | null;
-    if (!eventRow) {
-      const response = NextResponse.json(
-        { error: 'Event not found' },
-        { status: 404 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
-
-    const { status: eventStatus, fundId: eventFundId, createdBy: eventCreatedBy } = getEventMeta(eventRow);
-
-    if (eventStatus !== 'draft') {
-      const response = NextResponse.json(
-        { error: 'Only draft events can be deleted' },
-        { status: 400 }
-      );
-      setCORSHeaders(response);
-      return response;
-    }
-
-    if (auth.role === 'fund_director') {
-      if (!eventFundId || !hasFundAccess(auth, eventFundId) || !eventCreatedBy || eventCreatedBy !== auth.userId) {
-        const response = NextResponse.json(
-          { error: 'No access to delete this event' },
-          { status: 403 }
-        );
-        setCORSHeaders(response);
-        return response;
-      }
-    }
-
-    await executeWithContext(auth, `
-      DELETE FROM fund_events WHERE id = $1
-    `, [eventId]);
-
-    const response = NextResponse.json({
-      success: true,
-      message: 'Event deleted successfully'
+    await client.mutation(api.fundEvents.deleteEvent, {
+      id: eventId as Id<'fund_events'>,
     });
 
-    setCORSHeaders(response);
-    return response;
+    return NextResponse.json({
+      success: true,
+      message: 'Evento eliminado exitosamente',
+    });
   } catch (error) {
-    console.error('Error deleting event:', error);
-    const response = NextResponse.json(
-      {
-        error: 'Error deleting event',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    );
-    setCORSHeaders(response);
-    return response;
+    return handleApiError(error, req.headers.get('origin'), 'DELETE /api/fund-events/[id]');
   }
-}
-
-export async function OPTIONS(): Promise<NextResponse> {
-  const response = new NextResponse(null, { status: 200 });
-  setCORSHeaders(response);
-  return response;
 }

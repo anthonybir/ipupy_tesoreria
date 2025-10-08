@@ -1,27 +1,21 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
-import { requireAuth } from '@/lib/auth-supabase';
-import { executeWithContext } from '@/lib/db';
-import { firstOrDefault, expectOne } from '@/lib/db-helpers';
+import { getAuthenticatedConvexClient } from '@/lib/convex-server';
+import { api } from '../../../../convex/_generated/api';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
+import type { Id } from '../../../../convex/_generated/dataModel';
 
-type ProviderRow = {
-  id: number;
-  ruc: string;
-  nombre: string;
-  tipo_identificacion: string;
-  razon_social: string | null;
-  direccion: string | null;
-  telefono: string | null;
-  email: string | null;
-  categoria: string | null;
-  notas: string | null;
-  es_activo: boolean;
-  es_especial: boolean;
-  created_at: string;
-  updated_at: string;
-  created_by: string | null;
-};
+/**
+ * Provider API Routes - Migrated to Convex
+ *
+ * Phase 4.6 - Provider Routes Migration (2025-01-07)
+ *
+ * This route now uses Convex functions instead of direct Supabase queries.
+ * Authorization is handled by Convex functions (requireMinRole("treasurer")).
+ *
+ * IMPORTANT: Uses authenticated Convex client with Google ID token from NextAuth.
+ * Each request creates a new client with the current user's Google ID token.
+ */
 
 const parseInteger = (value: string | null, fallback: number): number => {
   if (!value) return fallback;
@@ -29,61 +23,35 @@ const parseInteger = (value: string | null, fallback: number): number => {
   return Number.isNaN(parsed) ? fallback : parsed;
 };
 
-const buildProviderFilters = (searchParams: URLSearchParams) => {
-  const conditions: string[] = [];
-  const params: unknown[] = [];
-
-  const categoria = searchParams.get('categoria');
-  const esActivo = searchParams.get('es_activo');
-
-  if (categoria) {
-    params.push(categoria);
-    conditions.push(`categoria = $${params.length}`);
-  }
-
-  if (esActivo !== null) {
-    params.push(esActivo === 'true');
-    conditions.push(`es_activo = $${params.length}`);
-  }
-
-  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-  return { whereClause, params };
-};
-
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
-    const auth = await requireAuth(request);
+    // Get authenticated Convex client with user's session token
+    const client = await getAuthenticatedConvexClient();
     const { searchParams } = new URL(request.url);
 
     const limit = parseInteger(searchParams.get('limit'), 100);
     const offset = parseInteger(searchParams.get('offset'), 0);
-    const { whereClause, params } = buildProviderFilters(searchParams);
+    const categoria = searchParams.get('categoria') || undefined;
+    const esActivoParam = searchParams.get('es_activo');
+    const includeInactive = esActivoParam === 'false' || undefined;
 
-    const dataParams = [...params, limit, offset];
-    const providersResult = await executeWithContext<ProviderRow>(
-      auth,
-      `
-        SELECT id, ruc, nombre, tipo_identificacion, razon_social, direccion, telefono, email,
-               categoria, notas, es_activo, es_especial, created_at, updated_at, created_by
-        FROM providers
-        ${whereClause}
-        ORDER BY es_especial DESC, nombre ASC
-        LIMIT $${dataParams.length - 1}
-        OFFSET $${dataParams.length}
-      `,
-      dataParams
-    );
+    // Call Convex query - only include defined parameters
+    const queryArgs: {
+      limit?: number;
+      offset?: number;
+      categoria?: string;
+      include_inactive?: boolean;
+    } = {};
 
-    const countResult = await executeWithContext<{ count: string }>(
-      auth,
-      `SELECT COUNT(*) AS count FROM providers ${whereClause}`,
-      params
-    );
+    if (limit !== 100) queryArgs.limit = limit;
+    if (offset !== 0) queryArgs.offset = offset;
+    if (categoria) queryArgs.categoria = categoria;
+    if (includeInactive) queryArgs.include_inactive = includeInactive;
 
-    return NextResponse.json({
-      data: providersResult.rows,
-      count: Number.parseInt(String(firstOrDefault(countResult.rows, { count: '0' }).count), 10)
-    });
+    const result = await client.query(api.providers.list, queryArgs);
+
+    // Result already has { data, count } structure
+    return NextResponse.json(result);
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'GET /api/providers');
   }
@@ -91,7 +59,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const auth = await requireAuth(request);
+    const client = await getAuthenticatedConvexClient();
     const body = await request.json();
     const {
       ruc,
@@ -109,36 +77,29 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       throw new ValidationError('RUC, nombre y tipo de identificación son requeridos');
     }
 
-    const existing = await executeWithContext(auth, `SELECT id FROM providers WHERE ruc = $1`, [ruc]);
-    if (existing.rowCount && existing.rowCount > 0) {
-      return NextResponse.json({ error: 'Ya existe un proveedor con este RUC' }, { status: 409 });
+    // Check for duplicate RUC
+    const existing = await client.query(api.providers.searchByRUC, { ruc });
+    if (existing) {
+      return NextResponse.json(
+        { error: 'Ya existe un proveedor con este RUC' },
+        { status: 409 }
+      );
     }
 
-    const result = await executeWithContext<ProviderRow>(
-      auth,
-      `
-        INSERT INTO providers (
-          ruc, nombre, tipo_identificacion, razon_social, direccion, telefono, email,
-          categoria, notas, es_activo, created_by
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, $10)
-        RETURNING *
-      `,
-      [
-        ruc,
-        nombre,
-        tipo_identificacion,
-        razon_social ?? null,
-        direccion ?? null,
-        telefono ?? null,
-        email ?? null,
-        categoria ?? null,
-        notas ?? null,
-        auth.userId
-      ]
-    );
+    // Create provider via Convex
+    const provider = await client.mutation(api.providers.create, {
+      ruc,
+      nombre,
+      tipo_identificacion,
+      razon_social: razon_social ?? undefined,
+      direccion: direccion ?? undefined,
+      telefono: telefono ?? undefined,
+      email: email ?? undefined,
+      categoria: categoria ?? undefined,
+      notas: notas ?? undefined,
+    });
 
-    return NextResponse.json({ data: expectOne(result.rows) }, { status: 201 });
+    return NextResponse.json({ data: provider }, { status: 201 });
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'POST /api/providers');
   }
@@ -146,7 +107,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
 export async function PUT(request: NextRequest): Promise<NextResponse> {
   try {
-    const auth = await requireAuth(request);
+    const client = await getAuthenticatedConvexClient();
     const body = await request.json();
     const {
       id,
@@ -164,47 +125,42 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       throw new ValidationError('ID de proveedor es requerido');
     }
 
-    const updates: string[] = [];
-    const values: unknown[] = [];
+    // Build updates object (only include defined, non-null fields)
+    const updates: {
+      nombre?: string;
+      razon_social?: string;
+      direccion?: string;
+      telefono?: string;
+      email?: string;
+      categoria?: string;
+      notas?: string;
+      es_activo?: boolean;
+    } = {};
 
-    const pushUpdate = (column: string, value: unknown) => {
-      updates.push(`${column} = $${values.length + 1}`);
-      values.push(value);
-    };
+    if (nombre !== undefined) updates.nombre = nombre;
+    if (razon_social !== undefined && razon_social !== null) updates.razon_social = razon_social;
+    if (direccion !== undefined && direccion !== null) updates.direccion = direccion;
+    if (telefono !== undefined && telefono !== null) updates.telefono = telefono;
+    if (email !== undefined && email !== null) updates.email = email;
+    if (categoria !== undefined && categoria !== null) updates.categoria = categoria;
+    if (notas !== undefined && notas !== null) updates.notas = notas;
+    if (es_activo !== undefined) updates.es_activo = Boolean(es_activo);
 
-    if (nombre !== undefined) pushUpdate('nombre', nombre);
-    if (razon_social !== undefined) pushUpdate('razon_social', razon_social ?? null);
-    if (direccion !== undefined) pushUpdate('direccion', direccion ?? null);
-    if (telefono !== undefined) pushUpdate('telefono', telefono ?? null);
-    if (email !== undefined) pushUpdate('email', email ?? null);
-    if (categoria !== undefined) pushUpdate('categoria', categoria ?? null);
-    if (notas !== undefined) pushUpdate('notas', notas ?? null);
-    if (es_activo !== undefined) pushUpdate('es_activo', Boolean(es_activo));
-
-    if (updates.length === 0) {
+    if (Object.keys(updates).length === 0) {
       throw new ValidationError('No hay campos para actualizar');
     }
 
-    pushUpdate('updated_at', new Date());
+    // Update via Convex
+    const provider = await client.mutation(api.providers.update, {
+      id: id as Id<'providers'>,
+      ...updates,
+    });
 
-    values.push(id);
-
-    const result = await executeWithContext<ProviderRow>(
-      auth,
-      `
-        UPDATE providers
-        SET ${updates.join(', ')}
-        WHERE id = $${values.length}
-        RETURNING *
-      `,
-      values
-    );
-
-    if (result.rowCount === 0) {
+    if (!provider) {
       return NextResponse.json({ error: 'Proveedor no encontrado' }, { status: 404 });
     }
 
-    return NextResponse.json({ data: expectOne(result.rows) });
+    return NextResponse.json({ data: provider });
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'PUT /api/providers');
   }
@@ -212,29 +168,18 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
 
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
   try {
-    const auth = await requireAuth(request);
+    const client = await getAuthenticatedConvexClient();
     const searchParams = request.nextUrl.searchParams;
     const idParam = searchParams.get('id');
-    const id = idParam ? Number.parseInt(idParam, 10) : NaN;
 
-    if (!Number.isInteger(id)) {
+    if (!idParam) {
       throw new ValidationError('ID de proveedor es requerido');
     }
 
-    const result = await executeWithContext<ProviderRow>(
-      auth,
-      `
-        UPDATE providers
-        SET es_activo = false, updated_at = NOW()
-        WHERE id = $1
-        RETURNING *
-      `,
-      [id]
-    );
-
-    if (result.rowCount === 0) {
-      return NextResponse.json({ error: 'Proveedor no encontrado' }, { status: 404 });
-    }
+    // Soft delete (archive) via Convex
+    await client.mutation(api.providers.archive, {
+      id: idParam as Id<'providers'>,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

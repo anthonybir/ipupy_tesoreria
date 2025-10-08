@@ -1,456 +1,324 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { getAuthContext } from "@/lib/auth-context";
-import { executeWithContext, executeTransaction } from "@/lib/db";
-import { firstOrNull, firstOrDefault, expectOne } from "@/lib/db-helpers";
-import { setCORSHeaders } from "@/lib/cors";
-import { createTransaction as createLedgerTransaction } from "@/app/api/reports/route-helpers";
-import { handleApiError } from "@/lib/api-errors";
-import { bulkCreateTransactionsSchema, formatValidationError } from "@/lib/validations/api-schemas";
-import { ZodError } from "zod";
+import { type NextRequest, NextResponse } from 'next/server';
 
-type GenericRecord = Record<string, unknown>;
+import { getAuthenticatedConvexClient } from '@/lib/convex-server';
+import { api } from '../../../../../convex/_generated/api';
+import { handleApiError, ValidationError } from '@/lib/api-errors';
+import type { Id } from '../../../../../convex/_generated/dataModel';
+import { createReverseLookupMaps, getFundConvexId, getChurchConvexId } from '@/lib/convex-id-mapping';
+import { mapTransactionsListResponse } from '@/lib/convex-adapters';
+import { normalizeTransactionsResponse } from '@/types/financial';
 
-interface Transaction {
-  id: number;
-  date: string;
-  fund_id: number;
-  fund_name?: string;
-  church_id?: number;
-  church_name?: string;
-  report_id?: number;
-  concept: string;
-  provider?: string;
-  provider_id?: number;
-  document_number?: string;
-  amount_in: number;
-  amount_out: number;
-  created_by: string;
-  created_at: string;
-  updated_at?: string;
-}
+/**
+ * Transaction API Routes - Migrated to Convex
+ *
+ * Phase 4.4 - Transaction Routes Migration (2025-01-07)
+ *
+ * This route now uses Convex functions instead of direct Supabase queries.
+ * Authorization is handled by Convex functions (requireMinRole("treasurer")).
+ *
+ * IMPORTANT: Uses authenticated Convex client with Google ID token from NextAuth.
+ * Each request creates a new client with the current user's Google ID token.
+ */
 
-interface TransactionInput {
-  date: string;
-  fund_id: number;
-  church_id?: number;
-  report_id?: number;
-  concept: string;
-  provider?: string;
-  provider_id?: number;
-  document_number?: string;
-  amount_in?: number;
-  amount_out?: number;
-}
+const parseInteger = (value: string | null, fallback: number): number => {
+  if (!value) return fallback;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? fallback : parsed;
+};
 
-// GET /api/financial/transactions - Get transactions with filters
-async function handleGet(req: NextRequest) {
+const parseNumber = (value: string | null, fallback: number): number => {
+  if (!value) return fallback;
+  const parsed = Number.parseFloat(value);
+  return Number.isNaN(parsed) ? fallback : parsed;
+};
+
+export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
-    // Require auth context for RLS - financial data should not be public
-    const { requireAuth } = await import('@/lib/auth-context');
-    const auth = await requireAuth(req);
-    const { searchParams } = new URL(req.url);
+    // Get authenticated Convex client with user's session token
+    const client = await getAuthenticatedConvexClient();
+    const { searchParams } = new URL(request.url);
 
-    const fund_id = searchParams.get("fund_id");
-    const church_id = searchParams.get("church_id");
-    const date_from = searchParams.get("date_from");
-    const date_to = searchParams.get("date_to");
-    const month = searchParams.get("month");
-    const year = searchParams.get("year");
-    const limit = searchParams.get("limit") || "100";
-    const offset = searchParams.get("offset") || "0";
+    // Parse query parameters
+    const fund_id = searchParams.get('fund_id');
+    const church_id = searchParams.get('church_id');
+    const date_from = searchParams.get('date_from');
+    const date_to = searchParams.get('date_to');
+    const month = searchParams.get('month');
+    const year = searchParams.get('year');
+    const limit = parseInteger(searchParams.get('limit'), 100);
+    const offset = parseInteger(searchParams.get('offset'), 0);
 
-    const limitNumber = Number.isNaN(Number(limit)) ? 100 : parseInt(limit, 10);
-    const offsetNumber = Number.isNaN(Number(offset)) ? 0 : parseInt(offset, 10);
-
-    const filters: string[] = [];
-    const filterValues: (string | number)[] = [];
+    // Build query args (only include defined parameters)
+    const queryArgs: {
+      fund_id?: Id<'funds'>;
+      church_id?: Id<'churches'>;
+      date_from?: number;
+      date_to?: number;
+      month?: number;
+      year?: number;
+      limit?: number;
+      offset?: number;
+    } = {};
 
     if (fund_id) {
-      filterValues.push(fund_id);
-      filters.push(`t.fund_id = $${filterValues.length}`);
-    }
-
-    if (church_id) {
-      filterValues.push(church_id);
-      filters.push(`t.church_id = $${filterValues.length}`);
-    }
-
-    if (date_from) {
-      filterValues.push(date_from);
-      filters.push(`t.date >= $${filterValues.length}`);
-    }
-
-    if (date_to) {
-      filterValues.push(date_to);
-      filters.push(`t.date <= $${filterValues.length}`);
-    }
-
-    if (month && year) {
-      filterValues.push(month);
-      filters.push(`EXTRACT(MONTH FROM t.date) = $${filterValues.length}`);
-      filterValues.push(year);
-      filters.push(`EXTRACT(YEAR FROM t.date) = $${filterValues.length}`);
-    }
-
-    const whereClause = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
-
-    const listQuery = `
-      SELECT
-        t.*,
-        f.name as fund_name,
-        c.name as church_name
-      FROM transactions t
-      LEFT JOIN funds f ON t.fund_id = f.id
-      LEFT JOIN churches c ON t.church_id = c.id
-      ${whereClause}
-      ORDER BY t.date DESC, t.created_at DESC
-      LIMIT $${filterValues.length + 1}
-      OFFSET $${filterValues.length + 2}
-    `;
-
-    const result = await executeWithContext<Transaction>(auth, listQuery, [...filterValues, limitNumber, offsetNumber]);
-
-    const totalsQuery = `
-      SELECT
-        COUNT(*) as total_count,
-        COALESCE(SUM(amount_in), 0) as total_in,
-        COALESCE(SUM(amount_out), 0) as total_out
-      FROM transactions t
-      ${whereClause}
-    `;
-
-    const totals = await executeWithContext<{
-      total_count: string;
-      total_in: string;
-      total_out: string
-    }>(auth, totalsQuery, filterValues);
-
-    const totalsRow = firstOrDefault(totals.rows, { total_count: '0', total_in: '0', total_out: '0' });
-    const response = NextResponse.json({
-      success: true,
-      data: result.rows,
-      pagination: {
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        total: parseInt(totalsRow.total_count)
-      },
-      totals: {
-        count: parseInt(totalsRow.total_count),
-        total_in: parseFloat(totalsRow.total_in),
-        total_out: parseFloat(totalsRow.total_out),
-        balance: parseFloat(totalsRow.total_in) - parseFloat(totalsRow.total_out)
+      if (/^\d+$/.test(fund_id)) {
+        const numericFundId = Number.parseInt(fund_id, 10);
+        const convexFundId = await getFundConvexId(client, numericFundId);
+        if (!convexFundId) {
+          throw new ValidationError(`Fondo ${numericFundId} no encontrado`);
+        }
+        queryArgs.fund_id = convexFundId;
+      } else {
+        queryArgs.fund_id = fund_id as Id<'funds'>;
       }
-    });
+    }
+    if (church_id) {
+      if (/^\d+$/.test(church_id)) {
+        const numericChurchId = Number.parseInt(church_id, 10);
+        const convexChurchId = await getChurchConvexId(client, numericChurchId);
+        if (!convexChurchId) {
+          throw new ValidationError(`Iglesia ${numericChurchId} no encontrada`);
+        }
+        queryArgs.church_id = convexChurchId;
+      } else {
+        queryArgs.church_id = church_id as Id<'churches'>;
+      }
+    }
 
-    setCORSHeaders(response);
-    return response;
+    // Validate date_from
+    if (date_from) {
+      const fromTimestamp = Date.parse(date_from);
+      if (Number.isNaN(fromTimestamp)) {
+        throw new ValidationError('date_from inválida');
+      }
+      queryArgs.date_from = fromTimestamp;
+    }
+
+    // Validate date_to
+    if (date_to) {
+      const toTimestamp = Date.parse(date_to);
+      if (Number.isNaN(toTimestamp)) {
+        throw new ValidationError('date_to inválida');
+      }
+      queryArgs.date_to = toTimestamp;
+    }
+
+    // Validate month (1-12)
+    if (month) {
+      const monthNum = parseInteger(month, 0);
+      if (monthNum < 1 || monthNum > 12) {
+        throw new ValidationError('month debe estar entre 1 y 12');
+      }
+      queryArgs.month = monthNum;
+    }
+
+    // Validate year (reasonable range)
+    if (year) {
+      const yearNum = parseInteger(year, 0);
+      if (yearNum < 2000 || yearNum > 2100) {
+        throw new ValidationError('year debe estar entre 2000 y 2100');
+      }
+      queryArgs.year = yearNum;
+    }
+
+    if (limit !== 100) queryArgs.limit = limit;
+    if (offset !== 0) queryArgs.offset = offset;
+
+    // Call Convex query - returns { data, pagination, totals }
+    const result = await client.query(api.transactions.list, queryArgs);
+    const { fundMap, churchMap } = await createReverseLookupMaps(client);
+    const payload = mapTransactionsListResponse(result, { fundMap, churchMap });
+    const transactions = normalizeTransactionsResponse(payload);
+
+    return NextResponse.json({
+      success: true,
+      data: transactions.records,
+      pagination: transactions.pagination,
+      totals: transactions.totals,
+    });
   } catch (error) {
-    return handleApiError(error, req.headers.get('origin'), 'GET /api/financial/transactions');
+    return handleApiError(error, request.headers.get('origin'), 'GET /api/financial/transactions');
   }
 }
 
-// POST /api/financial/transactions - Create transaction(s)
-async function handlePost(req: NextRequest) {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const user = await getAuthContext(req);
-    if (!user) {
-      const response = NextResponse.json({ error: "Authentication required" }, { status: 401 });
-      setCORSHeaders(response);
-      return response;
-    }
-
-    // TODO(fund-director): Restore when fund_director role is added to migration-023
-    // if ((user.role as any) === 'fund_director') {
-    //   const response = NextResponse.json({ error: "Fund directors have read-only access" }, { status: 403 });
-    //   setCORSHeaders(response);
-    //   return response;
-    // }
-
-    const body = await req.json();
+    const client = await getAuthenticatedConvexClient();
+    const body = await request.json();
     const inputArray = Array.isArray(body) ? body : [body];
 
-    // Validate with Zod schema
-    let transactions;
-    try {
-      transactions = bulkCreateTransactionsSchema.parse(inputArray);
-    } catch (error) {
-      if (error instanceof ZodError) {
-        const response = NextResponse.json(formatValidationError(error), { status: 400 });
-        setCORSHeaders(response);
-        return response;
-      }
-      throw error;
-    }
-
-    const results: GenericRecord[] = [];
+    // Validate and process each transaction
+    const results: unknown[] = [];
     const errors: { transaction: unknown; error: string }[] = [];
 
-    for (const transaction of transactions) {
+    for (const transaction of inputArray) {
       try {
-
-        // Insert transaction using shared helper for consistency
-        const createdTransaction = await createLedgerTransaction({
-          date: transaction.date,
-          fund_id: transaction.fund_id,
-          church_id: transaction.church_id ?? null,
-          report_id: transaction.report_id ?? null,
-          concept: transaction.concept,
-          provider: transaction.provider ?? null,
-          provider_id: transaction.provider_id ?? null,
-          document_number: transaction.document_number ?? null,
-          amount_in: transaction.amount_in ?? 0,
-          amount_out: transaction.amount_out ?? 0,
-          created_by: user.email
-        }, user);
-
-        if (createdTransaction) {
-          results.push(createdTransaction);
+        // Validate required fields
+        if (!transaction['date']) {
+          throw new ValidationError('date es requerido');
         }
+        if (!transaction['fund_id']) {
+          throw new ValidationError('fund_id es requerido');
+        }
+        if (!transaction['concept']) {
+          throw new ValidationError('concept es requerido');
+        }
+
+        // Ensure at least one amount is provided
+        const amountIn = parseNumber(String(transaction['amount_in'] ?? 0), 0);
+        const amountOut = parseNumber(String(transaction['amount_out'] ?? 0), 0);
+
+        if (amountIn === 0 && amountOut === 0) {
+          throw new ValidationError('Se requiere al menos un monto (amount_in o amount_out)');
+        }
+
+        // Validate and parse date
+        const dateTimestamp = Date.parse(transaction['date']);
+        if (Number.isNaN(dateTimestamp)) {
+          throw new ValidationError('date inválida');
+        }
+
+        // Build mutation args
+        if (typeof transaction['fund_id'] !== 'string') {
+          throw new ValidationError('fund_id debe ser un identificador válido');
+        }
+        if (typeof transaction['concept'] !== 'string') {
+          throw new ValidationError('concept es requerido');
+        }
+
+        type CreateTransactionArgs = typeof api.transactions.create._args;
+        const args: CreateTransactionArgs = {
+          date: dateTimestamp,
+          fund_id: transaction['fund_id'] as Id<'funds'>,
+          concept: transaction['concept'],
+          amount_in: amountIn,
+          amount_out: amountOut,
+        };
+
+        // Optional fields
+        if (typeof transaction['church_id'] === 'string') {
+          args.church_id = transaction['church_id'] as Id<'churches'>;
+        }
+        if (typeof transaction['report_id'] === 'string') {
+          args.report_id = transaction['report_id'] as Id<'reports'>;
+        }
+        if (typeof transaction['provider'] === 'string') {
+          args.provider = transaction['provider'];
+        }
+        if (typeof transaction['provider_id'] === 'string') {
+          args.provider_id = transaction['provider_id'] as Id<'providers'>;
+        }
+        if (typeof transaction['document_number'] === 'string') {
+          args.document_number = transaction['document_number'];
+        }
+
+        // Create transaction via Convex
+        const created = await client.mutation(api.transactions.create, args);
+        results.push(created);
       } catch (error) {
         errors.push({
           transaction,
-          error: error instanceof Error ? error.message : "Unknown error"
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     }
 
-    const response = NextResponse.json({
-      success: errors.length === 0,
-      created: results,
-      errors: errors.length > 0 ? errors : undefined,
-      message: `Created ${results.length} transaction(s)${errors.length > 0 ? `, ${errors.length} failed` : ""}`
-    }, { status: errors.length === 0 ? 201 : 207 });
-
-    setCORSHeaders(response);
-    return response;
+    return NextResponse.json(
+      {
+        success: errors.length === 0,
+        created: results,
+        errors: errors.length > 0 ? errors : undefined,
+        message: `Created ${results.length} transaction(s)${
+          errors.length > 0 ? `, ${errors.length} failed` : ''
+        }`,
+      },
+      { status: errors.length === 0 ? 201 : 207 }
+    );
   } catch (error) {
-    return handleApiError(error, req.headers.get('origin'), 'POST /api/financial/transactions');
+    return handleApiError(error, request.headers.get('origin'), 'POST /api/financial/transactions');
   }
 }
 
-// PUT /api/financial/transactions?id=X - Update a transaction
-async function handlePut(req: NextRequest) {
+export async function PUT(request: NextRequest): Promise<NextResponse> {
   try {
-    const user = await getAuthContext(req);
-    if (!user) {
-      const response = NextResponse.json({ error: "Authentication required" }, { status: 401 });
-      setCORSHeaders(response);
-      return response;
-    }
-
-    // TODO(fund-director): Restore when fund_director role is added to migration-023
-    // if ((user.role as any) === 'fund_director') {
-    //   const response = NextResponse.json({ error: "Fund directors have read-only access" }, { status: 403 });
-    //   setCORSHeaders(response);
-    //   return response;
-    // }
-
-    const { searchParams } = new URL(req.url);
-    const transactionId = searchParams.get("id");
+    const client = await getAuthenticatedConvexClient();
+    const searchParams = request.nextUrl.searchParams;
+    const transactionId = searchParams.get('id');
 
     if (!transactionId) {
-      const response = NextResponse.json({ error: "Transaction ID is required" }, { status: 400 });
-      setCORSHeaders(response);
-      return response;
+      throw new ValidationError('ID de transacción es requerido');
     }
 
-    const body: Partial<TransactionInput> = await req.json();
+    const body = await request.json();
 
-    // Get existing transaction
-    const existing = await executeWithContext<Transaction>(user,
-      `SELECT * FROM transactions WHERE id = $1`,
-      [transactionId]
-    );
+    // Build updates object (only include defined, non-null fields)
+    const updates: {
+      date?: number;
+      concept?: string;
+      provider?: string;
+      document_number?: string;
+      amount_in?: number;
+      amount_out?: number;
+    } = {};
 
-    if (existing.rows.length === 0) {
-      const response = NextResponse.json({ error: "Transaction not found" }, { status: 404 });
-      setCORSHeaders(response);
-      return response;
-    }
-
-    const oldTransaction = firstOrNull(existing.rows);
-    if (!oldTransaction) {
-      const response = NextResponse.json({ error: "Transaction not found" }, { status: 404 });
-      setCORSHeaders(response);
-      return response;
-    }
-
-    // Build update query
-    const updates: string[] = [];
-    const values: (string | number | null)[] = [];
-    let paramCount = 0;
-
-    if (body.date !== undefined) {
-      paramCount++;
-      updates.push(`date = $${paramCount}`);
-      values.push(body.date);
-    }
-
-    if (body.concept !== undefined) {
-      paramCount++;
-      updates.push(`concept = $${paramCount}`);
-      values.push(body.concept);
-    }
-
-    if (body.provider !== undefined) {
-      paramCount++;
-      updates.push(`provider = $${paramCount}`);
-      values.push(body.provider);
-    }
-
-    if (body.document_number !== undefined) {
-      paramCount++;
-      updates.push(`document_number = $${paramCount}`);
-      values.push(body.document_number);
-    }
-
-    if (body.amount_in !== undefined || body.amount_out !== undefined) {
-      const newAmountIn = body.amount_in ?? oldTransaction.amount_in;
-      const newAmountOut = body.amount_out ?? oldTransaction.amount_out;
-
-      paramCount++;
-      updates.push(`amount_in = $${paramCount}`);
-      values.push(newAmountIn);
-
-      paramCount++;
-      updates.push(`amount_out = $${paramCount}`);
-      values.push(newAmountOut);
-
-      // Update fund balance difference
-      const oldBalance = Number(oldTransaction.amount_in) - Number(oldTransaction.amount_out);
-      const newBalance = Number(newAmountIn) - Number(newAmountOut);
-      const balanceDiff = newBalance - oldBalance;
-
-      if (balanceDiff !== 0) {
-        await executeWithContext(user, 
-          `UPDATE funds
-           SET current_balance = current_balance + $1,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = $2`,
-          [balanceDiff, oldTransaction.fund_id]
-        );
+    if (body['date'] !== undefined) {
+      const timestamp = Date.parse(body['date']);
+      if (Number.isNaN(timestamp)) {
+        throw new ValidationError('date inválida');
       }
+      updates.date = timestamp;
     }
 
-    if (updates.length === 0) {
-      const response = NextResponse.json({ error: "No fields to update" }, { status: 400 });
-      setCORSHeaders(response);
-      return response;
+    if (body['concept'] !== undefined) updates.concept = body['concept'];
+    if (body['provider'] !== undefined) updates.provider = body['provider'];
+    if (body['document_number'] !== undefined) updates.document_number = body['document_number'];
+    if (body['amount_in'] !== undefined) updates.amount_in = parseNumber(String(body['amount_in']), 0);
+    if (body['amount_out'] !== undefined) updates.amount_out = parseNumber(String(body['amount_out']), 0);
+
+    if (Object.keys(updates).length === 0) {
+      throw new ValidationError('No hay campos para actualizar');
     }
 
-    updates.push(`updated_at = CURRENT_TIMESTAMP`);
-
-    paramCount++;
-    values.push(transactionId);
-
-    const result = await executeWithContext<Transaction>(user,
-      `UPDATE transactions SET ${updates.join(", ")} WHERE id = $${paramCount} RETURNING *`,
-      values
+    // Update via Convex (includes automatic balance recalculation)
+    type UpdateTransactionArgs = typeof api.transactions.update._args;
+    const transaction = await client.mutation(
+      api.transactions.update,
+      {
+        id: transactionId as Id<'transactions'>,
+        ...updates,
+      } satisfies UpdateTransactionArgs
     );
 
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: true,
-      data: expectOne(result.rows),
-      message: "Transaction updated successfully"
+      data: transaction,
+      message: 'Transacción actualizada exitosamente',
     });
-
-    setCORSHeaders(response);
-    return response;
   } catch (error) {
-    return handleApiError(error, req.headers.get('origin'), 'PUT /api/financial/transactions');
+    return handleApiError(error, request.headers.get('origin'), 'PUT /api/financial/transactions');
   }
 }
 
-// DELETE /api/financial/transactions?id=X - Delete a transaction
-async function handleDelete(req: NextRequest) {
+export async function DELETE(request: NextRequest): Promise<NextResponse> {
   try {
-    const user = await getAuthContext(req);
-    if (!user) {
-      const response = NextResponse.json({ error: "Authentication required" }, { status: 401 });
-      setCORSHeaders(response);
-      return response;
-    }
-
-    // TODO(fund-director): Restore when fund_director role is added to migration-023
-    // if ((user.role as any) === 'fund_director') {
-    //   const response = NextResponse.json({ error: "Fund directors have read-only access" }, { status: 403 });
-    //   setCORSHeaders(response);
-    //   return response;
-    // }
-
-    const { searchParams } = new URL(req.url);
-    const transactionId = searchParams.get("id");
+    const client = await getAuthenticatedConvexClient();
+    const searchParams = request.nextUrl.searchParams;
+    const transactionId = searchParams.get('id');
 
     if (!transactionId) {
-      const response = NextResponse.json({ error: "Transaction ID is required" }, { status: 400 });
-      setCORSHeaders(response);
-      return response;
+      throw new ValidationError('ID de transacción es requerido');
     }
 
-    let deletedFundId: number | null = null;
-
-    await executeTransaction(user, async (client) => {
-      const existing = await client.query<Transaction>(
-        `SELECT * FROM transactions WHERE id = $1`,
-        [transactionId]
-      );
-
-      if (existing.rows.length === 0) {
-        throw new Error('Transaction not found');
-      }
-
-      const transaction = expectOne(existing.rows);
-
-      deletedFundId = transaction.fund_id;
-
-      await client.query(`DELETE FROM fund_movements_enhanced WHERE transaction_id = $1`, [transactionId]);
-      await client.query(`DELETE FROM transactions WHERE id = $1`, [transactionId]);
-
-      await client.query(
-        `UPDATE funds
-         SET current_balance = COALESCE((
-           SELECT SUM(amount_in - amount_out)
-           FROM transactions
-           WHERE fund_id = $1
-         ), 0),
-             updated_at = NOW()
-         WHERE id = $1`,
-        [transaction.fund_id]
-      );
+    // Delete via Convex (includes automatic balance recalculation)
+    await client.mutation(api.transactions.deleteTransaction, {
+      id: transactionId as Id<'transactions'>,
     });
 
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: true,
-      message: "Transaction deleted successfully",
-      fundId: deletedFundId
+      message: 'Transacción eliminada exitosamente',
     });
-
-    setCORSHeaders(response);
-    return response;
   } catch (error) {
-    return handleApiError(error, req.headers.get('origin'), 'DELETE /api/financial/transactions');
+    return handleApiError(error, request.headers.get('origin'), 'DELETE /api/financial/transactions');
   }
-}
-
-// OPTIONS handler for CORS
-export async function OPTIONS(): Promise<NextResponse> {
-  const response = new NextResponse(null, { status: 200 });
-  setCORSHeaders(response);
-  return response;
-}
-
-export async function GET(req: NextRequest): Promise<NextResponse> {
-  return handleGet(req);
-}
-
-export async function POST(req: NextRequest): Promise<NextResponse> {
-  return handlePost(req);
-}
-
-export async function PUT(req: NextRequest): Promise<NextResponse> {
-  return handlePut(req);
-}
-
-export async function DELETE(req: NextRequest): Promise<NextResponse> {
-  return handleDelete(req);
 }

@@ -40,8 +40,8 @@ const nextConfig: NextConfig = {
           "style-src 'self' 'unsafe-inline'",
           "img-src 'self' data: https:",
           "font-src 'self' data:",
-          // API connections: Supabase + Vercel Analytics
-          "connect-src 'self' https://*.supabase.co https://*.supabase.in https://va.vercel-scripts.com",
+          // API connections: Convex + Supabase (during migration) + Vercel Analytics + Google OAuth
+          "connect-src 'self' https://*.convex.cloud wss://*.convex.cloud https://*.supabase.co https://*.supabase.in https://accounts.google.com https://oauth2.googleapis.com https://va.vercel-scripts.com",
           "frame-ancestors 'none'",
           "object-src 'none'",
           "base-uri 'self'",
@@ -104,6 +104,18 @@ const nextConfig: NextConfig = {
   // Image optimization
   images: {
     domains: ['localhost', 'ipupytesoreria.vercel.app']
+  },
+
+  // ESLint configuration for build
+  eslint: {
+    // Allow build to succeed even with ESLint errors
+    ignoreDuringBuilds: false,
+  },
+
+  // TypeScript configuration for build
+  typescript: {
+    // We run tsc separately, so we can skip type checking during build
+    ignoreBuildErrors: false,
   }
 };
 

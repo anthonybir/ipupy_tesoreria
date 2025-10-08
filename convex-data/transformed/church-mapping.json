@@ -1,0 +1,157 @@
+{
+  "church_count": 38,
+  "churches": [
+    {
+      "id": 1,
+      "name": "IPU LAMBARÉ"
+    },
+    {
+      "id": 2,
+      "name": "IPU EDELIRA KM 48"
+    },
+    {
+      "id": 3,
+      "name": "IPU MARAMBURÉ"
+    },
+    {
+      "id": 4,
+      "name": "IPU LUQUE"
+    },
+    {
+      "id": 5,
+      "name": "IPU VILLA HAYES PAÑETE"
+    },
+    {
+      "id": 6,
+      "name": "IPU ITAUGUÁ"
+    },
+    {
+      "id": 7,
+      "name": "IPU ANAHÍ"
+    },
+    {
+      "id": 8,
+      "name": "IPU CAACUPÉ"
+    },
+    {
+      "id": 9,
+      "name": "IPU BARBEROS"
+    },
+    {
+      "id": 10,
+      "name": "IPU CAPIATÁ"
+    },
+    {
+      "id": 11,
+      "name": "IPU ITÁ"
+    },
+    {
+      "id": 12,
+      "name": "IPU CAAGUAZÚ"
+    },
+    {
+      "id": 13,
+      "name": "IPU HERNANDARIAS"
+    },
+    {
+      "id": 14,
+      "name": "IPU CONCEPCIÓN"
+    },
+    {
+      "id": 15,
+      "name": "IPU ÑEMBY"
+    },
+    {
+      "id": 16,
+      "name": "IPU ASUNCIÓN"
+    },
+    {
+      "id": 17,
+      "name": "IPU CDE PRIMAVERA"
+    },
+    {
+      "id": 18,
+      "name": "IPU CDE REMANSITO"
+    },
+    {
+      "id": 19,
+      "name": "IPU YUQUYRY"
+    },
+    {
+      "id": 20,
+      "name": "IPU PILAR"
+    },
+    {
+      "id": 21,
+      "name": "IPU EDELIRA KM 28"
+    },
+    {
+      "id": 22,
+      "name": "IPU PINDOLO"
+    },
+    {
+      "id": 23,
+      "name": "IPU CHINO CUE"
+    },
+    {
+      "id": 24,
+      "name": "IPU ENCARNACIÓN"
+    },
+    {
+      "id": 25,
+      "name": "IPU LA COLMENA"
+    },
+    {
+      "id": 26,
+      "name": "IPU VILLA HAYES SAN JORGE"
+    },
+    {
+      "id": 27,
+      "name": "IPU J. AUGUSTO SALDÍVAR"
+    },
+    {
+      "id": 28,
+      "name": "IPU ITACURUBÍ DE ROSARIO"
+    },
+    {
+      "id": 29,
+      "name": "IPU BOLIVIA"
+    },
+    {
+      "id": 30,
+      "name": "IPU SANTANÍ"
+    },
+    {
+      "id": 31,
+      "name": "IPU GENÉRICO"
+    },
+    {
+      "id": 32,
+      "name": "IPU GENÉRICO 2"
+    },
+    {
+      "id": 33,
+      "name": "IPU PY - CUOTAS SOCIALES"
+    },
+    {
+      "id": 34,
+      "name": "IPU PY - VENTA DE LIBROS"
+    },
+    {
+      "id": 35,
+      "name": "PASTORES IPU PY"
+    },
+    {
+      "id": 37,
+      "name": "IPU EDELIRA"
+    },
+    {
+      "id": 43,
+      "name": "IPU CAACUPE"
+    },
+    {
+      "id": 56,
+      "name": "IPU EDELIRA KM 28 (DUPLICADO)"
+    }
+  ]
+}

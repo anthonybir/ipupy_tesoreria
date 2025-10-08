@@ -1,731 +1,731 @@
 # API Reference - IPU PY Tesorería
 
-> 🕒 **Historical Snapshot** — The canonical and up-to-date reference now lives in [`docs/api/API_COMPLETE_REFERENCE.md`](./api/API_COMPLETE_REFERENCE.md). Keep this file for context only.
+> **Note**: For detailed endpoint-by-endpoint documentation, see [`docs/api/API_COMPLETE_REFERENCE.md`](./api/API_COMPLETE_REFERENCE.md).
 
-## Descripción General
+## Overview
 
-Sistema de API serverless construido con Next.js 15 API Routes, optimizado para la gestión financiera de 22 iglesias de la Iglesia Pentecostal Unida del Paraguay.
+IPU PY Tesorería provides two API layers:
+
+1. **Convex Functions** (Primary) - TypeScript functions with real-time subscriptions
+2. **REST API Routes** (Compatibility) - Next.js API routes that wrap Convex functions
 
 **Base URL**: `https://ipupytesoreria.vercel.app/api`
+**Convex URL**: `https://your-deployment.convex.cloud`
 
-## Autenticación
+## Architecture
 
-### Sistema de Autenticación
+```
+┌─────────────┐
+│   Client    │
+└──────┬──────┘
+       │
+       ├─────────────┐
+       │             │
+       v             v
+┌─────────────┐  ┌──────────────┐
+│ Convex      │  │ REST API     │
+│ Functions   │  │ Routes       │
+│ (Direct)    │  │ (Wrapper)    │
+└──────┬──────┘  └──────┬───────┘
+       │                │
+       │                v
+       │         ┌──────────────┐
+       │         │ Convex HTTP  │
+       │         │ Client       │
+       │         └──────┬───────┘
+       │                │
+       └────────────────┘
+                │
+         ┌──────v──────┐
+         │   Convex    │
+         │   Backend   │
+         └─────────────┘
+```
 
-Todas las rutas protegidas requieren autenticación via Supabase Auth. La autenticación se maneja mediante cookies httpOnly establecidas por Supabase.
+## Authentication
+
+### NextAuth v5 + Convex OIDC
+
+All API requests must be authenticated:
+
+**Frontend (Convex Direct)**:
+```typescript
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+// Authenticated automatically via ConvexProvider
+function MyComponent() {
+  const churches = useQuery(api.churches.list);
+  const createReport = useMutation(api.reports.create);
+
+  // Session handled by NextAuth + OIDC bridge
+  // No manual token passing required
+}
+```
+
+**Server-side (REST API)**:
+```typescript
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+
+export async function GET(req: NextRequest) {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.email) {
+    return NextResponse.json(
+      { error: 'Unauthorized' },
+      { status: 401 }
+    );
+  }
+
+  // ... authenticated request
+}
+```
+
+### Authorization
+
+Authorization is enforced in Convex functions using role-based checks:
 
 ```typescript
-// Verificación en API routes
-import { getAuthContext } from '@/lib/auth-context';
-import { executeWithContext, executeTransaction } from '@/lib/db';
+// convex/reports.ts
+export const approveReport = mutation({
+  args: { reportId: v.id("monthlyReports") },
+  handler: async (ctx, { reportId }) => {
+    // Check auth
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
 
-export async function GET(request: NextRequest) {
-  try {
-    const auth = await getAuthContext(request);
+    // Load user
+    const user = await ctx.db
+      .query("profiles")
+      .withIndex("by_email", (q) => q.eq("email", identity.email))
+      .unique();
 
-    if (!auth) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Check role
+    if (!["admin", "treasurer"].includes(user.role)) {
+      throw new Error("Unauthorized");
     }
 
-    // Use executeWithContext for RLS enforcement
-    const result = await executeWithContext(
-      auth,
-      'SELECT * FROM monthly_reports WHERE church_id = $1',
-      [auth.churchId]
-    );
-
-    return NextResponse.json({ success: true, data: result.rows });
-  } catch (error) {
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
-  }
-}
+    // ... perform operation
+  },
+});
 ```
 
-### Ejecución Segura de Base de Datos
+## Convex Functions API
 
-El sistema implementa tres patrones de ejecución de base de datos:
+### Queries (Read-only)
 
-1. **executeWithContext**: Para consultas con Row Level Security (RLS)
-2. **executeTransaction**: Para operaciones transaccionales complejas
-3. **execute**: Solo para consultas a nivel de sistema (sin RLS)
+Queries are reactive - components automatically update when data changes.
+
+#### Churches
 
 ```typescript
-// Operación transaccional segura
-export async function POST(req: NextRequest) {
-  const auth = await getAuthContext(req);
+// List all churches (filtered by role)
+api.churches.list()
+// Returns: Church[]
 
-  await executeTransaction(auth, async (client) => {
-    // Crear reporte
-    const report = await client.query(
-      'INSERT INTO monthly_reports (...) VALUES (...) RETURNING id',
-      [...]
-    );
-
-    // Actualizar balances de fondos
-    await client.query(
-      'UPDATE fund_balances SET balance = balance + $1 WHERE ...',
-      [...]
-    );
-
-    // Registrar actividad
-    await client.query(
-      'INSERT INTO user_activity (...) VALUES (...)',
-      [...]
-    );
-  });
-}
+// Get single church
+api.churches.get({ id: Id<"churches"> })
+// Returns: Church | null
 ```
 
-### Roles Disponibles (Sistema Actual: 7 Roles)
+#### Monthly Reports
 
-El sistema utiliza **7 roles jerárquicos** para control de acceso:
+```typescript
+// Get report for specific month
+api.reports.get({
+  churchId: Id<"churches">,
+  year: number,
+  month: number
+})
+// Returns: MonthlyReport | null
 
-1. **`admin`** - Administrador del Sistema (nivel 7)
-   - Acceso completo al sistema
-   - Gestión de usuarios y configuración global
+// List reports for church
+api.reports.listForChurch({
+  churchId: Id<"churches">,
+  year?: number
+})
+// Returns: MonthlyReport[]
 
-2. **`national_treasurer`** - Tesorero Nacional (nivel 6) - **NUEVO en Migration 040**
-   - Supervisión de todos los fondos nacionales
-   - Aprobación de eventos de fondos
+// List all reports (admin/treasurer only)
+api.reports.listAll({
+  year?: number,
+  month?: number,
+  status?: "draft" | "submitted" | "approved"
+})
+// Returns: MonthlyReport[]
+```
 
-3. **`fund_director`** - Director de Fondos (nivel 5) - **Agregado en Migration 026**
-   - Gestión de fondos específicos asignados
-   - Creación y gestión de eventos de fondos
+#### Fund Events
 
-4. **`pastor`** - Pastor de Iglesia (nivel 4)
-   - Liderazgo de iglesia
-   - Gestión de reportes mensuales
+```typescript
+// List events for fund
+api.fundEvents.listForFund({
+  fundId: Id<"funds">,
+  status?: "draft" | "submitted" | "approved" | "rejected"
+})
+// Returns: FundEvent[]
 
-5. **`treasurer`** - Tesorero de Iglesia (nivel 3)
-   - Operaciones financieras de iglesia
-   - Gestión de transacciones
+// Get single event
+api.fundEvents.get({ id: Id<"fundEvents"> })
+// Returns: FundEvent | null
 
-6. **`church_manager`** - Gerente de Iglesia (nivel 2)
-   - Administración de iglesia (solo lectura)
-   - Visualización de reportes
+// List events requiring approval (treasurer/admin)
+api.fundEvents.listPendingApproval()
+// Returns: FundEvent[]
+```
 
-7. **`secretary`** - Secretario de Iglesia (nivel 1)
-   - Soporte administrativo
-   - Entrada de datos básicos
+#### Funds
 
-**Historia de Migraciones:**
-- **Migration 023**: Simplificación de 8 a 6 roles (super_admin → admin, church_admin → pastor)
-- **Migration 026**: Agregado fund_director
-- **Migration 037**: Eliminados roles obsoletos (district_supervisor, member)
-- **Migration 040**: Agregado national_treasurer
+```typescript
+// List all funds
+api.funds.list()
+// Returns: Fund[]
 
-**Roles Obsoletos** (eliminados en Migration 037):
-- `district_supervisor` - Eliminado
-- `member` - Eliminado
-- `super_admin` - Consolidado en `admin` (Migration 023)
-- `church_admin` - Renombrado a `pastor` (Migration 023)
-- `viewer` - Eliminado (Migration 023)
+// Get fund with balance
+api.funds.getWithBalance({
+  fundId: Id<"funds">,
+  churchId?: Id<"churches">
+})
+// Returns: { fund: Fund, balance: number }
+```
 
----
+### Mutations (Write operations)
 
-## Endpoints
+Mutations modify data and trigger reactive updates.
 
-### 1. Dashboard
+#### Monthly Reports
 
-#### GET `/api/dashboard`
-Obtiene métricas y resumen del dashboard principal.
+```typescript
+// Create draft report
+api.reports.create({
+  churchId: Id<"churches">,
+  month: number,
+  year: number,
+  diezmos: number,
+  ofrendas: number,
+  // ... other fields
+})
+// Returns: MonthlyReport
 
-**Autorización**: Requiere autenticación
+// Submit report for approval
+api.reports.submit({ reportId: Id<"monthlyReports"> })
+// Returns: MonthlyReport
 
-**Response:**
+// Approve report (treasurer/admin only)
+api.reports.approve({ reportId: Id<"monthlyReports"> })
+// Returns: MonthlyReport
+
+// Reject report (treasurer/admin only)
+api.reports.reject({
+  reportId: Id<"monthlyReports">,
+  reason: string
+})
+// Returns: MonthlyReport
+```
+
+#### Fund Events
+
+```typescript
+// Create fund event
+api.fundEvents.create({
+  fundId: Id<"funds">,
+  eventName: string,
+  eventDate: string, // ISO date
+  budgetItems: Array<{
+    description: string,
+    estimatedAmount: number,
+    category: string
+  }>
+})
+// Returns: FundEvent
+
+// Submit for approval
+api.fundEvents.submit({ id: Id<"fundEvents"> })
+// Returns: FundEvent
+
+// Approve event (treasurer/admin only)
+api.fundEvents.approve({ id: Id<"fundEvents"> })
+// Returns: FundEvent
+
+// Reject event
+api.fundEvents.reject({
+  id: Id<"fundEvents">,
+  reason: string
+})
+// Returns: FundEvent
+
+// Add actual results (after event)
+api.fundEvents.addActuals({
+  id: Id<"fundEvents">,
+  actualItems: Array<{
+    description: string,
+    actualAmount: number,
+    category: string,
+    receiptNumber?: string
+  }>
+})
+// Returns: FundEvent
+```
+
+#### Fund Transactions
+
+```typescript
+// Create transaction
+api.fundTransactions.create({
+  fundId: Id<"funds">,
+  churchId?: Id<"churches">,
+  amount: number, // Positive = income, Negative = expense
+  transactionType: "deposit" | "withdrawal" | "transfer" | "adjustment",
+  description: string,
+  transactionDate: string, // ISO date
+  receiptNumber?: string
+})
+// Returns: FundTransaction
+```
+
+### Actions (External operations)
+
+Actions can call external APIs and don't have reactive subscriptions.
+
+```typescript
+// Send email notification
+api.actions.sendEmailNotification({
+  to: string,
+  subject: string,
+  body: string
+})
+// Returns: { success: boolean }
+
+// Export data to Excel
+api.actions.exportToExcel({
+  reportIds: Id<"monthlyReports">[]
+})
+// Returns: { url: string }
+```
+
+## REST API Routes (Compatibility Layer)
+
+### Standard Response Format
+
 ```json
 {
   "success": true,
-  "user": {
-    "email": "administracion@ipupy.org.py",
-    "role": "admin",
-    "name": "Administrador IPUPY",
-    "churchId": null
-  },
-  "metrics": {
-    "totalChurches": 22,
-    "totalReports": 156,
-    "totalIncome": 45000000,
-    "totalExpenses": 4500000,
-    "nationalFund": 4500000
-  },
-  "recentReports": [...],
-  "churches": [...],
-  "currentPeriod": {
-    "month": 9,
-    "year": 2025
-  },
-  "funds": {
-    "totalBalance": 40500000,
-    "availableBalance": 36000000
-  },
-  "trends": [...]
+  "data": {},
+  "error": null
 }
 ```
 
----
+Error response:
+```json
+{
+  "success": false,
+  "data": null,
+  "error": "Error message"
+}
+```
 
-### 2. Iglesias
+### Churches
 
 #### GET `/api/churches`
-Lista todas las iglesias registradas.
 
-**Autorización**: Requiere autenticación
+List all churches (filtered by user role).
 
-**Query Parameters:**
-- `page` (optional): Número de página
-- `limit` (optional): Resultados por página (default: 50)
-- `search` (optional): Búsqueda por nombre o ciudad
-
-**Response:**
+**Response**:
 ```json
 {
   "success": true,
   "data": [
     {
-      "id": 1,
-      "name": "Primera Iglesia Central",
-      "city": "Asunción",
-      "pastor": "Rev. Juan Pérez",
-      "cedula": "1234567",
-      "grado": "Licenciado",
-      "posicion": "Pastor",
-      "created_at": "2025-01-01T00:00:00Z"
-    }
-  ],
-  "total": 22,
-  "page": 1,
-  "limit": 50
-}
-```
-
-#### POST `/api/churches`
-Crea una nueva iglesia.
-
-**Autorización**: Requiere rol `admin`
-
-**Request Body:**
-```json
-{
-  "name": "Nueva Iglesia",
-  "city": "Ciudad",
-  "pastor": "Nombre del Pastor",
-  "cedula": "CI",
-  "grado": "Grado Ministerial",
-  "posicion": "Posición"
-}
-```
-
-#### PUT `/api/churches`
-Actualiza información de una iglesia.
-
-**Autorización**: Requiere rol `admin`
-
-**Request Body:**
-```json
-{
-  "id": 1,
-  "name": "Nombre Actualizado",
-  "city": "Ciudad Nueva",
-  "pastor": "Nuevo Pastor"
-}
-```
-
----
-
-### 3. Reportes Mensuales
-
-#### GET `/api/reports`
-Obtiene reportes financieros mensuales.
-
-**Autorización**: Requiere autenticación
-
-**Query Parameters:**
-- `church_id` (optional): Filtrar por iglesia
-- `month` (optional): Mes (1-12)
-- `year` (optional): Año
-- `page` (optional): Paginación
-- `limit` (optional): Límite por página
-
-**Response:**
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": 1,
+      "id": "k17abc...",
       "church_id": 1,
-      "church_name": "Primera Iglesia Central",
-      "month": 9,
-      "year": 2025,
-      "diezmos": 5000000,
-      "ofrendas": 3000000,
-      "fondo_nacional": 800000,
-      "numero_deposito": "DEP-001",
-      "fecha_deposito": "2025-09-15",
-      "created_at": "2025-09-01T00:00:00Z"
+      "name": "Iglesia Central",
+      "city": "Asunción",
+      "pastor": "Pastor Name",
+      "supabase_id": 1
     }
-  ],
-  "total": 100,
-  "summary": {
-    "totalDiezmos": 50000000,
-    "totalOfrendas": 30000000,
-    "totalFondoNacional": 8000000
-  }
-}
-```
-
-#### POST `/api/reports`
-Crea un nuevo reporte mensual (desde iglesias o cargado manualmente por el tesorero nacional).
-
-**Autorización**: Requiere rol `treasurer`, `pastor`, o `admin`
-
-**Request Body (ejemplo iglesia en línea):**
-```json
-{
-  "church_id": 12,
-  "month": 8,
-  "year": 2025,
-  "diezmos": 4500000,
-  "ofrendas": 2350000,
-  "misiones": 600000,
-  "lazos_amor": 150000,
-  "mision_posible": 120000,
-  "apy": 80000,
-  "iba": 55000,
-  "caballeros": 110000,
-  "damas": 90000,
-  "jovenes": 65000,
-  "ninos": 45000,
-  "servicios": 320000,
-  "energia_electrica": 280000,
-  "agua": 95000,
-  "recoleccion_basura": 55000,
-  "mantenimiento": 110000,
-  "materiales": 45000,
-  "otros_gastos": 25000,
-  "numero_deposito": "DEP-0825-001",
-  "fecha_deposito": "2025-08-28",
-  "aportantes": [
-    { "first_name": "María", "last_name": "Gómez", "document": "5123456", "amount": 2500000 },
-    { "first_name": "Carlos", "last_name": "López", "document": "4022333", "amount": 2000000 }
   ]
 }
 ```
 
-**Request Body (ejemplo tesorero nacional cargando informe manual):**
-```json
-{
-  "church_id": 7,
-  "month": 7,
-  "year": 2025,
-  "diezmos": 3800000,
-  "ofrendas": 2100000,
-  "otros": 500000,
-  "misiones": 450000,
-  "manual_report_source": "whatsapp",
-  "manual_report_notes": "Foto de informe enviada por Pr. Duarte",
-  "aportantes": [
-    { "first_name": "Lucía", "last_name": "Medina", "document": "1234567", "amount": 1800000 },
-    { "first_name": "Pedro", "last_name": "Vera", "document": "", "amount": 2000000 }
-  ],
-  "submission_source": "pastor_manual"
-}
-```
+#### GET `/api/churches/:id`
 
-**Campos calculados automáticamente**
-- `fondo_nacional` → 10% de (diezmos + ofrendas)
-- `honorarios_pastoral` → ingreso neto restante después de designados, gastos y 10%
-- `total_designado`, `total_operativo`, `total_salidas_calculadas`, `saldo_mes`
-- `submission_source`, `manual_report_source`, `entered_by`, `entered_at` se establecen según el rol autenticado si no se envían explícitamente.
+Get single church details.
 
-**Validaciones clave**
-- Si `diezmos > 0`, el arreglo `aportantes` debe incluir al menos un registro con `amount > 0` y la suma debe coincidir (±1 Gs) con el total de diezmos.
-- Cada aportante debe tener al menos nombre, apellido o documento informado.
-- Admins pueden registrar fuentes manuales (`paper`, `whatsapp`, etc.) para auditar la recepción.
+### Monthly Reports
 
-**Response (parcial):**
+#### GET `/api/reports`
+
+Query parameters:
+- `churchId` (optional)
+- `year` (optional)
+- `month` (optional)
+- `status` (optional): "draft" | "submitted" | "approved"
+
+**Response**:
 ```json
 {
   "success": true,
-  "data": {
-    "id": 812,
-    "church_id": 7,
-    "month": 7,
-    "year": 2025,
-    "estado": "pendiente_admin",
-    "submission_source": "pastor_manual",
-    "manual_report_source": "whatsapp",
-    "manual_report_notes": "Foto de informe enviada por Pr. Duarte",
-    "entered_by": "administracion@ipupy.org.py",
-    "entered_at": "2025-09-25T02:41:33.421Z",
-    "totals": {
-      "totalEntradas": 6400000,
-      "fondoNacional": 590000,
-      "honorariosPastoral": 1850000,
-      "totalDesignado": 450000,
-      "totalOperativo": 865000,
-      "saldoMes": 0
-    }
-  }
-}
-```
-
-#### PUT `/api/reports`
-Actualiza un reporte existente.
-
-**Autorización**: Requiere permisos sobre la iglesia del reporte
-
----
-
-### 4. Gestión Financiera
-
-#### GET `/api/financial/funds`
-Obtiene el estado de los fondos.
-
-**Autorización**: Requiere autenticación
-
-**Response:**
-```json
-{
-  "success": true,
-  "funds": {
-    "general": {
-      "balance": 20000000,
-      "lastMovement": "2025-09-15"
-    },
-    "national": {
-      "balance": 8000000,
-      "lastMovement": "2025-09-15"
-    },
-    "missions": {
-      "balance": 5000000,
-      "lastMovement": "2025-09-10"
-    }
-  },
-  "totalBalance": 33000000
-}
-```
-
-#### GET `/api/financial/transactions`
-Lista transacciones financieras.
-
-**Autorización**: Requiere autenticación
-
-**Query Parameters:**
-- `fund_id` (optional): Filtrar por fondo
-- `type` (optional): `income` | `expense`
-- `from_date` (optional): Fecha inicial
-- `to_date` (optional): Fecha final
-- `page` (optional): Paginación
-
-#### POST `/api/financial/transactions`
-Registra una nueva transacción.
-
-**Autorización**: Requiere rol `treasurer` o superior
-
-**Request Body:**
-```json
-{
-  "fund_id": 1,
-  "type": "income",
-  "amount": 1000000,
-  "description": "Donación especial",
-  "reference": "REF-001",
-  "date": "2025-09-23"
-}
-```
-
-#### GET `/api/financial/fund-movements`
-Obtiene movimientos de fondos entre cuentas.
-
-**Autorización**: Requiere rol `treasurer` o superior
-
----
-
-### 5. Gestión de Donantes
-
-#### GET `/api/donors`
-Lista de donantes registrados.
-
-**Autorización**: Requiere autenticación
-
-**Query Parameters:**
-- `church_id` (optional): Filtrar por iglesia
-- `search` (optional): Buscar por nombre
-
-**Response:**
-```json
-{
-  "success": true,
-  "donors": [
+  "data": [
     {
-      "id": 1,
-      "name": "Juan Pérez",
+      "id": "k17def...",
       "church_id": 1,
-      "phone": "0981123456",
-      "email": "juan@example.com",
-      "total_donated": 5000000,
-      "last_donation": "2025-09-15"
+      "month": 1,
+      "year": 2025,
+      "diezmos": 5000000,
+      "ofrendas": 2000000,
+      "fondo_nacional": 700000,
+      "status": "approved"
     }
-  ],
-  "total": 150
+  ]
 }
 ```
 
-#### POST `/api/donors`
-Registra un nuevo donante.
+#### POST `/api/reports`
 
-**Autorización**: Requiere rol `secretary` o superior
+Create new monthly report.
 
----
-
-### 6. Contabilidad
-
-#### GET `/api/accounting`
-Obtiene información contable detallada.
-
-**Autorización**: Requiere rol `treasurer` o superior
-
-**Query Parameters:**
-- `period` (optional): Período contable
-- `type` (optional): Tipo de reporte
-
----
-
-### 7. Registros de Culto
-
-#### GET `/api/worship-records`
-Obtiene registros de asistencia a cultos.
-
-**Autorización**: Requiere autenticación
-
-#### POST `/api/worship-records`
-Registra asistencia a culto.
-
-**Autorización**: Requiere rol `secretary` o superior
-
-**Request Body:**
+**Request Body**:
 ```json
 {
-  "church_id": 1,
-  "date": "2025-09-22",
-  "service_type": "domingo_am",
-  "attendance": 150,
-  "visitors": 5,
-  "conversions": 2,
-  "baptisms": 1
+  "churchId": "k17abc...",
+  "month": 1,
+  "year": 2025,
+  "diezmos": 5000000,
+  "ofrendas": 2000000,
+  "honorarios_pastorales": 1000000,
+  "total_entradas": 5000000,
+  "total_salidas": 3000000,
+  "numero_deposito": "123456",
+  "fecha_deposito": "2025-01-15"
 }
 ```
 
----
+#### POST `/api/reports/:id/submit`
 
-### 8. Personas
+Submit report for approval.
 
-#### GET `/api/people`
-Lista de miembros y personas relacionadas.
-
-**Autorización**: Requiere autenticación
-
-**Query Parameters:**
-- `church_id` (optional): Filtrar por iglesia
-- `role` (optional): Filtrar por rol
-- `status` (optional): `active` | `inactive`
-
----
-
-### 9. Configuración del Sistema
-
-#### GET `/api/admin/configuration`
-Obtiene la configuración del sistema por sección.
-
-**Autorización**: Requiere rol `admin`
-
-**Query Parameters:**
-- `section` (optional): Sección específica (`general`, `financial`, `security`, `notifications`, `funds`, `roles`, `integration`)
-
-**Response:**
+**Response**:
 ```json
 {
   "success": true,
   "data": {
-    "financial": {
-      "fondoNacionalPercentage": 10,
-      "reportDeadlineDay": 5,
-      "requireReceipts": true,
-      "receiptMinAmount": 100000,
-      "autoCalculateTotals": true,
-      "requireDoubleEntry": true
+    "id": "k17def...",
+    "status": "submitted",
+    "submitted_at": 1704096000000
+  },
+  "message": "Report submitted successfully"
+}
+```
+
+#### POST `/api/reports/:id/approve`
+
+Approve report (treasurer/admin only).
+
+#### POST `/api/reports/:id/reject`
+
+Reject report with reason.
+
+**Request Body**:
+```json
+{
+  "reason": "Missing deposit receipt"
+}
+```
+
+### Fund Events
+
+#### GET `/api/fund-events`
+
+Query parameters:
+- `fundId` (optional)
+- `churchId` (optional)
+- `status` (optional)
+
+#### GET `/api/fund-events/:id`
+
+Get single fund event with full details.
+
+#### POST `/api/fund-events`
+
+Create new fund event.
+
+**Request Body**:
+```json
+{
+  "fund_id": "k17xyz...",
+  "event_name": "Campaña Nacional",
+  "event_date": "2025-03-15",
+  "description": "Campaña evangelística nacional",
+  "budget_items": [
+    {
+      "description": "Alquiler de local",
+      "estimated_amount": 2000000,
+      "category": "venue"
+    },
+    {
+      "description": "Publicidad",
+      "estimated_amount": 1000000,
+      "category": "marketing"
     }
-  }
+  ]
 }
 ```
 
-#### POST `/api/admin/configuration`
-Actualiza la configuración del sistema.
+#### POST `/api/fund-events/:id/submit`
 
-**Autorización**: Requiere rol `admin`
+Submit event for approval.
 
-**Request Body:**
+#### POST `/api/fund-events/:id/approve`
+
+Approve fund event (treasurer/admin only).
+
+#### POST `/api/fund-events/:id/reject`
+
+Reject fund event with reason.
+
+#### PUT `/api/fund-events/:id/actuals`
+
+Add actual results after event completion.
+
+**Request Body**:
 ```json
 {
-  "section": "financial",
+  "actual_items": [
+    {
+      "description": "Alquiler de local",
+      "actual_amount": 1800000,
+      "category": "venue",
+      "receipt_number": "REC-001"
+    }
+  ]
+}
+```
+
+### Dashboard
+
+#### GET `/api/dashboard`
+
+Get dashboard metrics (filtered by role).
+
+**Response**:
+```json
+{
+  "success": true,
   "data": {
-    "fondoNacionalPercentage": 12,
-    "reportDeadlineDay": 7,
-    "requireReceipts": true,
-    "receiptMinAmount": 150000
+    "total_churches": 22,
+    "reports_pending": 5,
+    "reports_this_month": 18,
+    "total_diezmos": 50000000,
+    "total_ofrendas": 20000000,
+    "fondo_nacional_balance": 15000000,
+    "recent_activity": []
   }
 }
 ```
 
-**Response:**
+### Admin Endpoints
+
+#### GET `/api/admin/users`
+
+List all users (admin only).
+
+#### PUT `/api/admin/users/:id/role`
+
+Change user role (admin only).
+
+**Request Body**:
 ```json
 {
-  "success": true,
-  "message": "Configuration updated successfully"
+  "role": "pastor" | "treasurer" | "secretary" | "church_manager" | "fund_director" | "admin"
 }
 ```
 
-#### PUT `/api/admin/configuration`
-Restablece la configuración a valores predeterminados.
+#### GET `/api/admin/activity-logs`
 
-**Autorización**: Requiere rol `admin`
+Query user activity logs (admin only).
 
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Configuration reset to defaults"
-}
-```
+Query parameters:
+- `userId` (optional)
+- `action` (optional)
+- `startDate` (optional)
+- `endDate` (optional)
 
----
+## Error Codes
 
-### 10. Exportación de Datos
-
-#### GET `/api/data`
-Exporta datos en formato JSON o CSV.
-
-**Autorización**: Requiere rol `admin`
-
-**Query Parameters:**
-- `format`: `json` | `csv` | `excel`
-- `type`: `reports` | `churches` | `donors` | `all`
-- `from_date` (optional): Fecha inicial
-- `to_date` (optional): Fecha final
-
----
-
-## Respuestas de Error
-
-### Estructura de Error Estándar
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "ERROR_CODE",
-    "message": "Descripción del error",
-    "details": {}
-  }
-}
-```
-
-### Códigos de Error Comunes
-
-| Código | HTTP Status | Descripción |
-|--------|-------------|-------------|
-| `UNAUTHORIZED` | 401 | No autenticado |
-| `FORBIDDEN` | 403 | Sin permisos suficientes |
-| `NOT_FOUND` | 404 | Recurso no encontrado |
-| `VALIDATION_ERROR` | 400 | Datos inválidos |
-| `DUPLICATE_ENTRY` | 409 | Entrada duplicada |
-| `INTERNAL_ERROR` | 500 | Error del servidor |
-
----
+| Code | Meaning |
+|------|---------|
+| 401  | Unauthorized - Not authenticated |
+| 403  | Forbidden - Insufficient permissions |
+| 404  | Not Found - Resource doesn't exist |
+| 422  | Unprocessable Entity - Validation error |
+| 429  | Too Many Requests - Rate limit exceeded |
+| 500  | Internal Server Error |
 
 ## Rate Limiting
 
-- **Límite**: 100 requests por minuto por IP
-- **Headers de Respuesta**:
-  - `X-RateLimit-Limit`: 100
-  - `X-RateLimit-Remaining`: 95
-  - `X-RateLimit-Reset`: 1695456789
+REST API routes may implement rate limiting:
 
----
+- **Default**: 100 requests per minute per IP
+- **Auth endpoints**: 10 requests per minute per IP
+- **Admin endpoints**: 50 requests per minute per user
 
-## Webhooks
+Rate limit headers:
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1704096000
+```
 
-### Eventos Disponibles
+## Pagination
 
-- `report.created` - Nuevo reporte creado
-- `report.updated` - Reporte actualizado
-- `church.created` - Nueva iglesia registrada
-- `transaction.created` - Nueva transacción
+Convex queries support pagination:
 
-### Configuración de Webhook
+```typescript
+// Get paginated results
+const result = await ctx.db
+  .query("monthlyReports")
+  .order("desc")
+  .paginate({ numItems: 20, cursor: null });
 
-```json
-{
-  "url": "https://tu-servidor.com/webhook",
-  "events": ["report.created", "transaction.created"],
-  "secret": "webhook_secret_key"
+// Returns:
+// {
+//   page: MonthlyReport[],
+//   isDone: boolean,
+//   continueCursor: string
+// }
+```
+
+REST API pagination (query parameters):
+- `page`: Page number (default: 1)
+- `limit`: Items per page (default: 20, max: 100)
+
+## Real-time Subscriptions
+
+Convex provides automatic real-time updates:
+
+```typescript
+function ReportsPage() {
+  // Automatically updates when data changes
+  const reports = useQuery(api.reports.listAll);
+
+  // If another user creates/updates a report,
+  // this component re-renders with new data automatically
+  return <ReportsList reports={reports} />;
 }
 ```
 
----
+No polling or manual refetching required!
 
-## SDK Examples
+## Code Examples
 
-### JavaScript/TypeScript
+### Creating a Report (Convex)
 
 ```typescript
-// Usando fetch con cookies
-const response = await fetch('/api/churches', {
-  method: 'GET',
-  credentials: 'include', // Importante para cookies
-  headers: {
-    'Content-Type': 'application/json'
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+function CreateReportForm() {
+  const createReport = useMutation(api.reports.create);
+
+  const handleSubmit = async (data: FormData) => {
+    try {
+      const report = await createReport({
+        churchId: data.churchId,
+        month: data.month,
+        year: data.year,
+        diezmos: data.diezmos,
+        ofrendas: data.ofrendas,
+        // ...
+      });
+      toast.success("Report created!");
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
+  return <form onSubmit={handleSubmit}>...</form>;
+}
+```
+
+### Creating a Report (REST)
+
+```typescript
+async function createReport(data: ReportData) {
+  const response = await fetch('/api/reports', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  });
+
+  const result = await response.json();
+
+  if (!result.success) {
+    throw new Error(result.error);
   }
-});
 
-const data = await response.json();
+  return result.data;
+}
 ```
 
-### Con Supabase Client
+## TypeScript Types
+
+Convex provides auto-generated types:
 
 ```typescript
-import { createClient } from '@/lib/supabase/client';
+import { Doc, Id } from "@/convex/_generated/dataModel";
 
-const supabase = createClient();
-const { data, error } = await supabase
-  .from('churches')
-  .select('*')
-  .order('name');
+// Document types
+type Church = Doc<"churches">;
+type MonthlyReport = Doc<"monthlyReports">;
+type FundEvent = Doc<"fundEvents">;
+
+// ID types
+type ChurchId = Id<"churches">;
+type ReportId = Id<"monthlyReports">;
+
+// Function return types are inferred
+const churches = useQuery(api.churches.list);
+// Type: Church[] | undefined
 ```
 
----
+## Best Practices
 
-## Migración desde v1.0
+1. **Prefer Convex Direct**: Use Convex functions directly when possible for real-time updates
+2. **Use REST for Legacy**: Only use REST API routes for backward compatibility
+3. **Handle Loading States**: Convex queries return `undefined` while loading
+4. **Error Boundaries**: Wrap components in error boundaries for failed queries
+5. **Optimistic Updates**: Use Convex optimistic updates for better UX
+6. **Batch Operations**: Combine multiple updates in single mutation when possible
 
-### Cambios Principales
+## Migration from REST to Convex
 
-1. **Autenticación**: Migrado de JWT a Supabase Auth
-2. **Endpoints**: `/api/auth` ya no existe (auth via Supabase)
-3. **Headers**: No se requiere `Authorization: Bearer`
-4. **Cookies**: Autenticación basada en cookies httpOnly
+```typescript
+// BEFORE (REST API)
+const [reports, setReports] = useState([]);
+const [loading, setLoading] = useState(true);
 
-### Endpoints Deprecados
+useEffect(() => {
+  fetch('/api/reports')
+    .then(r => r.json())
+    .then(data => setReports(data.data))
+    .finally(() => setLoading(false));
+}, []);
 
-- `/api/auth/login` - Usar Supabase Auth
-- `/api/auth/logout` - Usar Supabase signOut
-- `/api/auth/refresh` - Automático via Supabase
+// AFTER (Convex)
+const reports = useQuery(api.reports.listAll);
+// Loading state: reports === undefined
+// Loaded state: reports is Report[]
+// Auto-updates when data changes!
+```
 
----
+## References
 
-## Soporte
-
-Para soporte técnico sobre la API:
-- Email: administracion@ipupy.org.py
-- Documentación: [GitHub Repository](https://github.com/anthonybirhouse/ipupy-tesoreria)
+- [Convex Functions Documentation](https://docs.convex.dev/functions)
+- [Convex React Hooks](https://docs.convex.dev/client/react)
+- [Complete API Reference](./api/API_COMPLETE_REFERENCE.md)
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
+- [CONVEX_SCHEMA.md](./CONVEX_SCHEMA.md)
+- [SECURITY.md](./SECURITY.md)

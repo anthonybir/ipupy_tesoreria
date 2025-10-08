@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { updateSession } from "@/lib/supabase/middleware";
+import { getToken } from "next-auth/jwt";
 
 // Build ID for cache busting (Vercel sets VERCEL_GIT_COMMIT_SHA)
 const BUILD_ID = process.env['VERCEL_GIT_COMMIT_SHA'] ||
@@ -8,52 +8,65 @@ const BUILD_ID = process.env['VERCEL_GIT_COMMIT_SHA'] ||
                  'dev';
 
 // Define public routes that don't require authentication
-const publicRoutes = [
+const publicRoutePrefixes = [
   "/login",
   "/auth/callback",
-  "/api/auth/callback",
+  "/api/auth", // Allow Auth.js routes (includes /api/auth/*)
+  "/api/openid/token",
+  "/api/openid/refresh",
 ];
 
-export async function middleware(request: NextRequest): Promise<NextResponse> {
-  const { pathname } = request.nextUrl;
+const isPublicRoute = (pathname: string): boolean =>
+  publicRoutePrefixes.some((route) => pathname.startsWith(route));
 
-  // Update user session and get user
-  const { response, user } = await updateSession(request);
-
-  // Set build version cookie for client-side cache invalidation
+const applyBuildIdCookie = (request: NextRequest, response: NextResponse) => {
   const currentBuildId = request.cookies.get("app_build_id")?.value;
   if (currentBuildId !== BUILD_ID) {
     response.cookies.set("app_build_id", BUILD_ID, {
       path: "/",
       sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 365 // 1 year
+      maxAge: 60 * 60 * 24 * 365, // 1 year
     });
-    // Signal to client that build changed
     response.headers.set("x-app-build-changed", "1");
   }
+};
+
+export async function middleware(request: NextRequest): Promise<NextResponse> {
+  const { pathname } = request.nextUrl;
 
   // Allow public routes without auth check
-  if (publicRoutes.some((route) => pathname.startsWith(route))) {
+  if (isPublicRoute(pathname)) {
+    const response = NextResponse.next();
+    applyBuildIdCookie(request, response);
     return response;
   }
 
-  // Check if user is authenticated
-  if (!user) {
+  const secret = process.env['NEXTAUTH_SECRET'];
+  if (!secret) {
+    throw new Error("NEXTAUTH_SECRET is not configured");
+  }
 
+  const token = await getToken({ req: request, secret });
+
+  if (!token) {
     if (pathname.startsWith("/api/")) {
-      // For API routes, return 401
-      return NextResponse.json(
+      const jsonResponse = NextResponse.json(
         { error: "Autenticación requerida" },
         { status: 401 }
       );
+      applyBuildIdCookie(request, jsonResponse);
+      return jsonResponse;
     }
 
-    // For page routes, redirect to login
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("from", pathname);
-    return NextResponse.redirect(loginUrl);
+    const redirectResponse = NextResponse.redirect(loginUrl);
+    applyBuildIdCookie(request, redirectResponse);
+    return redirectResponse;
   }
 
+  const response = NextResponse.next();
+  applyBuildIdCookie(request, response);
   return response;
 }
 

@@ -1,81 +1,148 @@
-'use client';
+"use client";
 
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useMemo } from "react";
+import { api } from "../../convex/_generated/api";
 
-import { fetchJson } from '@/lib/api-client';
 import {
+  mapTransactionsToFundMovements,
+  type ConvexTransactionsListResult,
+} from "@/lib/convex-adapters";
+import {
+  normalizeFundMovementsResponse,
   type FundMovementCollection,
   type FundMovementFilters,
-  type FundMovementsApiResponse,
-  normalizeFundMovementsResponse,
-} from '@/types/financial';
+} from "@/types/financial";
+import { useFunds } from "@/hooks/useFunds";
+import { useChurches } from "@/hooks/useChurches";
+import {
+  useConvexQueryState,
+  type ConvexQueryState,
+} from "@/hooks/useConvexQueryState";
 
-type UseLedgerOptions = Pick<
-  UseQueryOptions<FundMovementCollection, Error>,
-  'enabled' | 'staleTime' | 'placeholderData'
->;
+type UseLedgerOptions = {
+  enabled?: boolean;
+};
 
-const buildQueryString = (filters: FundMovementFilters): string => {
-  const params = new URLSearchParams();
+type UseLedgerResult = ConvexQueryState<FundMovementCollection> & {
+  data: FundMovementCollection;
+};
 
-  if (filters.reportId) {
-    params.set('report_id', String(filters.reportId));
+type TransactionsListArgs = {
+  fund_id?: string;
+  church_id?: string;
+  report_supabase_id?: number;
+  month?: number;
+  year?: number;
+  limit?: number;
+  offset?: number;
+};
+
+const EMPTY_COLLECTION: FundMovementCollection = {
+  records: [],
+  pagination: {
+    limit: 50,
+    offset: 0,
+    total: 0,
+  },
+  totals: {
+    count: 0,
+    totalAmount: 0,
+  },
+};
+
+const buildArgs = (
+  filters: FundMovementFilters,
+  fundSupabaseToConvex: Map<number, string>,
+  churchSupabaseToConvex: Map<number, string>
+): readonly unknown[] => {
+  const args: TransactionsListArgs = {};
+
+  if (filters.fundId) {
+    const convexId = fundSupabaseToConvex.get(filters.fundId);
+    if (convexId) {
+      args.fund_id = convexId;
+    }
   }
 
   if (filters.churchId) {
-    params.set('church_id', String(filters.churchId));
+    const convexId = churchSupabaseToConvex.get(filters.churchId);
+    if (convexId) {
+      args.church_id = convexId;
+    }
   }
 
-  if (filters.fundId) {
-    params.set('fund_id', String(filters.fundId));
+  if (filters.reportId) {
+    args.report_supabase_id = filters.reportId;
   }
 
-  if (filters.month) {
-    params.set('month', String(filters.month));
+  if (typeof filters.month === "number") {
+    args.month = filters.month;
   }
 
-  if (filters.year) {
-    params.set('year', String(filters.year));
+  if (typeof filters.year === "number") {
+    args.year = filters.year;
   }
 
-  params.set('limit', String(filters.limit ?? 50));
-  params.set('offset', String(filters.offset ?? 0));
+  if (typeof filters.limit === "number") {
+    args.limit = filters.limit;
+  }
 
-  return params.toString();
+  if (typeof filters.offset === "number") {
+    args.offset = filters.offset;
+  }
+
+  return [args];
 };
 
-const fetchLedger = async (
+export function useLedger(
   filters: FundMovementFilters,
-): Promise<FundMovementCollection> => {
-  const query = buildQueryString(filters);
-  const url = query ? `/api/financial/fund-movements?${query}` : '/api/financial/fund-movements';
-  const payload = await fetchJson<FundMovementsApiResponse>(url);
-  return normalizeFundMovementsResponse(payload);
-};
+  options?: UseLedgerOptions
+): UseLedgerResult {
+  const fundsQuery = useFunds({ includeInactive: true });
+  const churchesQuery = useChurches();
 
-export const ledgerQueryKey = (
-  filters: FundMovementFilters,
-) =>
-  [
-    'financial',
-    'fund-movements',
-    filters.reportId ?? 'any-report',
-    filters.churchId ?? 'any-church',
-    filters.fundId ?? 'any-fund',
-    filters.month ?? 'any-month',
-    filters.year ?? 'any-year',
-    filters.limit ?? 50,
-    filters.offset ?? 0,
-  ] as const;
+  const fundSupabaseToConvex = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const fund of fundsQuery.data.records) {
+      if (fund.convexId) {
+        map.set(fund.id, fund.convexId);
+      }
+    }
+    return map;
+  }, [fundsQuery.data.records]);
 
-export function useLedger(filters: FundMovementFilters, options?: UseLedgerOptions): UseQueryResult<FundMovementCollection, Error> {
-  const { enabled = true, staleTime, placeholderData } = options ?? {};
+  const churchSupabaseToConvex = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const church of churchesQuery.data) {
+      if (church.convexId) {
+        map.set(church.id, church.convexId);
+      }
+    }
+    return map;
+  }, [churchesQuery.data]);
 
-  return useQuery<FundMovementCollection, Error>({
-    queryKey: ledgerQueryKey(filters),
-    queryFn: () => fetchLedger(filters),
-    staleTime: staleTime ?? 60 * 1000,
-    placeholderData: placeholderData ?? ((previous) => previous ?? undefined),
-    enabled,
-  });
+  const args = useMemo(
+    () => buildArgs(filters, fundSupabaseToConvex, churchSupabaseToConvex),
+    [filters, fundSupabaseToConvex, churchSupabaseToConvex]
+  );
+
+  const enabled = options?.enabled ?? true;
+
+  const queryResult = useConvexQueryState(
+    api.transactions.list,
+    args,
+    (result: ConvexTransactionsListResult) =>
+      normalizeFundMovementsResponse(mapTransactionsToFundMovements(result)),
+    { enabled }
+  );
+
+  const data = useMemo(
+    () => queryResult.data ?? EMPTY_COLLECTION,
+    [queryResult.data]
+  );
+
+  return {
+    ...queryResult,
+    data,
+  };
 }

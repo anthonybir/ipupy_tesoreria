@@ -25,9 +25,8 @@ import type { DataTableColumn } from '@/components/Shared/DataTable';
 import {
   type AdminReportRecord,
   useAdminReports,
-  useApproveReport,
-  useUpdateReport,
 } from '@/hooks/useAdminData';
+import { useUpdateReport } from '@/hooks/useReportMutations';
 import { formatCurrencyDisplay } from '@/lib/utils/currency';
 
 const monthNames = [
@@ -98,7 +97,6 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps): JSX.Elem
   }, [filters]);
 
   const reportsQuery = useAdminReports(queryFilters);
-  const approveReport = useApproveReport();
   const updateReport = useUpdateReport();
   useEffect(() => {
     const fetchChurches = async () => {
@@ -107,8 +105,9 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps): JSX.Elem
         if (!response.ok) {
           return;
         }
-        const data = await response.json();
-        setChurches((data?.data as ChurchOption[] | undefined) ?? []);
+        const json = (await response.json()) as { data?: ChurchOption[] };
+        const list = Array.isArray(json.data) ? json.data : [];
+        setChurches(list);
       } catch (error) {
         console.error('Error fetching churches:', error);
       }
@@ -116,8 +115,8 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps): JSX.Elem
 
     fetchChurches();
   }, []);
-  const reports = reportsQuery.data?.reports ?? [];
-  const summary = reportsQuery.data?.summary ?? {};
+  const reports = reportsQuery.data.reports;
+  const summary = reportsQuery.data.summary;
   const pendingCount = reports.length;
   const selectedReportRaw = (selectedReport?.raw ?? {}) as Record<string, unknown>;
 
@@ -134,7 +133,11 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps): JSX.Elem
     async (report: AdminReportRecord) => {
       try {
         setQuickApproveId(report.id);
-        await approveReport.mutateAsync({ reportId: report.id });
+        await updateReport.mutateAsync({
+          reportId: report.id,
+          convexId: report.convexId,
+          estado: 'aprobado',
+        });
         await reportsQuery.refetch();
       } catch (error) {
         console.error('Error approving report', error);
@@ -142,20 +145,24 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps): JSX.Elem
         setQuickApproveId(null);
       }
     },
-    [approveReport, reportsQuery],
+    [reportsQuery, updateReport],
   );
   const handleApproveDetailed = useCallback(async () => {
     if (!selectedReport) {
       return;
     }
     try {
-      await approveReport.mutateAsync({ reportId: selectedReport.id });
+      await updateReport.mutateAsync({
+        reportId: selectedReport.id,
+        convexId: selectedReport.convexId,
+        estado: 'aprobado',
+      });
       await reportsQuery.refetch();
       handleCloseReview();
     } catch (error) {
       console.error('Error approving report', error);
     }
-  }, [approveReport, handleCloseReview, reportsQuery, selectedReport]);
+  }, [handleCloseReview, reportsQuery, selectedReport, updateReport]);
   const handleReject = useCallback(async () => {
     if (!selectedReport) {
       return;
@@ -163,8 +170,9 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps): JSX.Elem
     try {
       await updateReport.mutateAsync({
         reportId: selectedReport.id,
-        estado: 'rechazado_admin',
-        observations,
+        convexId: selectedReport.convexId,
+        estado: 'rechazado',
+        observaciones: observations,
         transactionsCreated: false,
       });
       await reportsQuery.refetch();
@@ -252,7 +260,7 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps): JSX.Elem
               variant="success"
               size="sm"
               density="compact"
-              loading={approveReport.isPending && quickApproveId === report.id}
+              loading={updateReport.isPending && quickApproveId === report.id}
               onClick={async (event) => {
                 event.stopPropagation();
                 await handleQuickApprove(report);
@@ -264,7 +272,7 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps): JSX.Elem
         ),
       },
     ],
-    [approveReport.isPending, handleOpenReview, handleQuickApprove, quickApproveId],
+    [handleOpenReview, handleQuickApprove, quickApproveId, updateReport.isPending],
   );
   const summaryMetrics = useMemo(
     () => [
@@ -465,7 +473,7 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps): JSX.Elem
           <DataTable
             data={reports}
             columns={columns}
-            loading={reportsQuery.isFetching || approveReport.isPending || updateReport.isPending}
+            loading={reportsQuery.isFetching || updateReport.isPending}
             skeletonRows={6}
             onRowClick={handleOpenReview}
           />
@@ -499,7 +507,7 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps): JSX.Elem
               density="compact"
               onClick={handleReject}
               loading={updateReport.isPending}
-              disabled={approveReport.isPending}
+              disabled={updateReport.isPending}
             >
               Solicitar corrección
             </Button>
@@ -509,7 +517,7 @@ export function PendingReportsTab({ filters }: PendingReportsTabProps): JSX.Elem
               size="sm"
               density="compact"
               onClick={handleApproveDetailed}
-              loading={approveReport.isPending}
+              loading={updateReport.isPending}
               disabled={updateReport.isPending}
             >
               Aprobar y generar movimientos

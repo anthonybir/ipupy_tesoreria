@@ -1,13 +1,13 @@
 {
   "mcpServers": {
-    "supabase": {
-      "command": "/Users/anthonybir/.nvm/versions/node/v22.18.0/bin/mcp-server-supabase",
+    "convex": {
+      "command": "npx",
       "args": [
-        "--project-ref=vnxghlfrmmzvlhzhontk"
-      ],
-      "env": {
-        "SUPABASE_ACCESS_TOKEN": "sbp_9e93d5fbcb195f4f92e1140f748de2727c2d2196"
-      }
+        "-y",
+        "convex@latest",
+        "mcp",
+        "start"
+      ]
     }
   }
 }

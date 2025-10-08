@@ -1,220 +1,126 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { executeWithContext, executeTransaction } from '@/lib/db';
-import { firstOrDefault, expectOne } from '@/lib/db-helpers';
-import { requireAdmin } from '@/lib/auth-supabase';
-import { withRateLimit } from '@/lib/rate-limit';
-import { createTransaction as createLedgerTransaction } from '@/app/api/reports/route-helpers';
+import { getAuthenticatedConvexClient } from '@/lib/convex-server';
+import { api } from '../../../../../convex/_generated/api';
+import { handleApiError, ValidationError } from '@/lib/api-errors';
+import type { Id } from '../../../../../convex/_generated/dataModel';
+import { getFundConvexId, getChurchConvexId, createReverseLookupMaps } from '@/lib/convex-id-mapping';
+import { mapTransactionsListResponse } from '@/lib/convex-adapters';
+import { normalizeTransactionsResponse } from '@/types/financial';
 
-// IMPORTANT: Node.js runtime required for Supabase rate limiting
-export const runtime = 'nodejs';
+/**
+ * Admin Transactions API - Migrated to Convex
+ *
+ * Phase 4.10 - Remaining Admin Routes (2025-01-07)
+ *
+ * Admin view of all transactions (delegates to main transactions API)
+ */
 
-// Admin endpoint for full transaction management
-export async function GET(request: NextRequest): Promise<NextResponse> {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
-    // SECURITY: Rate limiting check
-    const rateLimitResponse = await withRateLimit(request, 'admin');
-    if (rateLimitResponse) return rateLimitResponse;
+    const client = await getAuthenticatedConvexClient();
+    const { searchParams } = new URL(req.url);
 
-    // SECURITY: Require admin authentication
-    const auth = await requireAdmin(request);
-    const { searchParams } = new URL(request.url);
+    // Parse all filter parameters
     const fund_id = searchParams.get('fund_id');
     const church_id = searchParams.get('church_id');
-    const start_date = searchParams.get('start_date');
-    const end_date = searchParams.get('end_date');
-    const typeFilter = searchParams.get('type');
-    const limit = searchParams.get('limit') || '1000';
-    const offset = searchParams.get('offset') || '0';
+    const date_from = searchParams.get('date_from');
+    const date_to = searchParams.get('date_to');
+    const month = searchParams.get('month');
+    const year = searchParams.get('year');
 
-    // Build query with filters
-    const conditions = [];
-    const params = [];
+    const args: {
+      fund_id?: Id<'funds'>;
+      church_id?: Id<'churches'>;
+      date_from?: number;
+      date_to?: number;
+      month?: number;
+      year?: number;
+      limit?: number;
+      offset?: number;
+    } = {};
 
     if (fund_id) {
-      params.push(fund_id);
-      conditions.push(`t.fund_id = $${params.length}`);
+      const numericFundId = Number.parseInt(fund_id, 10);
+      if (Number.isNaN(numericFundId)) {
+        throw new ValidationError('fund_id inválido');
+      }
+      const convexFundId = await getFundConvexId(client, numericFundId);
+      if (!convexFundId) {
+        throw new ValidationError(`Fondo ${numericFundId} no encontrado`);
+      }
+      args.fund_id = convexFundId;
     }
 
     if (church_id) {
-      params.push(church_id);
-      conditions.push(`t.church_id = $${params.length}`);
+      const numericChurchId = Number.parseInt(church_id, 10);
+      if (Number.isNaN(numericChurchId)) {
+        throw new ValidationError('church_id inválido');
+      }
+      const convexChurchId = await getChurchConvexId(client, numericChurchId);
+      if (!convexChurchId) {
+        throw new ValidationError(`Iglesia ${numericChurchId} no encontrada`);
+      }
+      args.church_id = convexChurchId;
     }
 
-    if (start_date) {
-      params.push(start_date);
-      conditions.push(`t.date >= $${params.length}`);
+    if (date_from) {
+      const parsed = Date.parse(date_from);
+      if (Number.isNaN(parsed)) {
+        throw new ValidationError('date_from inválida');
+      }
+      args.date_from = parsed;
     }
 
-    if (end_date) {
-      params.push(end_date);
-      conditions.push(`t.date <= $${params.length}`);
+    if (date_to) {
+      const parsed = Date.parse(date_to);
+      if (Number.isNaN(parsed)) {
+        throw new ValidationError('date_to inválida');
+      }
+      args.date_to = parsed;
     }
 
-    if (typeFilter) {
-      if (typeFilter === 'automatic') {
-        conditions.push("t.created_by IN ('system', 'legacy-import')");
-      } else if (typeFilter === 'manual') {
-        conditions.push("t.created_by NOT IN ('system', 'legacy-import', 'system-reconciliation')");
-      } else if (typeFilter === 'reconciliation') {
-        conditions.push("t.created_by = 'system-reconciliation'");
-      } else {
-        params.push(typeFilter);
-        conditions.push(`t.created_by = $${params.length}`);
+    if (month) {
+      const parsedMonth = Number.parseInt(month, 10);
+      if (Number.isNaN(parsedMonth)) {
+        throw new ValidationError('month inválido');
+      }
+      args.month = parsedMonth;
+    }
+
+    if (year) {
+      const parsedYear = Number.parseInt(year, 10);
+      if (Number.isNaN(parsedYear)) {
+        throw new ValidationError('year inválido');
+      }
+      args.year = parsedYear;
+    }
+
+    if (searchParams.get('limit')) {
+      const parsedLimit = Number.parseInt(searchParams.get('limit') ?? '', 10);
+      if (!Number.isNaN(parsedLimit)) {
+        args.limit = parsedLimit;
       }
     }
 
-    const whereClause = conditions.length > 0
-      ? `WHERE ${conditions.join(' AND ')}`
-      : '';
-
-    // Get transactions with fund, church, and provider details
-    params.push(limit, offset);
-    const result = await executeWithContext(auth, `
-      SELECT
-        t.*,
-        f.name as fund_name,
-        c.name as church_name,
-        p.nombre as provider_name,
-        p.ruc as provider_ruc,
-        p.categoria as provider_categoria,
-        (SUM(t.amount_in - t.amount_out) OVER (ORDER BY t.date, t.id)) as running_balance
-      FROM transactions t
-      LEFT JOIN funds f ON t.fund_id = f.id
-      LEFT JOIN churches c ON t.church_id = c.id
-      LEFT JOIN providers p ON t.provider_id = p.id
-      ${whereClause}
-      ORDER BY t.date DESC, t.id DESC
-      LIMIT $${params.length - 1}
-      OFFSET $${params.length}
-    `, params);
-
-    // Get total count for pagination
-    const countResult = await executeWithContext(auth, `
-      SELECT COUNT(*) as total
-      FROM transactions t
-      ${whereClause}
-    `, params.slice(0, -2));
-
-    const countRow = firstOrDefault(countResult.rows, { total: 0 });
-
-    return NextResponse.json({
-      success: true,
-      data: result.rows,
-      pagination: {
-        total: Number.parseInt(String(countRow['total'] ?? '0'), 10),
-        limit: Number.parseInt(limit, 10),
-        offset: Number.parseInt(offset, 10)
+    if (searchParams.get('offset')) {
+      const parsedOffset = Number.parseInt(searchParams.get('offset') ?? '', 10);
+      if (!Number.isNaN(parsedOffset)) {
+        args.offset = parsedOffset;
       }
-    });
-  } catch (error) {
-    console.error('Error fetching transactions:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to fetch transactions' },
-      { status: 500 }
-    );
-  }
-}
-
-// POST: Create external transaction
-export async function POST(request: NextRequest): Promise<NextResponse> {
-  try {
-    // SECURITY: Require admin authentication
-    const auth = await requireAdmin(request);
-    const data = await request.json();
-    const {
-      fund_id,
-      concept,
-      amount_in = 0,
-      amount_out = 0,
-      date,
-      provider,
-      document_number
-    } = data;
-
-    try {
-      const transaction = await createLedgerTransaction({
-        fund_id,
-        concept,
-        provider: provider ?? null,
-        provider_id: data.provider_id ?? null,
-        document_number: document_number ?? null,
-        amount_in,
-        amount_out,
-        date,
-        created_by: 'treasurer'
-      }, auth);
-
-      return NextResponse.json({
-        success: true,
-        data: transaction
-      });
-    } catch (error) {
-      throw error;
-    }
-  } catch (error) {
-    console.error('Error creating external transaction:', error);
-    return NextResponse.json(
-      { success: false, error: 'Failed to create transaction' },
-      { status: 500 }
-    );
-  }
-}
-
-// DELETE: Remove transaction (with balance adjustment)
-export async function DELETE(request: NextRequest): Promise<NextResponse> {
-  try {
-    // SECURITY: Require admin authentication
-    const auth = await requireAdmin(request);
-    const { searchParams } = new URL(request.url);
-    const transaction_id = searchParams.get('id');
-
-    if (!transaction_id) {
-      return NextResponse.json(
-        { success: false, error: 'Transaction ID required' },
-        { status: 400 }
-      );
     }
 
-    let deletedFundId: number | null = null;
-
-    await executeTransaction(auth, async (client) => {
-      const txn = await client.query(
-        `SELECT * FROM transactions WHERE id = $1`,
-        [transaction_id]
-      );
-
-      const transaction = expectOne(txn.rows);
-      deletedFundId = transaction.fund_id;
-
-      await client.query(`DELETE FROM fund_movements_enhanced WHERE transaction_id = $1`, [transaction_id]);
-      await client.query(`DELETE FROM transactions WHERE id = $1`, [transaction_id]);
-
-      await client.query(
-        `UPDATE funds
-         SET current_balance = COALESCE((
-           SELECT SUM(amount_in - amount_out)
-           FROM transactions
-           WHERE fund_id = $1
-         ), 0),
-             updated_at = NOW()
-         WHERE id = $1`,
-        [transaction.fund_id]
-      );
-    });
+    const result = await client.query(api.transactions.list, args);
+    const { fundMap, churchMap } = await createReverseLookupMaps(client);
+    const payload = mapTransactionsListResponse(result, { fundMap, churchMap });
+    const transactions = normalizeTransactionsResponse(payload);
 
     return NextResponse.json({
       success: true,
-      message: 'Transaction deleted successfully',
-      fundId: deletedFundId
+      data: transactions.records,
+      pagination: transactions.pagination,
+      totals: transactions.totals,
     });
   } catch (error) {
-    const isNotFound = error instanceof Error && error.message === 'Transaction not found';
-    if (!isNotFound) {
-      console.error('Error deleting transaction:', error);
-    }
-    return NextResponse.json(
-      { success: false, error: isNotFound ? 'Transaction not found' : 'Failed to delete transaction' },
-      { status: isNotFound ? 404 : 500 }
-    );
+    return handleApiError(error, req.headers.get('origin'), 'GET /api/admin/transactions');
   }
 }

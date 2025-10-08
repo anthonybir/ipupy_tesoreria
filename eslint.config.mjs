@@ -13,12 +13,44 @@ const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
     ignores: [
+      // Build artifacts & dependencies
       "node_modules/**",
       ".next/**",
       "out/**",
       "build/**",
+      ".vercel/**",
       "next-env.d.ts",
       "tests/**", // Exclude test scaffolds (Jest not yet configured)
+
+      // Configuration files (JavaScript/Module)
+      "*.config.js",
+      "*.config.mjs",
+      "*.config.cjs",
+      "postcss.config.mjs",
+      "lint-staged.config.js",
+
+      // Legacy scripts (pre-Convex migration)
+      "scripts/**/*.js",
+      "scripts/**/*.mjs",
+      "apply-migration.js",
+      "run-migration.js",
+      "fix-all-lint.js",
+      "test-*.js",
+      "*.test.js",
+      "scripts/postinstall/**",
+
+      // Public assets
+      "public/sw.js",
+
+      // Auto-generated files
+      "convex/_generated/**",
+
+      // Development/internal Convex scripts
+      "convex/updateForeignKeys.ts",
+      "convex/validate.ts",
+
+      // TypeScript declaration files
+      "*.d.ts",
     ],
   },
   {

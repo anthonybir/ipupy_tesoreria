@@ -1,52 +1,71 @@
 'use client';
 
-import { useQuery, type UseQueryOptions, type UseQueryResult } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { api } from '../../convex/_generated/api';
 
-import { fetchJson } from '@/lib/api-client';
-import {
-  type FundCollection,
-  type FundsApiResponse,
-  normalizeFundsResponse,
-} from '@/types/financial';
+import { mapFundsListResponse, type ConvexFundDocument, type ConvexFundTotals } from '@/lib/convex-adapters';
+import { normalizeFundsResponse, type FundCollection, type FundsApiResponse } from '@/types/financial';
+import { useConvexQueryState, type ConvexQueryState } from '@/hooks/useConvexQueryState';
 
 type FundsFilters = {
   includeInactive?: boolean;
   category?: string;
 };
 
-type UseFundsOptions = Pick<UseQueryOptions<FundCollection, Error>, 'enabled' | 'staleTime'>;
-
-const buildQueryString = (filters: FundsFilters): string => {
-  const params = new URLSearchParams();
-
-  if (filters.includeInactive) {
-    params.set('include_inactive', 'true');
-  }
-
-  if (filters.category) {
-    params.set('category', filters.category);
-  }
-
-  return params.toString();
+type UseFundsOptions = {
+  enabled?: boolean;
+  staleTime?: number; // retained for compatibility but ignored (Convex handles freshness)
 };
 
-const fetchFunds = async (filters: FundsFilters): Promise<FundCollection> => {
-  const query = buildQueryString(filters);
-  const url = query ? `/api/financial/funds?${query}` : '/api/financial/funds';
-  const payload = await fetchJson<FundsApiResponse>(url);
+type UseFundsResult = ConvexQueryState<FundCollection> & { data: FundCollection };
+
+const EMPTY_FUNDS: FundCollection = {
+  records: [],
+  totals: {
+    totalFunds: 0,
+    activeFunds: 0,
+    totalBalance: 0,
+    totalTarget: 0,
+  },
+};
+
+const mapFunds = (result: { data: ConvexFundDocument[]; totals: ConvexFundTotals }): FundCollection => {
+  const payload: FundsApiResponse = mapFundsListResponse(result);
   return normalizeFundsResponse(payload);
+};
+
+const buildArgs = (filters: FundsFilters): readonly unknown[] => {
+  const args: { type?: string; include_inactive?: boolean } = {};
+
+  if (filters.category) {
+    args.type = filters.category;
+  }
+
+  if (filters.includeInactive) {
+    args.include_inactive = true;
+  }
+
+  return Object.keys(args).length > 0 ? [args] : [{}];
 };
 
 export const fundsQueryKey = (filters: FundsFilters) =>
   ['financial', 'funds', filters.includeInactive ?? false, filters.category ?? 'all'] as const;
 
-export function useFunds(filters: FundsFilters = {}, options?: UseFundsOptions): UseQueryResult<FundCollection, Error> {
-  const { enabled, staleTime } = options ?? {};
+export function useFunds(filters: FundsFilters = {}, options?: UseFundsOptions): UseFundsResult {
+  const args = useMemo(() => buildArgs(filters), [filters]);
+  const enabled = options?.enabled ?? true;
 
-  return useQuery<FundCollection, Error>({
-    queryKey: fundsQueryKey(filters),
-    queryFn: () => fetchFunds(filters),
-    staleTime: staleTime ?? 2 * 60 * 1000,
-    ...(typeof enabled === 'boolean' ? { enabled } : {}),
-  });
+  const queryResult = useConvexQueryState(
+    api.funds.list,
+    args,
+    (result: { data: ConvexFundDocument[]; totals: ConvexFundTotals }) => mapFunds(result),
+    { enabled }
+  );
+
+  const data = useMemo(() => queryResult.data ?? EMPTY_FUNDS, [queryResult.data]);
+
+  return {
+    ...queryResult,
+    data,
+  };
 }

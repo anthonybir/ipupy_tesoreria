@@ -1,162 +1,124 @@
 import { type NextRequest, NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth-supabase';
-import { executeWithContext, executeTransaction } from '@/lib/db';
-import { expectOne, firstOrDefault } from '@/lib/db-helpers';
-import { handleApiError } from '@/lib/api-errors';
-import { setCORSHeaders } from '@/lib/cors';
-import { createFundEventSchema, formatValidationError } from '@/lib/validations/api-schemas';
-import { ZodError } from 'zod';
+import { getAuthenticatedConvexClient } from '@/lib/convex-server';
+import { api } from '../../../../convex/_generated/api';
+import { handleApiError, ValidationError } from '@/lib/api-errors';
+import type { Id } from '../../../../convex/_generated/dataModel';
+import {
+  getFundConvexId,
+  getChurchConvexId,
+  createReverseLookupMaps,
+  mapEventToSupabaseShape,
+} from '@/lib/convex-id-mapping';
 
-export const runtime = 'nodejs';
+/**
+ * Fund Events API Routes - Migrated to Convex
+ *
+ * Phase 4.9 - Fund Events Migration (2025-01-07)
+ *
+ * Event planning and budget tracking for fund directors
+ * - List/create events with filters
+ * - Budget vs actual tracking
+ * - Approval workflow (draft → submitted → approved)
+ *
+ * Authorization handled by Convex fundEvents functions
+ */
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
-    const auth = await requireAuth(req);
+    const client = await getAuthenticatedConvexClient();
     const { searchParams } = new URL(req.url);
 
-    const filters: string[] = [];
-    const params: unknown[] = [];
-
-    // Fund directors see only their assigned funds (enforced by RLS policies)
-    // Admin and treasurer see all fund events
-
+    // Parse filters
     const status = searchParams.get('status');
-    if (status) {
-      filters.push(`fe.status = $${params.length + 1}`);
-      params.push(status);
-    }
-
-    const fundId = searchParams.get('fund_id');
-    if (fundId) {
-      filters.push(`fe.fund_id = $${params.length + 1}`);
-      params.push(parseInt(fundId));
-    }
-
-    const churchId = searchParams.get('church_id');
-    if (churchId) {
-      filters.push(`fe.church_id = $${params.length + 1}`);
-      params.push(parseInt(churchId));
-    }
-
-    const dateFrom = searchParams.get('date_from');
-    if (dateFrom) {
-      filters.push(`fe.event_date >= $${params.length + 1}::date`);
-      params.push(dateFrom);
-    }
-
-    const dateTo = searchParams.get('date_to');
-    if (dateTo) {
-      filters.push(`fe.event_date <= $${params.length + 1}::date`);
-      params.push(dateTo);
-    }
-
-    const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
-
-    // Create separate param arrays to prevent placeholder misalignment
-    const queryParams = [...params];
-    const statsParams = [...params]; // Separate copy for stats query
-
-    // Get pagination parameters
+    const fund_id_param = searchParams.get('fund_id');
+    const church_id_param = searchParams.get('church_id');
+    const date_from = searchParams.get('date_from');
+    const date_to = searchParams.get('date_to');
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    let query = `
-      SELECT
-        fe.id,
-        fe.fund_id,
-        fe.church_id,
-        fe.name,
-        fe.description,
-        fe.event_date,
-        fe.status,
-        fe.created_by,
-        fe.approved_by,
-        fe.approved_at,
-        fe.submitted_at,
-        fe.rejection_reason,
-        fe.created_at,
-        fe.updated_at,
-        f.name as fund_name,
-        c.name as church_name,
-        p.full_name as created_by_name,
-        COALESCE((
-          SELECT SUM(projected_amount)
-          FROM fund_event_budget_items
-          WHERE event_id = fe.id
-        ), 0) as total_budget,
-        COALESCE((
-          SELECT SUM(amount)
-          FROM fund_event_actuals
-          WHERE event_id = fe.id AND line_type = 'income'
-        ), 0) as total_income,
-        COALESCE((
-          SELECT SUM(amount)
-          FROM fund_event_actuals
-          WHERE event_id = fe.id AND line_type = 'expense'
-        ), 0) as total_expense
-      FROM fund_events fe
-      LEFT JOIN funds f ON f.id = fe.fund_id
-      LEFT JOIN churches c ON c.id = fe.church_id
-      LEFT JOIN profiles p ON p.id = fe.created_by
-      ${whereClause}
-      ORDER BY fe.created_at DESC
-    `;
+    // Build query args
+    const queryArgs: {
+      status?: string;
+      fund_id?: Id<'funds'>;
+      church_id?: Id<'churches'>;
+      date_from?: number;
+      date_to?: number;
+      limit?: number;
+      offset?: number;
+    } = {};
 
-    // Add pagination only to main query params
-    if (limit > 0) {
-      queryParams.push(limit);
-      query += ` LIMIT $${queryParams.length}`;
+    if (status) queryArgs.status = status;
+
+    // Convert numeric Supabase IDs to Convex IDs
+    if (fund_id_param) {
+      const numericId = parseInt(fund_id_param);
+      const convexId = await getFundConvexId(client, numericId);
+      if (convexId) {
+        queryArgs.fund_id = convexId;
+      } else {
+        throw new ValidationError(`Fund ID ${numericId} not found`);
+      }
     }
 
-    if (offset > 0) {
-      queryParams.push(offset);
-      query += ` OFFSET $${queryParams.length}`;
+    if (church_id_param) {
+      const numericId = parseInt(church_id_param);
+      const convexId = await getChurchConvexId(client, numericId);
+      if (convexId) {
+        queryArgs.church_id = convexId;
+      } else {
+        throw new ValidationError(`Church ID ${numericId} not found`);
+      }
     }
+    if (date_from) {
+      const timestamp = Date.parse(date_from);
+      if (Number.isNaN(timestamp)) {
+        throw new ValidationError('date_from inválida');
+      }
+      queryArgs.date_from = timestamp;
+    }
+    if (date_to) {
+      const timestamp = Date.parse(date_to);
+      if (Number.isNaN(timestamp)) {
+        throw new ValidationError('date_to inválida');
+      }
+      queryArgs.date_to = timestamp;
+    }
+    if (limit) queryArgs.limit = limit;
+    if (offset) queryArgs.offset = offset;
 
-    const result = await executeWithContext(auth, query, queryParams);
+    // Call Convex query
+    const { data: convexEvents, total, stats: aggregateStats } = await client.query(
+      api.fundEvents.list,
+      queryArgs
+    );
 
-    const statsQuery = `
-      SELECT
-        COUNT(*) as total,
-        COUNT(*) FILTER (WHERE status = 'draft') as draft,
-        COUNT(*) FILTER (WHERE status = 'submitted') as submitted,
-        COUNT(*) FILTER (WHERE status = 'approved') as approved,
-        COUNT(*) FILTER (WHERE status = 'rejected') as rejected,
-        COUNT(*) FILTER (WHERE status = 'pending_revision') as pending_revision
-      FROM fund_events
-      ${whereClause}
-    `;
+    // Create lookup maps once to avoid N+1 queries
+    const { fundMap, churchMap } = await createReverseLookupMaps(client);
 
-    // Use statsParams (without pagination placeholders) for stats query
-    const statsResult = await executeWithContext(auth, statsQuery, statsParams);
-    const stats = firstOrDefault(statsResult.rows, {
-      total: 0,
-      draft: 0,
-      submitted: 0,
-      approved: 0,
-      rejected: 0,
-      pending_revision: 0
-    });
+    // Map Convex IDs back to numeric Supabase IDs using lookup maps
+    const mappedEvents = convexEvents.map((event: typeof convexEvents[number]) =>
+      mapEventToSupabaseShape(event, { fundMap, churchMap })
+    );
 
-    const response = NextResponse.json({
+    const stats = {
+      draft: aggregateStats.draft,
+      submitted: aggregateStats.submitted,
+      approved: aggregateStats.approved,
+      rejected: aggregateStats.rejected,
+      pending_revision: aggregateStats.pending_revision,
+    };
+
+    return NextResponse.json({
       success: true,
-      data: result.rows,
+      data: mappedEvents,
       pagination: {
-        total: parseInt(stats['total'] ?? '0'),
+        total,
         limit,
         offset,
       },
-      stats: {
-        draft: parseInt(stats['draft'] ?? '0'),
-        submitted: parseInt(stats['submitted'] ?? '0'),
-        approved: parseInt(stats['approved'] ?? '0'),
-        rejected: parseInt(stats['rejected'] ?? '0'),
-        pending_revision: parseInt(stats['pending_revision'] ?? '0'),
-      }
+      stats,
     });
-
-    setCORSHeaders(response);
-    return response;
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'GET /api/fund-events');
   }
@@ -164,96 +126,124 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    const auth = await requireAuth(req);
-    const rawBody = await req.json();
+    const client = await getAuthenticatedConvexClient();
+    const body = await req.json();
 
-    // Validate with Zod schema
-    let body;
-    try {
-      body = createFundEventSchema.parse({
-        fund_id: rawBody.fund_id,
-        event_name: rawBody.name,
-        event_date: rawBody.event_date,
-        description: rawBody.description,
-        budget_items: rawBody.budget_items || []
-      });
-    } catch (error) {
-      if (error instanceof ZodError) {
-        const response = NextResponse.json(formatValidationError(error), { status: 400 });
-        setCORSHeaders(response);
-        return response;
-      }
-      throw error;
+    const { fund_id, church_id, name, description, event_date, budget_items } = body as {
+      fund_id?: number | string; // Accept both numeric (Supabase) and string (Convex) IDs
+      church_id?: number | string;
+      name?: string;
+      description?: string;
+      event_date?: string;
+      budget_items?: Array<{
+        category: string;
+        description: string;
+        projected_amount: number;
+        notes?: string;
+      }>;
+    };
+
+    // Validate required fields
+    if (!fund_id) {
+      throw new ValidationError('fund_id es requerido');
+    }
+    if (!name) {
+      throw new ValidationError('name es requerido');
+    }
+    if (!event_date) {
+      throw new ValidationError('event_date es requerido');
     }
 
-    // Authorization enforced by RLS policies (migration 053)
-    // Fund directors can only create events for assigned funds
-    // Admin and treasurer can create events for any fund
-    // Note: treasurer is NATIONAL-scoped (level 6), not church-specific
+    // Parse and validate event date
+    const eventDateTimestamp = Date.parse(event_date);
+    if (Number.isNaN(eventDateTimestamp)) {
+      throw new ValidationError('event_date inválida');
+    }
 
-    // Use executeTransaction for atomic multi-insert operation
-    const event = await executeTransaction(auth, async (client) => {
-      // Insert event
-      const eventResult = await client.query(`
-        INSERT INTO fund_events (
-          fund_id, church_id, name, description, event_date, created_by, status
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, 'draft')
-        RETURNING *
-      `, [
-        body.fund_id,
-        rawBody.church_id ?? null,
-        body.event_name,
-        body.description ?? null,
-        body.event_date,
-        auth.userId
-      ]);
-
-      const newEvent = expectOne(eventResult.rows);
-
-      // Insert budget items (validated by Zod)
-      for (const item of body.budget_items) {
-          await client.query(`
-            INSERT INTO fund_event_budget_items (
-              event_id, category, description, projected_amount, notes
-            )
-            VALUES ($1, $2, $3, $4, $5)
-          `, [
-            newEvent.id,
-            null, // category - not in Zod schema
-            item.description,
-            item.projected_amount,
-            null // notes - not in Zod schema
-          ]);
+    // Convert numeric Supabase IDs to Convex IDs
+    let convexFundId: Id<'funds'>;
+    if (typeof fund_id === 'number') {
+      const resolvedId = await getFundConvexId(client, fund_id);
+      if (!resolvedId) {
+        throw new ValidationError(`Fund ID ${fund_id} not found`);
       }
+      convexFundId = resolvedId;
+    } else {
+      convexFundId = fund_id as Id<'funds'>;
+    }
 
-      // Create audit entry
-      await client.query(`
-        INSERT INTO fund_event_audit (event_id, new_status, changed_by, comment)
-        VALUES ($1, 'draft', $2, 'Evento creado')
-      `, [newEvent.id, auth.userId]);
+    let convexChurchId: Id<'churches'> | undefined;
+    if (church_id) {
+      if (typeof church_id === 'number') {
+        const resolvedId = await getChurchConvexId(client, church_id);
+        if (!resolvedId) {
+          throw new ValidationError(`Church ID ${church_id} not found`);
+        }
+        convexChurchId = resolvedId;
+      } else {
+        convexChurchId = church_id as Id<'churches'>;
+      }
+    }
 
-      return newEvent;
+    // Create event (conditionally include optional fields)
+    const createArgs: {
+      fund_id: Id<'funds'>;
+      church_id?: Id<'churches'>;
+      name: string;
+      description?: string;
+      event_date: number;
+    } = {
+      fund_id: convexFundId,
+      name,
+      event_date: eventDateTimestamp,
+    };
+    if (convexChurchId) createArgs.church_id = convexChurchId;
+    if (description) createArgs.description = description;
+
+    const event = await client.mutation(api.fundEvents.create, createArgs);
+
+    if (!event) {
+      throw new Error('Event creation failed');
+    }
+
+    // Add budget items if provided
+    if (budget_items && budget_items.length > 0) {
+      for (const item of budget_items) {
+        const budgetArgs: {
+          event_id: Id<'fund_events'>;
+          category: string;
+          description: string;
+          projected_amount: number;
+          notes?: string;
+        } = {
+          event_id: event._id,
+          category: item.category,
+          description: item.description,
+          projected_amount: item.projected_amount,
+        };
+        if (item.notes) budgetArgs.notes = item.notes;
+
+        await client.mutation(api.fundEvents.addBudgetItem, budgetArgs);
+      }
+    }
+
+    // Fetch complete event with budget items
+    const completeEvent = await client.query(api.fundEvents.get, {
+      id: event._id,
     });
 
-    const response = NextResponse.json(
+    // Map response to match Supabase contract (numeric IDs)
+    const { fundMap, churchMap } = await createReverseLookupMaps(client);
+    const mappedEvent = mapEventToSupabaseShape(completeEvent, { fundMap, churchMap });
+
+    return NextResponse.json(
       {
         success: true,
-        data: event,
-        message: 'Event created successfully'
+        data: mappedEvent,
       },
       { status: 201 }
     );
-
-    setCORSHeaders(response);
-    return response;
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'POST /api/fund-events');
   }
-}
-
-export async function OPTIONS(): Promise<NextResponse> {
-  const response = new NextResponse(null, { status: 200 });
-  setCORSHeaders(response);
-  return response;
 }

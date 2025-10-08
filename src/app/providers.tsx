@@ -2,11 +2,29 @@
 
 import { type ReactNode, useState, useEffect, type JSX } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SupabaseAuthProvider } from '@/components/Auth/SupabaseAuthProvider';
+import { SessionProvider } from 'next-auth/react';
+import { ConvexProviderWithAuth } from 'convex/react';
+import { useAuthFromNextAuth } from '@/hooks/useAuthFromNextAuth';
 import { logger } from '@/lib/logger';
+import { convexClient } from '@/lib/convex-client';
+import { ConvexConnectionBoundary } from '@/components/ConvexConnectionBoundary';
 
 const DEFAULT_STALE_TIME = 60 * 1000;
 const DEFAULT_GC_TIME = 15 * 60 * 1000;
+
+/**
+ * Convex Provider with NextAuth Integration
+ *
+ * This wraps ConvexProviderWithAuth and provides the useAuth hook
+ * that bridges NextAuth → Convex authentication.
+ */
+function ConvexAuthProvider({ children }: { children: ReactNode }) {
+  return (
+    <ConvexProviderWithAuth client={convexClient} useAuth={useAuthFromNextAuth}>
+      <ConvexConnectionBoundary>{children}</ConvexConnectionBoundary>
+    </ConvexProviderWithAuth>
+  );
+}
 
 export function Providers({ children }: { children: ReactNode }): JSX.Element {
   const [queryClient] = useState(() => new QueryClient({
@@ -62,8 +80,12 @@ export function Providers({ children }: { children: ReactNode }): JSX.Element {
   }, []);
 
   return (
-    <SupabaseAuthProvider>
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    </SupabaseAuthProvider>
+    <SessionProvider>
+      <ConvexAuthProvider>
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      </ConvexAuthProvider>
+    </SessionProvider>
   );
 }

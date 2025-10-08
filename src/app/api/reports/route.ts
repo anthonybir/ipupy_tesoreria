@@ -1,30 +1,34 @@
-import path from 'path';
-import { promises as fs } from 'fs';
 import { type NextRequest, NextResponse } from 'next/server';
 
-import { executeWithContext } from '@/lib/db';
-import { firstOrNull, expectOne } from '@/lib/db-helpers';
-import { buildCorsHeaders, handleCorsPreflight } from '@/lib/cors';
-import { requireAuth, type AuthContext } from '@/lib/auth-supabase';
+import { getAuthenticatedConvexClient } from '@/lib/convex-server';
+import { api } from '../../../../convex/_generated/api';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
-import { createReportTransactions } from './route-helpers';
+import type { Id } from '../../../../convex/_generated/dataModel';
+import { getChurchConvexId } from '@/lib/convex-id-mapping';
 
-type GenericRecord = Record<string, unknown>;
+/**
+ * Report API Routes - Migrated to Convex
+ *
+ * Phase 4.3 - Report Routes Migration (2025-01-07)
+ *
+ * This route now uses Convex functions instead of direct Supabase queries.
+ * Authorization is handled by Convex functions (requireAdmin for approvals).
+ *
+ * IMPORTANT: Uses authenticated Convex client with Google ID token from NextAuth.
+ * Each request creates a new client with the current user's Google ID token.
+ *
+ * MIGRATION NOTES:
+ * - Simplified from Supabase version (1249 → ~400 lines)
+ * - File uploads: Deferred to Phase 4.10 (Convex storage integration)
+ * - Donor tracking: Deferred to Phase 4.11 (report_tithers migration)
+ * - Notifications: Deferred to Phase 4.12 (notification system)
+ * - Status history: Deferred to Phase 4.13 (audit trail)
+ *
+ * The core report CRUD and approval workflow is fully functional.
+ * Advanced features will be added in subsequent phases.
+ */
 
-// Keep BadRequestError for backward compatibility, but map to ValidationError
-class BadRequestError extends ValidationError {
-  constructor(message: string) {
-    super(message);
-    this.name = 'BadRequestError';
-  }
-}
-
-const uploadsDir = path.join(process.cwd(), 'uploads');
-
-const jsonResponse = (data: unknown, origin: string | null, status = 200) =>
-  NextResponse.json(data, { status, headers: buildCorsHeaders(origin) });
-
-const parseInteger = (value: string | null) => {
+const parseInteger = (value: string | null): number | null => {
   if (value === null) {
     return null;
   }
@@ -32,1217 +36,387 @@ const parseInteger = (value: string | null) => {
   return Number.isNaN(parsed) ? null : parsed;
 };
 
-const isProvided = (value: unknown) => value !== undefined && value !== null && String(value).trim() !== '';
+type ConvexClient = Awaited<ReturnType<typeof getAuthenticatedConvexClient>>;
 
-const parseOptionalYear = (value: string | null) => {
-  if (!isProvided(value)) {
-    return null;
-  }
-  const parsed = parseInteger(value);
-  if (parsed === null) {
-    throw new BadRequestError('Parámetro year inválido.');
-  }
-  return parsed;
-};
+const NUMERIC_ID_REGEX = /^\d+$/;
 
-const parseOptionalMonth = (value: string | null) => {
-  if (!isProvided(value)) {
-    return null;
-  }
-  const parsed = parseInteger(value);
-  if (parsed === null || parsed < 1 || parsed > 12) {
-    throw new BadRequestError('Parámetro month debe estar entre 1 y 12.');
-  }
-  return parsed;
-};
-
-const parseOptionalChurchId = (value: string | null) => {
-  if (!isProvided(value)) {
-    return null;
-  }
-  const parsed = parseInteger(value);
-  if (parsed === null || parsed <= 0) {
-    throw new BadRequestError('Parámetro church_id inválido.');
-  }
-  return parsed;
-};
-
-const parseRequiredChurchId = (value: unknown) => {
-  const normalized = typeof value === 'string' ? value : value !== null && value !== undefined ? String(value) : null;
-  const parsed = parseOptionalChurchId(normalized);
-  if (parsed === null) {
-    throw new BadRequestError('church_id es requerido');
-  }
-  return parsed;
-};
-
-const parseRequiredYear = (value: unknown) => {
-  const normalized = typeof value === 'string' ? value : value !== null && value !== undefined ? String(value) : null;
-  const parsed = parseInteger(normalized);
-  if (parsed === null) {
-    throw new BadRequestError('El año es requerido y debe ser numérico');
-  }
-  return parsed;
-};
-
-const parseRequiredMonth = (value: unknown) => {
-  const normalized = typeof value === 'string' ? value : value !== null && value !== undefined ? String(value) : null;
-  const parsed = parseInteger(normalized);
-  if (parsed === null || parsed < 1 || parsed > 12) {
-    throw new BadRequestError('El mes debe estar entre 1 y 12');
-  }
-  return parsed;
-};
-
-const parseReportId = (value: string | null) => {
-  const parsed = parseInteger(value);
-  if (parsed === null || parsed <= 0) {
-    throw new BadRequestError('ID de informe inválido');
-  }
-  return parsed;
-};
-
-const toNumber = (value: unknown, fallback = 0): number => {
-  const parsed = Number.parseFloat(String(value ?? ''));
-  return Number.isFinite(parsed) ? parsed : fallback;
-};
-
-const toIntOrZero = (value: unknown): number => {
-  const parsed = parseInteger(typeof value === 'string' ? value : value !== null && value !== undefined ? String(value) : null);
-  return parsed === null ? 0 : parsed;
-};
-
-const getRecordValue = <T = unknown>(record: GenericRecord | undefined, key: string): T | undefined => {
-  if (!record) return undefined;
-  return record[key] as T | undefined;
-};
-
-const getRecordString = (record: GenericRecord | undefined, key: string, fallback = ''): string => {
-  const value = getRecordValue(record, key);
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-  return fallback;
-};
-
-const getRecordNumber = (record: GenericRecord | undefined, key: string, fallback = 0): number => {
-  return toNumber(getRecordValue(record, key), fallback);
-};
-
-const DESIGNATED_FORM_KEYS = [
-  'misiones',
-  'lazos_amor',
-  'mision_posible',
-  'apy',
-  'iba',
-  'caballeros',
-  'damas',
-  'jovenes',
-  'ninos'
-] as const;
-
-type DesignatedKey = typeof DESIGNATED_FORM_KEYS[number];
-
-const DESIGNATED_FIELD_MAP: Record<DesignatedKey, string> = {
-  misiones: 'ofrendas_directas_misiones',
-  lazos_amor: 'lazos_amor',
-  mision_posible: 'mision_posible',
-  apy: 'apy',
-  iba: 'instituto_biblico',
-  caballeros: 'aporte_caballeros',
-  damas: 'damas',
-  jovenes: 'jovenes',
-  ninos: 'ninos'
-};
-
-const EXPENSE_KEYS = [
-  'energia_electrica',
-  'agua',
-  'recoleccion_basura',
-  'servicios',
-  'mantenimiento',
-  'materiales',
-  'otros_gastos'
-] as const;
-
-type ExpenseKey = typeof EXPENSE_KEYS[number];
-
-const ensureUploadsDir = async () => {
-  try {
-    await fs.mkdir(uploadsDir, { recursive: true });
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
-      console.error('Failed to create uploads directory:', error);
-      throw error;
+async function resolveChurchConvexId(
+  client: ConvexClient,
+  raw: unknown
+): Promise<Id<'churches'>> {
+  if (typeof raw === 'number') {
+    const convexId = await getChurchConvexId(client, raw);
+    if (!convexId) {
+      throw new ValidationError(`Church ID ${raw} not found`);
     }
-  }
-};
-
-const saveBase64Attachment = async (raw: unknown, prefix: string) => {
-  if (!raw) {
-    return null;
+    return convexId;
   }
 
-  try {
-    await ensureUploadsDir();
-
-    const rawString = String(raw);
-    const match = rawString.match(/^data:(.+);base64,(.*)$/);
-    const detectedMime = match?.[1];
-    const base64Data = match?.[2] ?? rawString;
-    const mimeType = typeof detectedMime === 'string' && detectedMime.length > 0 ? detectedMime : 'image/png';
-    const extension = mimeType.split('/').pop() || 'png';
-    const filename = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${extension}`;
-    const filePath = path.join(uploadsDir, filename);
-
-    await fs.writeFile(filePath, Buffer.from(base64Data, 'base64'));
-
-    return path.join('uploads', filename);
-  } catch (error) {
-    console.error('Failed to store attachment:', error);
-    return null;
-  }
-};
-
-const recordReportStatus = async (
-  reportId: number | null,
-  previousStatus: string | null,
-  newStatus: string | null,
-  actor: string | undefined,
-  auth?: AuthContext | null
-) => {
-  if (!reportId || previousStatus === newStatus) {
-    return;
-  }
-
-  try {
-    await executeWithContext(
-      auth || null,
-      `
-        INSERT INTO report_status_history (report_id, previous_status, new_status, changed_by)
-        VALUES ($1, $2, $3, $4)
-      `,
-      [reportId, previousStatus || null, newStatus, actor || null]
-    );
-  } catch (error) {
-    console.error('Failed to record report status transition:', error);
-  }
-};
-
-const queueReportNotification = async (
-  reportRow: GenericRecord | undefined,
-  actorEmail: string | undefined,
-  notificationType = 'submission',
-  auth?: AuthContext | null
-) => {
-  const recipient = process.env['TREASURY_NOTIFICATION_EMAIL'];
-  if (!recipient || !reportRow) {
-    return;
-  }
-
-  const actionLabel = notificationType === 'processed' ? 'Informe procesado' : 'Nuevo informe';
-  const monthLabel = getRecordString(reportRow, 'month', '?');
-  const yearLabel = getRecordString(reportRow, 'year', '????');
-  const churchLabel = getRecordString(reportRow, 'church_id', 'desconocida');
-  const totalEntradas = getRecordNumber(reportRow, 'total_entradas', 0);
-  const reportId = getRecordNumber(reportRow, 'id', 0) || null;
-
-  if (!reportId) {
-    return;
-  }
-
-  const subject = `${actionLabel} ${monthLabel}/${yearLabel} - Iglesia ${churchLabel}`;
-  const body = `${actionLabel.toUpperCase()}\n`
-    + `Iglesia: ${churchLabel}\n`
-    + `Monto total: ${totalEntradas}\n`
-    + `Acción registrada por: ${actorEmail || 'usuario'}`;
-
-  try {
-    await executeWithContext(
-      auth || null,
-      `
-        INSERT INTO report_notifications (report_id, notification_type, recipient_email, subject, body)
-        VALUES ($1, $2, $3, $4, $5)
-      `,
-      [reportId, notificationType, recipient, subject, body]
-    );
-  } catch (error) {
-    console.error('Failed to queue a report notification:', error);
-  }
-};
-
-const setAuditContext = async (actorEmail: string | undefined, auth?: AuthContext | null) => {
-  if (!actorEmail) {
-    return;
-  }
-
-  try {
-    await executeWithContext(auth || null, 'SELECT set_config($1, $2, true)', ['audit.user', actorEmail]);
-  } catch {
-    // Safe to ignore if audit schema is not yet installed
-  }
-};
-
-
-
-
-const handleGetReports = async (request: NextRequest, auth: AuthContext) => {
-  const searchParams = request.nextUrl.searchParams;
-  const yearFilter = parseOptionalYear(searchParams.get('year'));
-  const monthFilter = parseOptionalMonth(searchParams.get('month'));
-  const churchFilter = parseOptionalChurchId(searchParams.get('church_id'));
-
-  const filters: string[] = [];
-  const params: unknown[] = [];
-
-  // Define role-based access patterns
-  const isNationalRole = auth.role === 'admin' || auth.role === 'treasurer';
-  const isChurchRole = auth.role === 'pastor' || auth.role === 'church_manager' || auth.role === 'secretary';
-  const isFundDirector = auth.role === 'fund_director';
-
-  // Church-scoped roles: restrict to own church only
-  if (isChurchRole) {
-    const scopedChurchId = parseRequiredChurchId(auth.churchId);
-    params.push(scopedChurchId);
-    filters.push(`r.church_id = $${params.length}`);
-  }
-  // Fund directors: restrict to assigned churches (if any)
-  else if (isFundDirector && auth.assignedChurches && auth.assignedChurches.length > 0) {
-    params.push(auth.assignedChurches);
-    filters.push(`r.church_id = ANY($${params.length}::int[])`);
-  }
-  // National roles (admin, treasurer): apply optional church filter if provided
-  else if (isNationalRole && churchFilter !== null) {
-    params.push(churchFilter);
-    filters.push(`r.church_id = $${params.length}`);
-  }
-
-  if (yearFilter !== null) {
-    params.push(yearFilter);
-    filters.push(`r.year = $${params.length}`);
-  }
-
-  if (monthFilter !== null) {
-    params.push(monthFilter);
-    filters.push(`r.month = $${params.length}`);
-  }
-
-  const whereClause = filters.length ? ` WHERE ${filters.join(' AND ')}` : '';
-  const baseQuery = `
-    SELECT r.*, c.name AS church_name, c.city, c.pastor,
-           c.pastor_grado AS grado, c.pastor_posicion AS posicion,
-           c.pastor_cedula AS cedula, c.pastor_ruc AS ruc
-    FROM reports r
-    JOIN churches c ON r.church_id = c.id
-  `;
-
-  const queryParams = [...params];
-  let recordsQuery = `${baseQuery}${whereClause} ORDER BY c.name, r.year DESC, r.month DESC`;
-
-  const limitValue = parseInteger(searchParams.get('limit'));
-  const pageValue = parseInteger(searchParams.get('page'));
-
-  if (limitValue !== null && limitValue > 0) {
-    const limitInt = Math.max(limitValue, 1);
-    const pageInt = pageValue !== null && pageValue > 0 ? pageValue : 1;
-    const offsetInt = (pageInt - 1) * limitInt;
-
-    const limitPlaceholder = `$${queryParams.length + 1}`;
-    const offsetPlaceholder = `$${queryParams.length + 2}`;
-    recordsQuery += ` LIMIT ${limitPlaceholder} OFFSET ${offsetPlaceholder}`;
-    queryParams.push(limitInt, offsetInt);
-  }
-
-  const result = await executeWithContext(auth, recordsQuery, queryParams);
-  return result.rows;
-};
-
-const extractReportPayload = (data: GenericRecord) => {
-  const baseDiezmos = getRecordNumber(data, 'diezmos');
-  const baseOfrendas = getRecordNumber(data, 'ofrendas');
-  const otros = getRecordNumber(data, 'otros');
-  const anexos = getRecordNumber(data, 'anexos');
-
-  const designated: Record<DesignatedKey, number> = {} as Record<DesignatedKey, number>;
-  let totalDesignados = 0;
-  DESIGNATED_FORM_KEYS.forEach((key) => {
-    const dbColumn = DESIGNATED_FIELD_MAP[key];
-    const value = getRecordNumber(data, key, getRecordNumber(data, dbColumn, 0));
-    designated[key] = value;
-    totalDesignados += value;
-  });
-
-  const expenses: Record<ExpenseKey, number> = {} as Record<ExpenseKey, number>;
-  let gastosOperativos = 0;
-  EXPENSE_KEYS.forEach((key) => {
-    const value = getRecordNumber(data, key, 0);
-    expenses[key] = value;
-    gastosOperativos += value;
-  });
-
-  const congregationalBase = baseDiezmos + baseOfrendas;
-  const totalIngresos = congregationalBase + anexos + otros + totalDesignados;
-  const diezmoNacional = Math.round(congregationalBase * 0.1);
-  const honorariosPastoral = Math.max(0, totalIngresos - (totalDesignados + gastosOperativos + diezmoNacional));
-  const totalSalidas = totalDesignados + gastosOperativos + diezmoNacional + honorariosPastoral;
-  const saldoMes = totalIngresos - totalSalidas;
-
-  const fechaDepositoValue = getRecordValue<string>(data, 'fecha_deposito');
-  const fechaDeposito = typeof fechaDepositoValue === 'string' ? fechaDepositoValue : null;
-
-  return {
-    totals: {
-      totalEntradas: totalIngresos,
-      fondoNacional: diezmoNacional,
-      honorariosPastoral,
-      gastosOperativos,
-      totalSalidas,
-      saldoMes,
-      totalDesignados,
-      congregationalBase,
-      fechaDeposito
-    },
-    breakdown: {
-      diezmos: baseDiezmos,
-      ofrendas: baseOfrendas,
-      anexos,
-      otros,
-      ...designated
-    },
-    expenses
-  };
-};
-
-const handleCreateReport = async (data: GenericRecord, auth: AuthContext) => {
-  // Check if user has admin privileges
-  const isAdminRole = auth.role === 'admin';
-
-  // Church-level roles that can create reports: pastor only
-  // Note: treasurer is NATIONAL-scoped (migration 053), not church-level
-  const isChurchRole = auth.role === 'pastor';
-
-  // Determine which church this report is for
-  const payloadChurchIdRaw = getRecordValue(data, 'church_id');
-  const scopedChurchId = isChurchRole
-    ? parseRequiredChurchId(auth.churchId)
-    : parseRequiredChurchId(payloadChurchIdRaw);
-
-  // Church-level users can only submit for their own church
-  if (isChurchRole && payloadChurchIdRaw && parseRequiredChurchId(payloadChurchIdRaw) !== scopedChurchId) {
-    throw new BadRequestError('No puede registrar informes para otra iglesia');
-  }
-
-  // Only admin or church-level roles can create reports
-  if (!isAdminRole && !isChurchRole) {
-    throw new BadRequestError('No tiene permisos para crear informes');
-  }
-
-  const reportMonth = parseRequiredMonth(getRecordValue(data, 'month'));
-  const reportYear = parseRequiredYear(getRecordValue(data, 'year'));
-
-  await setAuditContext(auth.email);
-
-  // REMOVED: Check-then-insert pattern (race condition risk)
-  // const existingReport = await executeWithContext(
-  //   auth,
-  //   'SELECT id, estado FROM reports WHERE church_id = $1 AND month = $2 AND year = $3',
-  //   [scopedChurchId, reportMonth, reportYear]
-  // );
-  //
-  // if (existingReport.rows.length > 0) {
-  //   throw new BadRequestError('Ya existe un informe para este mes y año');
-  // }
-  //
-  // NEW: Use ON CONFLICT to atomically handle duplicates (see after INSERT below)
-
-  const { totals, breakdown, expenses } = extractReportPayload(data);
-
-  const designatedDbValues = DESIGNATED_FORM_KEYS.reduce<Record<string, number>>((acc, key) => {
-    const column = DESIGNATED_FIELD_MAP[key];
-    acc[column] = breakdown[key];
-    return acc;
-  }, {});
-
-  const designatedForTransactions = DESIGNATED_FORM_KEYS.reduce<Record<DesignatedKey, number>>((acc, key) => {
-    acc[key] = breakdown[key];
-    return acc;
-  }, {} as Record<DesignatedKey, number>);
-
-  const expenseValues = EXPENSE_KEYS.reduce<Record<string, number>>((acc, key) => {
-    acc[key] = expenses[key];
-    return acc;
-  }, {});
-
-  const aportantesRaw = getRecordValue<unknown>(data, 'aportantes');
-  const donorRowsInput = Array.isArray(aportantesRaw) ? (aportantesRaw as GenericRecord[]) : [];
-  const donorRows = donorRowsInput
-    .map((donor) => ({
-      first_name: getRecordString(donor, 'first_name').trim(),
-      last_name: getRecordString(donor, 'last_name').trim(),
-      document: getRecordString(donor, 'document').trim(),
-      amount: toNumber(getRecordValue(donor, 'amount'))
-    }))
-    .filter((donor) => donor.amount > 0 && (donor.first_name || donor.last_name || donor.document));
-
-  if (breakdown.diezmos > 0) {
-    const donorsTotal = donorRows.reduce((sum, donor) => sum + donor.amount, 0);
-    if (donorRows.length === 0) {
-      throw new BadRequestError('Registra al menos un aportante para los diezmos declarados.');
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (trimmed === '') {
+      throw new ValidationError('church_id inválido');
     }
-    if (Math.abs(donorsTotal - breakdown.diezmos) > 1) {
-      throw new BadRequestError('La suma de los aportantes no coincide con el total de diezmos.');
+    if (NUMERIC_ID_REGEX.test(trimmed)) {
+      const numericId = Number.parseInt(trimmed, 10);
+      const convexId = await getChurchConvexId(client, numericId);
+      if (!convexId) {
+        throw new ValidationError(`Church ID ${numericId} not found`);
+      }
+      return convexId;
     }
+    return trimmed as Id<'churches'>;
   }
 
-  const montoDepositadoValue = getRecordValue(data, 'monto_depositado');
-  const montoDepositado = montoDepositadoValue !== undefined
-    ? toNumber(montoDepositadoValue)
-    : totals.fondoNacional + totals.totalDesignados;
-
-  const attachmentPrefix = `report-${scopedChurchId}-${reportYear}-${reportMonth}`;
-  const attachments = getRecordValue<{ summary?: string; deposit?: string } | null>(data, 'attachments') || undefined;
-  const fotoInforme = await saveBase64Attachment(attachments?.summary, `${attachmentPrefix}-resumen`);
-  const fotoDeposito = await saveBase64Attachment(attachments?.deposit, `${attachmentPrefix}-deposito`);
-
-  const isChurchSubmission = auth.role === 'pastor';
-  const isAdminSubmission = isAdminRole;
-
-  // Determine submission source based on role and data
-  const submissionSourceRaw = getRecordString(data, 'submission_source', '');
-  const manualReportSourceRaw = getRecordString(data, 'manual_report_source', '');
-  let submissionSource = 'church_online';
-  if (isAdminSubmission && submissionSourceRaw) {
-    submissionSource = submissionSourceRaw;
-  } else if (isAdminSubmission && manualReportSourceRaw) {
-    submissionSource = 'pastor_manual'; // Admin entering on behalf of pastor
-  } else if (isAdminSubmission) {
-    submissionSource = 'admin_manual'; // Admin manual entry
-  } else if (isChurchSubmission) {
-    submissionSource = 'church_online'; // Church online submission
-  }
-
-  const submissionType = getRecordString(data, 'submission_type', isChurchSubmission ? 'online' : 'manual');
-  const submittedByPayload = getRecordString(data, 'submitted_by', '');
-  const submittedBy = auth.email || (submittedByPayload ? submittedByPayload : null);
-  const submittedAt = new Date();
-
-  // For admin manual entries on behalf of pastors, default to pendiente_admin
-  const estadoPayload = getRecordString(data, 'estado', '');
-  const initialEstado = estadoPayload || (
-    isChurchSubmission ? 'pendiente_admin' :
-    (submissionSource === 'pastor_manual' ? 'pendiente_admin' : 'importado_excel')
-  );
-
-  // Track who entered manual reports
-  const enteredBy = (isAdminSubmission && submissionSource !== 'admin_import') ? auth.email : null;
-  const enteredAt = enteredBy ? new Date() : null;
-  const manualReportNotes = getRecordString(data, 'manual_report_notes', '') || null;
-
-  const numeroDepositoValue = getRecordString(data, 'numero_deposito', '');
-  const numeroDeposito = numeroDepositoValue ? numeroDepositoValue : null;
-  const fechaDepositoInput = getRecordString(data, 'fecha_deposito', '');
-  const fechaDeposito = fechaDepositoInput ? fechaDepositoInput : null;
-  const asistenciaVisitas = toIntOrZero(getRecordValue(data, 'asistencia_visitas'));
-  const bautismosAgua = toIntOrZero(getRecordValue(data, 'bautismos_agua'));
-  const bautismosEspiritu = toIntOrZero(getRecordValue(data, 'bautismos_espiritu'));
-  const observacionesRaw = getRecordValue(data, 'observaciones');
-  const observaciones = typeof observacionesRaw === 'string' ? observacionesRaw : '';
-  const manualReportSource = manualReportSourceRaw || null;
-
-
-  const result = await executeWithContext(
-    auth,
-    `
-      INSERT INTO reports (
-        church_id, month, year,
-        diezmos, ofrendas, anexos, caballeros, damas,
-        jovenes, ninos, otros,
-        fondo_nacional, honorarios_pastoral,
-        servicios, energia_electrica, agua, recoleccion_basura, mantenimiento, materiales, otros_gastos,
-        ofrendas_directas_misiones, lazos_amor, mision_posible, aporte_caballeros, apy, instituto_biblico,
-        numero_deposito, fecha_deposito, monto_depositado,
-        asistencia_visitas, bautismos_agua, bautismos_espiritu, observaciones, estado,
-        foto_informe, foto_deposito, submission_type, submitted_by, submitted_at,
-        submission_source, manual_report_source, manual_report_notes, entered_by, entered_at
-      ) VALUES (
-        $1, $2, $3,
-        $4, $5, $6, $7, $8,
-        $9, $10, $11,
-        $12, $13,
-        $14, $15, $16, $17, $18, $19, $20,
-        $21, $22, $23, $24, $25, $26,
-        $27, $28, $29,
-        $30, $31, $32, $33, $34,
-        $35, $36, $37, $38, $39,
-        $40, $41, $42, $43, $44
-      )
-      ON CONFLICT (church_id, month, year) DO NOTHING
-      RETURNING *
-    `,
-    [
-      scopedChurchId,
-      reportMonth,
-      reportYear,
-      breakdown.diezmos,
-      breakdown.ofrendas,
-      breakdown.anexos,
-      breakdown.caballeros,
-      breakdown.damas,
-      breakdown.jovenes,
-      breakdown.ninos,
-      breakdown.otros,
-      totals.fondoNacional,
-      totals.honorariosPastoral,
-      (expenseValues['servicios'] ?? 0),
-      (expenseValues['energia_electrica'] ?? 0),
-      (expenseValues['agua'] ?? 0),
-      (expenseValues['recoleccion_basura'] ?? 0),
-      (expenseValues['mantenimiento'] ?? 0),
-      (expenseValues['materiales'] ?? 0),
-      (expenseValues['otros_gastos'] ?? 0),
-      designatedDbValues['ofrendas_directas_misiones'] ?? 0,
-      designatedDbValues['lazos_amor'] ?? 0,
-      designatedDbValues['mision_posible'] ?? 0,
-      designatedDbValues['aporte_caballeros'] ?? 0,
-      designatedDbValues['apy'] ?? 0,
-      designatedDbValues['instituto_biblico'] ?? 0,
-      numeroDeposito,
-      fechaDeposito,
-      montoDepositado,
-      asistenciaVisitas,
-      bautismosAgua,
-      bautismosEspiritu,
-      observaciones,
-      initialEstado,
-      fotoInforme,
-      fotoDeposito,
-      submissionType,
-      submittedBy,
-      submittedAt,
-      submissionSource,
-      manualReportSource,
-      manualReportNotes,
-      enteredBy,
-      enteredAt
-    ]
-  );
-
-  // ON CONFLICT DO NOTHING returns 0 rows when duplicate exists
-  // This prevents mutating historical metadata (updated_at, audit timestamps)
-  if (result.rowCount === 0) {
-    throw new BadRequestError('Ya existe un informe para este mes y año');
-  }
-
-  const report = expectOne(result.rows) as GenericRecord;
-
-  const reportIdValue = getRecordNumber(report, 'id', 0);
-  const reportEstado = getRecordString(report, 'estado', '');
-
-  if (!reportIdValue) {
-    throw new BadRequestError('No se pudo crear el informe correctamente');
-  }
-
-  await recordReportStatus(reportIdValue, null, reportEstado, auth.email || "", auth);
-
-  const shouldAutoGenerateTransactions = !isChurchSubmission && reportEstado === 'procesado';
-
-  if (shouldAutoGenerateTransactions) {
-    await createReportTransactions(report, {
-      totalEntradas: totals.totalEntradas,
-      fondoNacional: totals.fondoNacional,
-      honorariosPastoral: totals.honorariosPastoral,
-      gastosOperativos: totals.gastosOperativos,
-      fechaDeposito: totals.fechaDeposito || fechaDeposito
-    }, designatedForTransactions, auth);
-
-    await executeWithContext(
-      auth,
-      `
-        UPDATE reports
-        SET transactions_created = TRUE,
-            transactions_created_at = NOW(),
-            transactions_created_by = $1
-        WHERE id = $2
-      `,
-      [auth.email || 'system', reportIdValue]
-    );
-
-    await queueReportNotification(report, auth.email, 'processed', auth);
-  } else {
-    await queueReportNotification(report, auth.email, 'submission', auth);
-  }
-
-  await replaceReportDonors(reportIdValue, scopedChurchId, donorRows, auth);
-
-  return report;
-};
-
-const replaceReportDonors = async (
-  reportId: number,
-  churchId: number,
-  donors: Array<{ first_name: string; last_name: string; document: string; amount: number }>,
-  auth?: AuthContext | null
-) => {
-  await executeWithContext(auth || null, 'DELETE FROM report_tithers WHERE report_id = $1', [reportId]);
-
-  if (!donors.length) {
-    return;
-  }
-
-  for (const donor of donors) {
-    await executeWithContext(
-      auth || null,
-      `
-        INSERT INTO report_tithers (report_id, church_id, first_name, last_name, document, amount)
-        VALUES ($1, $2, $3, $4, $5, $6)
-      `,
-      [
-        reportId,
-        churchId,
-        donor.first_name,
-        donor.last_name,
-        donor.document || null,
-        donor.amount
-      ]
-    );
-  }
-};
-
-const resetAutomaticTransactions = async (reportId: number, auth?: AuthContext | null) => {
-  await executeWithContext(
-    auth || null,
-    `DELETE FROM fund_movements_enhanced
-      WHERE transaction_id IN (
-        SELECT id FROM transactions WHERE report_id = $1 AND created_by = 'system'
-      )`,
-    [reportId]
-  );
-
-  await executeWithContext(
-    auth || null,
-    'DELETE FROM transactions WHERE report_id = $1 AND created_by = $2',
-    [reportId, 'system']
-  );
-};
-
-const handleUpdateReport = async (
-  reportId: number,
-  data: GenericRecord,
-  auth: AuthContext
-) => {
-  await setAuditContext(auth.email, auth);
-
-  const existingResult = await executeWithContext(
-    auth,
-    `
-      SELECT r.*, c.name as church_name
-      FROM reports r
-      JOIN churches c ON r.church_id = c.id
-      WHERE r.id = $1
-    `,
-    [reportId]
-  );
-
-  const existing = firstOrNull(existingResult.rows) as GenericRecord | null;
-  if (!existing) {
-    throw new BadRequestError('Informe no encontrado');
-  }
-  const existingChurchId = getRecordNumber(existing, 'church_id', 0);
-  const existingYear = getRecordNumber(existing, 'year', 0);
-  const existingMonth = getRecordNumber(existing, 'month', 0);
-
-  // Check if user has permission to modify this report
-  const isChurchRole = auth.role === 'pastor';
-  const isAdminRole = auth.role === 'admin';
-
-
-  if (isChurchRole && parseRequiredChurchId(auth.churchId) !== existingChurchId) {
-    throw new BadRequestError('No tiene permisos para modificar este informe');
-  }
-
-  if (!isAdminRole && !isChurchRole) {
-    throw new BadRequestError('No tiene permisos para modificar este informe');
-  }
-
-  const { totals, breakdown, expenses } = extractReportPayload({ ...existing, ...data });
-
-  const designatedDbValues = DESIGNATED_FORM_KEYS.reduce<Record<string, number>>((acc, key) => {
-    const column = DESIGNATED_FIELD_MAP[key];
-    acc[column] = breakdown[key];
-    return acc;
-  }, {});
-
-  const designatedForTransactions = DESIGNATED_FORM_KEYS.reduce<Record<DesignatedKey, number>>((acc, key) => {
-    acc[key] = breakdown[key];
-    return acc;
-  }, {} as Record<DesignatedKey, number>);
-
-  const expenseValues = EXPENSE_KEYS.reduce<Record<string, number>>((acc, key) => {
-    acc[key] = expenses[key];
-    return acc;
-  }, {});
-
-  const existingDesignatedValues = {
-    ofrendas_directas_misiones: getRecordNumber(existing, 'ofrendas_directas_misiones', 0),
-    lazos_amor: getRecordNumber(existing, 'lazos_amor', 0),
-    mision_posible: getRecordNumber(existing, 'mision_posible', 0),
-    aporte_caballeros: getRecordNumber(existing, 'aporte_caballeros', 0),
-    apy: getRecordNumber(existing, 'apy', 0),
-    instituto_biblico: getRecordNumber(existing, 'instituto_biblico', 0)
-  };
-
-  const aportantesUpdateRaw = getRecordValue<unknown>(data, 'aportantes');
-  const donorRowsInput = Array.isArray(aportantesUpdateRaw) ? (aportantesUpdateRaw as GenericRecord[]) : null;
-  const donorPayloadProvided = donorRowsInput !== null;
-  const donorRows = donorRowsInput !== null
-    ? donorRowsInput
-        .map((donor) => ({
-          first_name: getRecordString(donor, 'first_name').trim(),
-          last_name: getRecordString(donor, 'last_name').trim(),
-          document: getRecordString(donor, 'document').trim(),
-          amount: toNumber(getRecordValue(donor, 'amount'))
-        }))
-        .filter((donor) => donor.amount > 0 && (donor.first_name || donor.last_name || donor.document))
-    : [];
-
-  if (donorPayloadProvided && breakdown.diezmos > 0) {
-    const donorsTotal = donorRows.reduce((sum, donor) => sum + donor.amount, 0);
-    if (donorRows.length === 0) {
-      throw new BadRequestError('Registra al menos un aportante para los diezmos declarados.');
-    }
-    if (Math.abs(donorsTotal - breakdown.diezmos) > 1) {
-      throw new BadRequestError('La suma de los aportantes no coincide con el total de diezmos.');
-    }
-  }
-
-  const attachmentsRaw = getRecordValue<{ summary?: string | null; deposit?: string | null } | null>(data, 'attachments') || {};
-  const attachments = attachmentsRaw as { summary?: string | null; deposit?: string | null };
-  const attachmentPrefix = `report-${existingChurchId}-${existingYear}-${existingMonth}`;
-
-  let fotoInformePath = getRecordValue<string | null>(existing, 'foto_informe') ?? null;
-  if (Object.prototype.hasOwnProperty.call(attachments, 'summary')) {
-    fotoInformePath = attachments.summary === null
-        ? null
-        : await saveBase64Attachment(attachments.summary, `${attachmentPrefix}-resumen`);
-  }
-
-  let fotoDepositoPath = getRecordValue<string | null>(existing, 'foto_deposito') ?? null;
-  if (Object.prototype.hasOwnProperty.call(attachments, 'deposit')) {
-    fotoDepositoPath = attachments.deposit === null
-        ? null
-        : await saveBase64Attachment(attachments.deposit, `${attachmentPrefix}-deposito`);
-  }
-
-  const montoDepositadoValue = getRecordValue(data, 'monto_depositado');
-  const existingMontoDepositado = getRecordValue(existing, 'monto_depositado');
-  const montoDepositado = montoDepositadoValue !== undefined
-    ? toNumber(montoDepositadoValue)
-    : toNumber(existingMontoDepositado ?? totals.fondoNacional + totals.totalDesignados);
-
-  const numeroDepositoPayload = getRecordString(data, 'numero_deposito', '');
-  const providedNumeroDeposito = numeroDepositoPayload ? numeroDepositoPayload : null;
-  const existingNumeroDeposito = getRecordValue<string | null>(existing, 'numero_deposito') ?? null;
-  const hasNumeroDeposito = Object.prototype.hasOwnProperty.call(data, 'numero_deposito');
-  const numeroDepositoUpdate = hasNumeroDeposito ? providedNumeroDeposito : existingNumeroDeposito;
-
-  const fechaDepositoPayload = getRecordString(data, 'fecha_deposito', '');
-  const providedFechaDeposito = fechaDepositoPayload ? fechaDepositoPayload : null;
-  const existingFechaDepositoValue = getRecordValue(existing, 'fecha_deposito');
-  const existingFechaDeposito = typeof existingFechaDepositoValue === 'string' ? existingFechaDepositoValue : null;
-  const hasFechaDeposito = Object.prototype.hasOwnProperty.call(data, 'fecha_deposito');
-  const fechaDepositoUpdate = hasFechaDeposito ? providedFechaDeposito : existingFechaDeposito;
-
-  const asistenciaVisitasPayload = toIntOrZero(getRecordValue(data, 'asistencia_visitas'));
-  const existingAsistenciaVisitas = toIntOrZero(getRecordValue(existing, 'asistencia_visitas'));
-  const hasAsistenciaVisitas = Object.prototype.hasOwnProperty.call(data, 'asistencia_visitas');
-  const asistenciaVisitasUpdate = hasAsistenciaVisitas ? asistenciaVisitasPayload : existingAsistenciaVisitas;
-
-  const bautismosAguaPayload = toIntOrZero(getRecordValue(data, 'bautismos_agua'));
-  const existingBautismosAgua = toIntOrZero(getRecordValue(existing, 'bautismos_agua'));
-  const hasBautismosAgua = Object.prototype.hasOwnProperty.call(data, 'bautismos_agua');
-  const bautismosAguaUpdate = hasBautismosAgua ? bautismosAguaPayload : existingBautismosAgua;
-
-  const bautismosEspirituPayload = toIntOrZero(getRecordValue(data, 'bautismos_espiritu'));
-  const existingBautismosEspiritu = toIntOrZero(getRecordValue(existing, 'bautismos_espiritu'));
-  const hasBautismosEspiritu = Object.prototype.hasOwnProperty.call(data, 'bautismos_espiritu');
-  const bautismosEspirituUpdate = hasBautismosEspiritu ? bautismosEspirituPayload : existingBautismosEspiritu;
-
-  const observacionesRaw = getRecordValue(data, 'observaciones');
-  const observacionesPayload = typeof observacionesRaw === 'string' ? observacionesRaw : '';
-  const existingObservaciones = getRecordString(existing, 'observaciones', '');
-  const hasObservaciones = Object.prototype.hasOwnProperty.call(data, 'observaciones');
-  const observacionesUpdate = hasObservaciones ? observacionesPayload : existingObservaciones;
-
-  const isChurchUpdate = auth.role === 'pastor';
-  const submissionTypePayload = getRecordString(data, 'submission_type', '');
-  const existingSubmissionType = getRecordString(existing, 'submission_type', '');
-  const submissionType = submissionTypePayload || existingSubmissionType || (isChurchUpdate ? 'online' : 'manual');
-
-  const estadoPayload = getRecordString(data, 'estado', '');
-  const existingEstado = getRecordString(existing, 'estado', '');
-  let estado = estadoPayload || existingEstado || (isChurchUpdate ? 'pendiente_admin' : 'importado_excel');
-  const previousStatus = existingEstado || null;
-
-  if (isChurchUpdate) {
-    estado = 'pendiente_admin';
-  }
-
-  let processedBy = getRecordString(existing, 'processed_by', '') || null;
-  const existingProcessedAt = getRecordValue(existing, 'processed_at');
-  let processedAt = existingProcessedAt ? new Date(String(existingProcessedAt)) : null;
-
-  if (estado === 'procesado') {
-    // CRITICAL: Validate bank deposit before approval (BUSINESS_LOGIC.md:616-622)
-    // This prevents incorrect deposits from being approved without verification
-
-    // 1. Validate deposit receipt uploaded
-    if (!fotoDepositoPath) {
-      throw new ValidationError('Foto de depósito es requerida para aprobar el reporte');
-    }
-
-    // 2. Validate deposit amount matches expected total
-    const expectedDeposit = totals.fondoNacional + totals.totalDesignados;
-    const tolerance = 100; // ₲100 tolerance for rounding differences
-    const difference = Math.abs(montoDepositado - expectedDeposit);
-
-    if (difference > tolerance) {
-      throw new ValidationError(
-        `Monto depositado (₲${montoDepositado.toLocaleString('es-PY')}) no coincide con total esperado (₲${expectedDeposit.toLocaleString('es-PY')}). ` +
-        `Diferencia: ₲${difference.toLocaleString('es-PY')}. ` +
-        `Verifique el monto depositado y vuelva a intentar.`
-      );
-    }
-
-    processedBy = auth.email || processedBy || null;
-    processedAt = new Date();
-  } else if (previousStatus === 'procesado' && estado !== 'procesado') {
-    processedBy = null;
-    processedAt = null;
-  }
-
-  const updatedResult = await executeWithContext(
-    auth,
-    `
-      UPDATE reports SET
-        diezmos = $1,
-        ofrendas = $2,
-        anexos = $3,
-        caballeros = $4,
-        damas = $5,
-        jovenes = $6,
-        ninos = $7,
-        otros = $8,
-        fondo_nacional = $9,
-        honorarios_pastoral = $10,
-        servicios = $11,
-        energia_electrica = $12,
-        agua = $13,
-        recoleccion_basura = $14,
-        mantenimiento = $15,
-        materiales = $16,
-        otros_gastos = $17,
-        ofrendas_directas_misiones = $18,
-        lazos_amor = $19,
-        mision_posible = $20,
-        aporte_caballeros = $21,
-        apy = $22,
-        instituto_biblico = $23,
-        numero_deposito = $24,
-        fecha_deposito = $25,
-        monto_depositado = $26,
-        asistencia_visitas = $27,
-        bautismos_agua = $28,
-        bautismos_espiritu = $29,
-        observaciones = $30,
-        estado = $31,
-        foto_informe = $32,
-        foto_deposito = $33,
-        submission_type = $34,
-        processed_by = $35,
-        processed_at = $36,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = $37
-      RETURNING *
-    `,
-    [
-      breakdown.diezmos,
-      breakdown.ofrendas,
-      breakdown.anexos,
-      breakdown.caballeros,
-      breakdown.damas,
-      breakdown.jovenes,
-      breakdown.ninos,
-      breakdown.otros,
-      totals.fondoNacional,
-      totals.honorariosPastoral,
-      (expenseValues['servicios'] ?? 0),
-      (expenseValues['energia_electrica'] ?? 0),
-      (expenseValues['agua'] ?? 0),
-      (expenseValues['recoleccion_basura'] ?? 0),
-      (expenseValues['mantenimiento'] ?? 0),
-      (expenseValues['materiales'] ?? 0),
-      (expenseValues['otros_gastos'] ?? 0),
-      (designatedDbValues['ofrendas_directas_misiones'] ?? existingDesignatedValues.ofrendas_directas_misiones),
-      (designatedDbValues['lazos_amor'] ?? existingDesignatedValues.lazos_amor),
-      (designatedDbValues['mision_posible'] ?? existingDesignatedValues.mision_posible),
-      (designatedDbValues['aporte_caballeros'] ?? existingDesignatedValues.aporte_caballeros),
-      (designatedDbValues['apy'] ?? existingDesignatedValues.apy),
-      (designatedDbValues['instituto_biblico'] ?? existingDesignatedValues.instituto_biblico),
-      numeroDepositoUpdate,
-      fechaDepositoUpdate,
-      montoDepositado,
-      asistenciaVisitasUpdate,
-      bautismosAguaUpdate,
-      bautismosEspirituUpdate,
-      observacionesUpdate,
-      estado,
-      fotoInformePath,
-      fotoDepositoPath,
-      submissionType,
-      processedBy,
-      processedAt,
-      reportId
-    ]
-  );
-
-  const updatedReport = expectOne(updatedResult.rows) as GenericRecord;
-  const updatedEstado = getRecordString(updatedReport, 'estado', '');
-
-  if (donorPayloadProvided) {
-    await replaceReportDonors(reportId, existingChurchId, donorRows, auth);
-  }
-
-  const existingTransactionsCreated = Boolean(getRecordValue(existing, 'transactions_created'));
-  const shouldGenerateTransactions = existingTransactionsCreated || estado === 'procesado';
-
-  await resetAutomaticTransactions(reportId, auth);
-
-  if (shouldGenerateTransactions) {
-    await createReportTransactions(
-      { ...existing, ...updatedReport },
-      {
-        totalEntradas: totals.totalEntradas,
-        fondoNacional: totals.fondoNacional,
-        honorariosPastoral: totals.honorariosPastoral,
-        gastosOperativos: totals.gastosOperativos,
-        fechaDeposito: totals.fechaDeposito || fechaDepositoUpdate
-      },
-      designatedForTransactions,
-      auth
-    );
-
-    await executeWithContext(
-      auth,
-      `
-        UPDATE reports
-        SET transactions_created = TRUE,
-            transactions_created_at = NOW(),
-            transactions_created_by = $1
-        WHERE id = $2
-      `,
-      [auth.email || getRecordString(existing, 'transactions_created_by', 'system') || 'system', reportId]
-    );
-  } else {
-    await executeWithContext(
-      auth,
-      `
-        UPDATE reports
-        SET transactions_created = FALSE,
-            transactions_created_at = NULL,
-            transactions_created_by = NULL
-        WHERE id = $1
-      `,
-      [reportId]
-    );
-  }
-
-  await recordReportStatus(reportId, String(previousStatus), updatedEstado, auth.email || "", auth);
-  if (previousStatus !== updatedEstado && updatedEstado === 'procesado') {
-    await queueReportNotification(updatedReport, auth.email, 'processed', auth);
-  }
-
-  return updatedReport;
-};
-
-const handleDeleteReport = async (reportId: number, auth: AuthContext) => {
-  await setAuditContext(auth.email, auth);
-
-  const existingResult = await executeWithContext(auth, 'SELECT church_id, estado FROM reports WHERE id = $1', [reportId]);
-  const existing = firstOrNull(existingResult.rows) as GenericRecord | null;
-  if (!existing) {
-    throw new BadRequestError('Informe no encontrado');
-  }
-  const existingChurchId = getRecordNumber(existing, 'church_id', 0);
-  const existingEstado = getRecordString(existing, 'estado', '');
-  // Check if user has permission to delete this report
-  const isChurchRole = auth.role === 'pastor';
-  const isAdminRole = auth.role === 'admin';
-
-  if (isChurchRole && parseRequiredChurchId(auth.churchId) !== existingChurchId) {
-    throw new BadRequestError('No tiene permisos para eliminar este informe');
-  }
-
-  if (!isAdminRole && !isChurchRole) {
-    throw new BadRequestError('No tiene permisos para eliminar este informe');
-  }
-
-  await resetAutomaticTransactions(reportId, auth);
-
-  const result = await executeWithContext(auth, 'DELETE FROM reports WHERE id = $1 RETURNING id', [reportId]);
-
-  if (result.rows.length === 0) {
-    throw new BadRequestError('Informe no encontrado');
-  }
-
-  await recordReportStatus(reportId, existingEstado, 'eliminado', auth.email || "", auth);
-
-  return { message: 'Informe eliminado exitosamente' };
-};
-
-export async function OPTIONS(request: NextRequest): Promise<NextResponse> {
-  const preflight = handleCorsPreflight(request);
-  if (preflight) {
-    return preflight;
-  }
-  return jsonResponse({ error: 'Method not allowed' }, request.headers.get('origin'), 405);
+  throw new ValidationError('church_id inválido');
 }
 
-// Removed local handleError - now using centralized handleApiError from @/lib/api-errors
-
+/**
+ * GET /api/reports - List reports with filters
+ *
+ * Query Params:
+ *   - churchId?: string (church ID filter)
+ *   - year?: string (year filter)
+ *   - month?: string (month filter)
+ *   - last_report?: "true" (special query for last report)
+ *
+ * Returns: Report[] - Array of reports with church info
+ */
 export async function GET(request: NextRequest): Promise<NextResponse> {
-  const origin = request.headers.get('origin');
-  const preflight = handleCorsPreflight(request);
-  if (preflight) {
-    return preflight;
-  }
-
   try {
-    // Make GET endpoint authentication-optional
-    // Return empty array for unauthenticated users
-    // This allows the reports page to load without login
-    const { getAuthContext } = await import('@/lib/auth-supabase');
-    const auth = await getAuthContext(request);
-
-    if (!auth) {
-      // Return empty array for unauthenticated users
-      return jsonResponse([], origin);
-    }
-
+    const client = await getAuthenticatedConvexClient();
     const searchParams = request.nextUrl.searchParams;
+
+    // Special query: last report for a church
     const lastReportParam = searchParams.get('last_report');
-
     if (lastReportParam === 'true') {
-      const churchIdParam = searchParams.get('church_id');
-      if (!churchIdParam) {
-        return jsonResponse({ error: 'church_id is required for last_report query' }, origin, 400);
+      const churchIdStr = searchParams.get('church_id');
+      if (!churchIdStr) {
+        return NextResponse.json(
+          { error: 'church_id is required for last_report query' },
+          { status: 400 }
+        );
       }
 
-      const churchId = parseOptionalChurchId(churchIdParam);
-      if (churchId === null) {
-        return jsonResponse({ error: 'Invalid church_id' }, origin, 400);
+      const churchConvexId = await resolveChurchConvexId(client, churchIdStr);
+
+      // Get all reports for church, sorted by date desc
+      const reports = await client.query(api.reports.list, {
+        churchId: churchConvexId,
+      });
+
+      if (reports.length === 0) {
+        return NextResponse.json({ lastReport: null });
       }
 
-      const lastReportResult = await executeWithContext(
-        auth,
-        `SELECT year, month FROM reports WHERE church_id = $1 ORDER BY year DESC, month DESC LIMIT 1`,
-        [churchId]
-      );
-
-      if (lastReportResult.rows.length === 0) {
-        return jsonResponse({ lastReport: null }, origin);
-      }
-
-      return jsonResponse({ lastReport: firstOrNull(lastReportResult.rows) }, origin);
+      // Find most recent report (already sorted by year desc, month desc)
+      const lastReport = reports[0];
+      return NextResponse.json({
+        lastReport: {
+          year: lastReport?.year,
+          month: lastReport?.month,
+        },
+      });
     }
 
-    const rows = await handleGetReports(request, auth);
-    return jsonResponse(rows, origin);
+    // Build filter args
+    const churchIdStr = searchParams.get('church_id');
+    const yearStr = searchParams.get('year');
+    const monthStr = searchParams.get('month');
+
+    const args: {
+      churchId?: Id<'churches'>;
+      year?: number;
+      month?: number;
+    } = {};
+
+    if (churchIdStr) {
+      args.churchId = await resolveChurchConvexId(client, churchIdStr);
+    }
+
+    if (yearStr) {
+      const year = parseInteger(yearStr);
+      if (year !== null) {
+        args.year = year;
+      }
+    }
+
+    if (monthStr) {
+      const month = parseInteger(monthStr);
+      if (month !== null && month >= 1 && month <= 12) {
+        args.month = month;
+      }
+    }
+
+    // Query reports via Convex
+    const reports = await client.query(api.reports.list, args);
+
+    return NextResponse.json(reports);
   } catch (error) {
-    return handleApiError(error, origin, 'GET /api/reports');
+    return handleApiError(error, request.headers.get('origin'), 'GET /api/reports');
   }
 }
 
+/**
+ * POST /api/reports - Create new report
+ *
+ * Body: {
+ *   church_id: string,
+ *   month: number,
+ *   year: number,
+ *   diezmos: number,
+ *   ofrendas: number,
+ *   anexos?: number,
+ *   otros?: number,
+ *   // ... other financial fields
+ * }
+ *
+ * Returns: Report - Created report record
+ */
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const origin = request.headers.get('origin');
-  const preflight = handleCorsPreflight(request);
-  if (preflight) {
-    return preflight;
-  }
-
   try {
-    const auth = await requireAuth(request);
+    const client = await getAuthenticatedConvexClient();
 
-    // Validate request body exists and parse JSON safely
-    let body: GenericRecord;
+    // Validate request body
+    let body: Record<string, unknown>;
     try {
       const text = await request.text();
       if (!text || text.trim() === '') {
-        throw new BadRequestError('Request body is empty');
+        throw new ValidationError('Request body is empty');
       }
-      body = JSON.parse(text) as GenericRecord;
+      body = JSON.parse(text) as Record<string, unknown>;
     } catch (jsonError) {
-      if (jsonError instanceof BadRequestError) {
+      if (jsonError instanceof ValidationError) {
         throw jsonError;
       }
-      console.error('JSON parsing error:', jsonError);
-      throw new BadRequestError('Invalid JSON in request body');
+      throw new ValidationError('Invalid JSON in request body');
     }
 
-    const report = await handleCreateReport(body, auth);
-    return jsonResponse({ success: true, report }, origin, 201);
+    // Extract fields using bracket notation for exactOptionalPropertyTypes compliance
+    const church_id = body['church_id'];
+    const month = body['month'];
+    const year = body['year'];
+    const diezmos = body['diezmos'];
+    const ofrendas = body['ofrendas'];
+
+    if (!church_id || !month || !year || diezmos === undefined || ofrendas === undefined) {
+      throw new ValidationError('church_id, month, year, diezmos, and ofrendas are required');
+    }
+
+    const churchConvexId = await resolveChurchConvexId(client, church_id);
+
+    // Build args object conditionally (only include defined fields)
+    const args: {
+      church_id: Id<'churches'>;
+      month: number;
+      year: number;
+      diezmos: number;
+      ofrendas: number;
+      [key: string]: unknown;
+    } = {
+      church_id: churchConvexId,
+      month: Number(month),
+      year: Number(year),
+      diezmos: Number(diezmos),
+      ofrendas: Number(ofrendas),
+    };
+
+    // Add optional numeric fields only if defined
+    const numericFields = [
+      'anexos', 'caballeros', 'damas', 'jovenes', 'ninos', 'otros',
+      'energia_electrica', 'agua', 'recoleccion_basura', 'servicios',
+      'mantenimiento', 'materiales', 'otros_gastos', 'misiones',
+      'ofrenda_misiones', 'lazos_amor', 'mision_posible', 'aporte_caballeros',
+      'apy', 'instituto_biblico', 'iba', 'monto_depositado',
+      'asistencia_visitas', 'bautismos_agua', 'bautismos_espiritu'
+    ];
+
+    for (const field of numericFields) {
+      if (body[field] !== undefined) {
+        args[field] = Number(body[field]);
+      }
+    }
+
+    // Fecha de depósito handled separately (string → timestamp)
+    const fechaDepositoValue = body['fecha_deposito'];
+    if (typeof fechaDepositoValue === 'string' && fechaDepositoValue.trim() !== '') {
+      const timestamp = Date.parse(fechaDepositoValue);
+      if (Number.isNaN(timestamp)) {
+        throw new ValidationError('fecha_deposito inválida');
+      }
+      args['fecha_deposito'] = timestamp;
+    }
+
+    // Add optional string fields only if defined
+    const stringFields = ['numero_deposito', 'observaciones'];
+    for (const field of stringFields) {
+      if (body[field] !== undefined) {
+        args[field] = String(body[field]);
+      }
+    }
+
+    // Create report via Convex
+    // TypeScript can't fully validate dynamic object - runtime validation in Convex
+    const report = await client.mutation(
+      api.reports.create,
+      args as typeof api.reports.create._args
+    );
+
+    return NextResponse.json({ success: true, report }, { status: 201 });
   } catch (error) {
-    return handleApiError(error, origin, 'POST /api/reports');
+    return handleApiError(error, request.headers.get('origin'), 'POST /api/reports');
   }
 }
 
+/**
+ * PUT /api/reports?id={reportId} - Update report
+ *
+ * Query Params: id (required)
+ * Body: Partial report fields to update
+ *
+ * Returns: Report - Updated report record
+ */
 export async function PUT(request: NextRequest): Promise<NextResponse> {
-  const origin = request.headers.get('origin');
-  const preflight = handleCorsPreflight(request);
-  if (preflight) {
-    return preflight;
-  }
-
   try {
-    const auth = await requireAuth(request);
-    const reportId = parseReportId(request.nextUrl.searchParams.get('id'));
+    const client = await getAuthenticatedConvexClient();
+    const searchParams = request.nextUrl.searchParams;
+    const reportIdStr = searchParams.get('id');
 
-    // Validate request body exists and parse JSON safely
-    let body: GenericRecord;
+    if (!reportIdStr) {
+      throw new ValidationError('ID de informe requerido');
+    }
+
+    // Validate request body
+    let body: Record<string, unknown>;
     try {
       const text = await request.text();
       if (!text || text.trim() === '') {
-        throw new BadRequestError('Request body is empty');
+        throw new ValidationError('Request body is empty');
       }
-      body = JSON.parse(text) as GenericRecord;
+      body = JSON.parse(text) as Record<string, unknown>;
     } catch (jsonError) {
-      if (jsonError instanceof BadRequestError) {
+      if (jsonError instanceof ValidationError) {
         throw jsonError;
       }
-      console.error('JSON parsing error:', jsonError);
-      throw new BadRequestError('Invalid JSON in request body');
+      throw new ValidationError('Invalid JSON in request body');
     }
 
-    const report = await handleUpdateReport(reportId, body, auth);
-    return jsonResponse({ success: true, report }, origin);
+    // Build updates object using bracket notation (exactOptionalPropertyTypes compliance)
+    const updates: {
+      id: Id<'reports'>;
+      [key: string]: unknown;
+    } = {
+      id: reportIdStr as Id<'reports'>,
+    };
+
+    // Add optional numeric fields only if defined
+    const numericFields = [
+      'diezmos', 'ofrendas', 'anexos', 'caballeros', 'damas', 'jovenes',
+      'ninos', 'otros', 'energia_electrica', 'agua', 'recoleccion_basura',
+      'servicios', 'mantenimiento', 'materiales', 'otros_gastos', 'misiones',
+      'ofrenda_misiones', 'lazos_amor', 'mision_posible', 'aporte_caballeros',
+      'apy', 'instituto_biblico', 'iba', 'monto_depositado',
+      'asistencia_visitas', 'bautismos_agua', 'bautismos_espiritu'
+    ];
+
+    for (const field of numericFields) {
+      if (body[field] !== undefined) {
+        updates[field] = Number(body[field]);
+      }
+    }
+
+    // Fecha de depósito handled separately (string → timestamp)
+    const fechaDepositoValue = body['fecha_deposito'];
+    if (typeof fechaDepositoValue === 'string') {
+      const trimmed = fechaDepositoValue.trim();
+      if (trimmed !== '') {
+        const timestamp = Date.parse(trimmed);
+        if (Number.isNaN(timestamp)) {
+          throw new ValidationError('fecha_deposito inválida');
+        }
+        updates['fecha_deposito'] = timestamp;
+      }
+    }
+
+    // Add optional string fields only if defined
+    const stringFields = ['numero_deposito', 'observaciones'];
+    for (const field of stringFields) {
+      if (body[field] !== undefined) {
+        updates[field] = String(body[field]);
+      }
+    }
+
+    // Special handling for estado (approval status changes)
+    const estadoValue = body['estado'];
+    if (estadoValue === 'procesado' || estadoValue === 'aprobado') {
+      // Admin approval - use dedicated approve mutation
+      await client.mutation(api.reports.approve, {
+        id: reportIdStr as Id<'reports'>,
+      });
+
+      // Return updated report
+      const report = await client.query(api.reports.get, {
+        id: reportIdStr as Id<'reports'>,
+      });
+
+      return NextResponse.json({ success: true, report });
+    } else if (estadoValue === 'rechazado') {
+      // Admin rejection - use dedicated reject mutation
+      const observacionesValue = body['observaciones'];
+      await client.mutation(api.reports.reject, {
+        id: reportIdStr as Id<'reports'>,
+        observaciones: String(observacionesValue || ''),
+      });
+
+      // Return updated report
+      const report = await client.query(api.reports.get, {
+        id: reportIdStr as Id<'reports'>,
+      });
+
+      return NextResponse.json({ success: true, report });
+    }
+
+    // Regular update via Convex
+    // TypeScript can't fully validate dynamic object - runtime validation in Convex
+    const report = await client.mutation(
+      api.reports.update,
+      updates as typeof api.reports.update._args
+    );
+
+    if (!report) {
+      return NextResponse.json({ error: 'Informe no encontrado' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, report });
   } catch (error) {
-    return handleApiError(error, origin, 'PUT /api/reports');
+    return handleApiError(error, request.headers.get('origin'), 'PUT /api/reports');
   }
 }
 
+/**
+ * DELETE /api/reports?id={reportId} - Delete report
+ *
+ * Query Params: id (required)
+ *
+ * Returns: { message: string }
+ */
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
-  const origin = request.headers.get('origin');
-  const preflight = handleCorsPreflight(request);
-  if (preflight) {
-    return preflight;
-  }
-
   try {
-    const auth = await requireAuth(request);
-    const reportId = parseReportId(request.nextUrl.searchParams.get('id'));
-    const result = await handleDeleteReport(reportId, auth);
-    return jsonResponse(result, origin);
+    const client = await getAuthenticatedConvexClient();
+    const searchParams = request.nextUrl.searchParams;
+    const reportIdStr = searchParams.get('id');
+
+    if (!reportIdStr) {
+      throw new ValidationError('ID de informe requerido');
+    }
+
+    // Delete via Convex
+    await client.mutation(api.reports.deleteReport, {
+      id: reportIdStr as Id<'reports'>,
+    });
+
+    return NextResponse.json({ message: 'Informe eliminado exitosamente' });
   } catch (error) {
-    return handleApiError(error, origin, 'DELETE /api/reports');
+    return handleApiError(error, request.headers.get('origin'), 'DELETE /api/reports');
   }
 }

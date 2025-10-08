@@ -4,6 +4,7 @@ import { toNumber } from './api';
 
 export type RawFundRecord = {
   id: number;
+  convex_id?: string | null;
   name: string;
   description: string;
   type: string;
@@ -16,6 +17,7 @@ export type RawFundRecord = {
 
 export type FundRecord = {
   id: number;
+  convexId: string | null;
   name: string;
   description: string;
   type: string;
@@ -32,6 +34,7 @@ export type FundRecord = {
 
 export const normalizeFundRecord = (raw: RawFundRecord): FundRecord => ({
   id: raw.id,
+  convexId: raw.convex_id ?? null,
   name: raw.name,
   description: raw.description,
   type: raw.type,
@@ -366,6 +369,7 @@ export type EventLineType = 'income' | 'expense';
 
 export type RawFundEvent = {
   id: string;
+  convex_id?: string | null;
   fund_id: number;
   church_id: number | null;
   name: string;
@@ -389,6 +393,7 @@ export type RawFundEvent = {
 
 export type FundEvent = {
   id: string;
+  convexId: string;
   name: string;
   description: string | null;
   eventDate: string;
@@ -432,6 +437,7 @@ export const normalizeFundEvent = (raw: RawFundEvent): FundEvent => {
 
   return {
     id: raw.id,
+    convexId: raw.convex_id ?? raw.id,
     name: raw.name,
     description: raw.description,
     eventDate: raw.event_date,
