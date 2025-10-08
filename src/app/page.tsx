@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 import Link from "next/link";
 
 import { executeWithContext } from "@/lib/db";
-import { getUserProfile } from "@/lib/supabase/server";
+import { auth } from "@/lib/auth";
 import { formatCurrencyDisplay } from "@/lib/utils/currency";
 import { logger } from "@/lib/logger";
 import {
@@ -190,31 +190,41 @@ const withDashboardFallback = async <TReturn,>(
 };
 
 export default async function DashboardLanding(): Promise<JSX.Element> {
-  const user = await getUserProfile().catch((error) => {
-    logger.error('[Dashboard] Failed to resolve user profile', error instanceof Error ? error : undefined);
+  // Get NextAuth session instead of Supabase auth
+  const session = await auth().catch((error) => {
+    logger.error('[Dashboard] Failed to resolve session', error instanceof Error ? error : undefined);
     return null;
   });
 
-  const auth = user ? {
-    userId: user.id,
-    role: user.role || 'viewer',
-    churchId: user.churchId || null
+  // For now, we don't have user profiles in the dashboard context
+  // This will be replaced with Convex profile queries in Phase 5
+  const authContext = session?.user?.email ? {
+    userId: session.user.id,
+    role: 'admin', // Temporary: all logged-in users get admin access
+    churchId: null
+  } : null;
+
+  const user = session?.user ? {
+    email: session.user.email ?? '',
+    role: 'admin',
+    churchName: null,
+    churchId: null
   } : null;
 
   const [summary, recentReports, pipeline, financial] = await Promise.all([
-    withDashboardFallback('summary', () => loadDashboardSummary(auth), {
+    withDashboardFallback('summary', () => loadDashboardSummary(authContext), {
       totalReports: 0,
       totalChurches: 0,
       processedThisMonth: 0,
     }),
-    withDashboardFallback('recent reports', () => loadRecentReports(auth), [] as RecentReport[]),
-    withDashboardFallback('pipeline health', () => loadPipelineHealth(auth), {
+    withDashboardFallback('recent reports', () => loadRecentReports(authContext), [] as RecentReport[]),
+    withDashboardFallback('pipeline health', () => loadPipelineHealth(authContext), {
       pendingAdmin: 0,
       awaitingDeposits: 0,
       awaitingTransactions: 0,
       rejected: 0,
     }),
-    withDashboardFallback('financial snapshot', () => loadFinancialSnapshot(auth), {
+    withDashboardFallback('financial snapshot', () => loadFinancialSnapshot(authContext), {
       currentTotal: 0,
       previousTotal: 0,
       reportingChurches: 0,
