@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedConvexClient } from '@/lib/convex-server';
 import { api } from '../../../../../convex/_generated/api';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Provider Search API - Migrated to Convex
@@ -29,7 +30,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       limit,
     });
 
-    return NextResponse.json({ data: results });
+    return NextResponse.json(
+      {
+        success: true,
+        data: results,
+      } satisfies ApiResponse<typeof results>,
+    );
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'GET /api/providers/search');
   }

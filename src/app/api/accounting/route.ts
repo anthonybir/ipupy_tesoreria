@@ -3,6 +3,7 @@ import { getAuthContext, type AuthContext } from "@/lib/auth-context";
 import { executeWithContext } from "@/lib/db";
 import { firstOrDefault, firstOrNull, expectOne } from "@/lib/db-helpers";
 import { setCORSHeaders } from "@/lib/cors";
+import type { ApiResponse } from "@/types/utils";
 
 interface MonthlyLedger {
   id?: number;
@@ -82,6 +83,25 @@ type LedgerClosePayload = LedgerOpenPayload & {
 
 type AccountingAction = "expense" | "entry" | "open_ledger" | "close_ledger";
 
+const corsJson = <T extends ApiResponse<unknown>>(
+  payload: T,
+  init?: ResponseInit,
+): NextResponse => {
+  const response = NextResponse.json(payload, init);
+  setCORSHeaders(response);
+  return response;
+};
+
+const corsError = (message: string, status: number, details?: unknown): NextResponse =>
+  corsJson<ApiResponse<never>>(
+    {
+      success: false,
+      error: message,
+      ...(details !== undefined ? { details } : {}),
+    },
+    { status },
+  );
+
 // GET /api/accounting - Get accounting records
 async function handleGet(req: NextRequest) {
   try {
@@ -100,22 +120,19 @@ async function handleGet(req: NextRequest) {
         return await getExpenses(auth, church_id, month, year);
       case "entries":
         return await getAccountingEntries(auth, church_id, month, year);
-      case "summary":
-        return await getAccountingSummary(auth, church_id, month, year);
-      default:
-        const response = NextResponse.json({ error: "Invalid type parameter" }, { status: 400 });
-        setCORSHeaders(response);
-        return response;
-    }
-  } catch (error) {
-    console.error("Error in accounting GET:", error);
-    const response = NextResponse.json(
-      { error: "Error fetching accounting data", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
-    );
-    setCORSHeaders(response);
-    return response;
+    case "summary":
+      return await getAccountingSummary(auth, church_id, month, year);
+    default:
+      return corsError("Invalid type parameter", 400);
   }
+} catch (error) {
+  console.error("Error in accounting GET:", error);
+  return corsError(
+    "Error fetching accounting data",
+    500,
+    error instanceof Error ? error.message : "Unknown error",
+  );
+}
 }
 
 // Get monthly ledger records
@@ -164,15 +181,12 @@ async function getMonthlyLedger(
 
   query += ` ORDER BY ml.year DESC, ml.month DESC, c.name ASC`;
 
-  const result = await executeWithContext(auth, query, params);
+const result = await executeWithContext(auth, query, params);
 
-  const response = NextResponse.json({
+  return corsJson<ApiResponse<typeof result.rows>>({
     success: true,
-    data: result.rows
+    data: result.rows,
   });
-
-  setCORSHeaders(response);
-  return response;
 }
 
 // Get expense records
@@ -212,28 +226,27 @@ async function getExpenses(
     values
   );
 
-  const categoryTotals = await executeWithContext(auth, 
-    `
-    SELECT
-      category,
-      COUNT(*) as count,
+const categoryTotals = await executeWithContext(auth, 
+  `
+  SELECT
+    category,
+    COUNT(*) as count,
       SUM(amount) as total
     FROM expense_records e
     ${whereClause}
     GROUP BY category
-    ORDER BY total DESC
-  `,
-    values
+  ORDER BY total DESC
+`,
+  values
+);
+
+  return corsJson<ApiResponse<typeof result.rows> & { categoryTotals: typeof categoryTotals.rows }>(
+    {
+      success: true,
+      data: result.rows,
+      categoryTotals: categoryTotals.rows,
+    },
   );
-
-  const response = NextResponse.json({
-    success: true,
-    data: result.rows,
-    categoryTotals: categoryTotals.rows
-  });
-
-  setCORSHeaders(response);
-  return response;
 }
 
 // Get accounting entries (double-entry bookkeeping)
@@ -273,30 +286,29 @@ async function getAccountingEntries(
     values
   );
 
-  const trialBalance = await executeWithContext(auth, 
-    `
-    SELECT
-      account_code,
-      account_name,
+const trialBalance = await executeWithContext(auth, 
+  `
+  SELECT
+    account_code,
+    account_name,
       SUM(debit) as total_debit,
       SUM(credit) as total_credit,
       SUM(debit - credit) as balance
     FROM accounting_entries ae
     ${whereClause}
-    GROUP BY account_code, account_name
-    ORDER BY account_code
-  `,
-    values
+  GROUP BY account_code, account_name
+  ORDER BY account_code
+`,
+  values
+);
+
+  return corsJson<ApiResponse<typeof result.rows> & { trialBalance: typeof trialBalance.rows }>(
+    {
+      success: true,
+      data: result.rows,
+      trialBalance: trialBalance.rows,
+    },
   );
-
-  const response = NextResponse.json({
-    success: true,
-    data: result.rows,
-    trialBalance: trialBalance.rows
-  });
-
-  setCORSHeaders(response);
-  return response;
 }
 
 // Get accounting summary for a period
@@ -432,19 +444,25 @@ async function getAccountingSummary(
   const movementsRow = firstOrDefault(movements.rows, {});
   const ledgerRow = firstOrDefault(ledger.rows, { status: "not_created" });
 
-  const response = NextResponse.json({
+  return corsJson<
+    ApiResponse<{
+      income: typeof incomeRow;
+      expenses: typeof expensesRow;
+      movements: typeof movementsRow;
+      ledger: typeof ledgerRow;
+      netResult: number;
+    }>
+  >({
     success: true,
-    summary: {
+    data: {
       income: incomeRow,
       expenses: expensesRow,
       movements: movementsRow,
       ledger: ledgerRow,
-      netResult: Number(incomeRow['total_income'] || 0) - Number(expensesRow['total_expenses'] || 0)
-    }
+      netResult:
+        Number(incomeRow["total_income"] || 0) - Number(expensesRow["total_expenses"] || 0),
+    },
   });
-
-  setCORSHeaders(response);
-  return response;
 }
 
 // POST /api/accounting - Create accounting records
@@ -452,16 +470,12 @@ async function handlePost(req: NextRequest) {
   try {
     const user = await getAuthContext(req);
     if (!user) {
-      const response = NextResponse.json({ error: "Authentication required" }, { status: 401 });
-      setCORSHeaders(response);
-      return response;
+      return corsError("Authentication required", 401);
     }
 
     const rawBody = await req.json();
     if (typeof rawBody !== "object" || rawBody === null) {
-      const response = NextResponse.json({ error: "Invalid request payload" }, { status: 400 });
-      setCORSHeaders(response);
-      return response;
+      return corsError("Invalid request payload", 400);
     }
 
     const body = rawBody as Record<string, unknown>;
@@ -477,18 +491,15 @@ async function handlePost(req: NextRequest) {
       case "close_ledger":
         return await closeMonthlyLedger(user, body as LedgerClosePayload, user.email || "");
       default:
-        const response = NextResponse.json({ error: "Invalid type" }, { status: 400 });
-        setCORSHeaders(response);
-        return response;
+        return corsError("Invalid type", 400);
     }
   } catch (error) {
     console.error("Error in accounting POST:", error);
-    const response = NextResponse.json(
-      { error: "Error creating accounting record", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+    return corsError(
+      "Error creating accounting record",
+      500,
+      error instanceof Error ? error.message : "Unknown error",
     );
-    setCORSHeaders(response);
-    return response;
   }
 }
 
@@ -504,9 +515,7 @@ async function createExpense(auth: AuthContext | null, data: ExpenseCreatePayloa
 
   for (const field of required) {
     if (data[field] === undefined || data[field] === null || data[field] === "") {
-      const response = NextResponse.json({ error: `${field as string} is required` }, { status: 400 });
-      setCORSHeaders(response);
-      return response;
+      return corsError(`${field as string} is required`, 400);
     }
   }
 
@@ -549,14 +558,14 @@ async function createExpense(auth: AuthContext | null, data: ExpenseCreatePayloa
     ]
   );
 
-  const response = NextResponse.json({
-    success: true,
-    data: expectOne(result.rows),
-    message: "Expense record created successfully"
-  }, { status: 201 });
-
-  setCORSHeaders(response);
-  return response;
+  return corsJson<ApiResponse<ExpenseRecord> & { message: string }>(
+    {
+      success: true,
+      data: expectOne(result.rows),
+      message: "Expense record created successfully",
+    },
+    { status: 201 },
+  );
 }
 
 // Create accounting entry (double-entry)
@@ -565,9 +574,7 @@ async function createAccountingEntry(auth: AuthContext | null, data: AccountingE
 
   if ("entries" in data) {
     if (!Array.isArray(data.entries) || data.entries.length === 0) {
-      const response = NextResponse.json({ error: "entries must be a non-empty array" }, { status: 400 });
-      setCORSHeaders(response);
-      return response;
+      return corsError("entries must be a non-empty array", 400);
     }
     entries = data.entries;
   } else {
@@ -585,9 +592,7 @@ async function createAccountingEntry(auth: AuthContext | null, data: AccountingE
   for (const entry of entries) {
     for (const field of requiredEntryFields) {
       if (entry[field] === undefined || entry[field] === null || entry[field] === "") {
-        const response = NextResponse.json({ error: `Entry field ${field as string} is required` }, { status: 400 });
-        setCORSHeaders(response);
-        return response;
+        return corsError(`Entry field ${field as string} is required`, 400);
       }
     }
   }
@@ -596,13 +601,14 @@ async function createAccountingEntry(auth: AuthContext | null, data: AccountingE
   const totalCredit = entries.reduce((sum, entry) => sum + (entry.credit ?? 0), 0);
 
   if (Math.abs(totalDebit - totalCredit) > 0.01) {
-    const response = NextResponse.json({
-      error: "Debits must equal credits",
-      totalDebit,
-      totalCredit
-    }, { status: 400 });
-    setCORSHeaders(response);
-    return response;
+    return corsJson<ApiResponse<never>>(
+      {
+        success: false,
+        error: "Debits must equal credits",
+        details: { totalDebit, totalCredit },
+      },
+      { status: 400 },
+    );
   }
 
   const results: AccountingEntry[] = [];
@@ -630,14 +636,14 @@ async function createAccountingEntry(auth: AuthContext | null, data: AccountingE
     results.push(row);
   }
 
-  const response = NextResponse.json({
-    success: true,
-    data: results,
-    message: `Created ${results.length} accounting entries`
-  }, { status: 201 });
-
-  setCORSHeaders(response);
-  return response;
+  return corsJson<ApiResponse<typeof results> & { message: string }>(
+    {
+      success: true,
+      data: results,
+      message: `Created ${results.length} accounting entries`,
+    },
+    { status: 201 },
+  );
 }
 
 // Open monthly ledger
@@ -645,9 +651,7 @@ async function openMonthlyLedger(auth: AuthContext | null, data: LedgerOpenPaylo
   const { church_id, month, year } = data;
 
   if (!church_id || !month || !year) {
-    const response = NextResponse.json({ error: "church_id, month, and year are required" }, { status: 400 });
-    setCORSHeaders(response);
-    return response;
+    return corsError("church_id, month, and year are required", 400);
   }
 
   // Check if ledger already exists
@@ -658,11 +662,10 @@ async function openMonthlyLedger(auth: AuthContext | null, data: LedgerOpenPaylo
 
   const existingRow = firstOrNull(existing.rows);
   if (existingRow) {
-    const response = NextResponse.json({
-      error: `Ledger already exists with status: ${existingRow['status'] || 'unknown'}`
-    }, { status: 409 });
-    setCORSHeaders(response);
-    return response;
+    return corsError(
+      `Ledger already exists with status: ${existingRow["status"] || "unknown"}`,
+      409,
+    );
   }
 
   // Get previous month's closing balance
@@ -689,14 +692,14 @@ async function openMonthlyLedger(auth: AuthContext | null, data: LedgerOpenPaylo
     [church_id, month, year, openingBalance, openingBalance, userEmail]
   );
 
-  const response = NextResponse.json({
-    success: true,
-    data: expectOne(result.rows),
-    message: "Monthly ledger opened successfully"
-  }, { status: 201 });
-
-  setCORSHeaders(response);
-  return response;
+  return corsJson<ApiResponse<MonthlyLedger> & { message: string }>(
+    {
+      success: true,
+      data: expectOne(result.rows),
+      message: "Monthly ledger opened successfully",
+    },
+    { status: 201 },
+  );
 }
 
 // Close monthly ledger
@@ -704,9 +707,7 @@ async function closeMonthlyLedger(auth: AuthContext | null, data: LedgerClosePay
   const { church_id, month, year, notes } = data;
 
   if (!church_id || !month || !year) {
-    const response = NextResponse.json({ error: "church_id, month, and year are required" }, { status: 400 });
-    setCORSHeaders(response);
-    return response;
+    return corsError("church_id, month, and year are required", 400);
   }
 
   // Get ledger
@@ -717,15 +718,11 @@ async function closeMonthlyLedger(auth: AuthContext | null, data: LedgerClosePay
 
   const ledgerRow = firstOrNull(ledger.rows);
   if (!ledgerRow) {
-    const response = NextResponse.json({ error: "Ledger not found" }, { status: 404 });
-    setCORSHeaders(response);
-    return response;
+    return corsError("Ledger not found", 404);
   }
 
-  if (ledgerRow['status'] === "closed") {
-    const response = NextResponse.json({ error: "Ledger is already closed" }, { status: 409 });
-    setCORSHeaders(response);
-    return response;
+  if (ledgerRow["status"] === "closed") {
+    return corsError("Ledger is already closed", 409);
   }
 
   // Calculate totals
@@ -773,14 +770,11 @@ async function closeMonthlyLedger(auth: AuthContext | null, data: LedgerClosePay
     ]
   );
 
-  const response = NextResponse.json({
+  return corsJson<ApiResponse<MonthlyLedger> & { message: string }>({
     success: true,
     data: expectOne(result.rows),
-    message: "Monthly ledger closed successfully"
+    message: "Monthly ledger closed successfully",
   });
-
-  setCORSHeaders(response);
-  return response;
 }
 
 // OPTIONS handler for CORS

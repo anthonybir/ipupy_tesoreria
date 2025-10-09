@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedConvexClient } from '@/lib/convex-server';
 import { api } from '../../../../../convex/_generated/api';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Provider RUC Check API - Migrated to Convex
@@ -24,11 +25,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const provider = await client.query(api.providers.searchByRUC, { ruc });
 
-    if (provider) {
-      return NextResponse.json({ exists: true, provider });
-    }
+    const exists = provider ? true : false;
 
-    return NextResponse.json({ exists: false, provider: null });
+    return NextResponse.json(
+      {
+        success: true,
+        data: {
+          exists,
+          provider: provider ?? null,
+        },
+      } satisfies ApiResponse<{
+        exists: boolean;
+        provider: typeof provider;
+      }>,
+    );
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'GET /api/providers/check-ruc');
   }

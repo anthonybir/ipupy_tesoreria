@@ -11,6 +11,7 @@
  */
 
 import { toast } from 'react-hot-toast';
+import type { ApiResponse } from '@/types/utils';
 
 export interface TransactionInput {
   date: string;
@@ -25,12 +26,21 @@ export interface TransactionInput {
   amount_out?: number;
 }
 
+export interface BulkTransactionSummary {
+  created: unknown[];
+  createdCount: number;
+  failedCount: number;
+  errors?: Array<{ index: number; error: string }>;
+  errorDetails?: Array<{ index: number; transaction: unknown; error: string }>;
+}
+
 export interface BulkTransactionResponse {
   success: boolean;
   created: number;
   failed?: number;
   errors?: Array<{ index: number; error: string }>;
   results?: unknown[];
+  message?: string;
 }
 
 /**
@@ -68,11 +78,31 @@ export async function createTransactionsBulk(
     body: JSON.stringify(transactions),
   });
 
-  const data = await response.json() as BulkTransactionResponse;
+  const payload = await response.json() as ApiResponse<BulkTransactionSummary> & { message?: string };
+
+  if (!payload.success) {
+    const errorMessage = payload.error ?? 'Error al crear transacciones';
+    if (showToast) {
+      toast.error(errorMessage);
+    }
+    throw new Error(errorMessage);
+  }
+
+  const summary = payload.data;
+  const resultEnvelope: BulkTransactionResponse = {
+    success: true,
+    created: summary.createdCount,
+    failed: summary.failedCount ?? undefined,
+    ...(summary.errors && summary.errors.length > 0 ? { errors: summary.errors } : {}),
+    results: summary.created,
+    ...(payload.message ? { message: payload.message } : {}),
+  };
 
   // Handle 207 Multi-Status (partial success)
   if (response.status === 207) {
-    const { created = 0, failed = 0, errors = [] } = data;
+    const created = summary.createdCount ?? 0;
+    const failed = summary.failedCount ?? 0;
+    const errors = summary.errors ?? [];
 
     if (showToast) {
       if (created > 0) {
@@ -97,16 +127,18 @@ export async function createTransactionsBulk(
 
     if (throwOnPartialFailure && failed > 0) {
       const error = new Error(`${failed} de ${transactions.length} transacciones fallaron`);
-      (error as { data?: BulkTransactionResponse }).data = data;
+      (error as { data?: BulkTransactionResponse }).data = resultEnvelope;
       throw error;
     }
 
-    return data;
+    return resultEnvelope;
   }
 
   // Handle complete failure (4xx/5xx)
   if (!response.ok) {
-    const errorMessage = (data as { error?: string }).error || 'Error al crear transacciones';
+    const errorMessage = ('error' in payload && typeof payload.error === 'string' ? payload.error :
+                          'message' in payload && typeof payload.message === 'string' ? payload.message :
+                          'Error al crear transacciones');
     if (showToast) {
       toast.error(errorMessage);
     }
@@ -114,11 +146,11 @@ export async function createTransactionsBulk(
   }
 
   // Handle complete success (201)
-  if (showToast && data.created) {
-    toast.success(`${data.created} transacción${data.created === 1 ? '' : 'es'} creada${data.created === 1 ? '' : 's'} correctamente`);
+  if (showToast && summary.createdCount) {
+    toast.success(`${summary.createdCount} transacción${summary.createdCount === 1 ? '' : 'es'} creada${summary.createdCount === 1 ? '' : 's'} correctamente`);
   }
 
-  return data;
+  return resultEnvelope;
 }
 
 /**

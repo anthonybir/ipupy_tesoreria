@@ -3,6 +3,7 @@ import { getAuthenticatedConvexClient } from '@/lib/convex-server';
 import { api } from '../../../../../../../convex/_generated/api';
 import { handleApiError } from '@/lib/api-errors';
 import type { Id } from '../../../../../../../convex/_generated/dataModel';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Fund Event Actual Item Detail API - Migrated to Convex
@@ -43,10 +44,12 @@ export async function PATCH(
 
     const actual = await client.mutation(api.fundEvents.updateActual, updateArgs);
 
-    return NextResponse.json({
-      success: true,
-      data: actual,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: actual,
+      } satisfies ApiResponse<typeof actual>,
+    );
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'PATCH /api/fund-events/[id]/actuals/[actualId]');
   }
@@ -65,10 +68,13 @@ export async function DELETE(
       id: actualId as Id<'fund_event_actuals'>,
     });
 
-    return NextResponse.json({
-      success: true,
-      message: 'Ítem actual eliminado',
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: {},
+        message: 'Ítem actual eliminado',
+      } satisfies ApiResponse<Record<string, never>> & { message: string },
+    );
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'DELETE /api/fund-events/[id]/actuals/[actualId]');
   }

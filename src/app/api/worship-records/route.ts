@@ -4,6 +4,7 @@ import { executeWithContext, executeTransaction } from '@/lib/db';
 import { expectOne } from '@/lib/db-helpers';
 import { setCORSHeaders } from '@/lib/cors';
 import type { PoolClient } from 'pg';
+import type { ApiResponse } from '@/types/utils';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -516,16 +517,35 @@ const listWorshipRecords = async (query: any, auth: AuthContext): Promise<any[]>
   }));
 };
 
-const jsonResponse = (origin: string | null, body: Record<string, unknown>, status = 200) => {
-  const response = NextResponse.json(body, { status });
+const corsJson = <T extends ApiResponse<unknown>>(
+  origin: string | null,
+  payload: T,
+  status = 200,
+) => {
+  const response = NextResponse.json(payload, { status });
   setCORSHeaders(response, origin);
   return response;
 };
 
+const corsError = (
+  origin: string | null,
+  message: string,
+  status: number,
+  details?: unknown,
+) =>
+  corsJson(
+    origin,
+    {
+      success: false as const,
+      error: message,
+      ...(details !== undefined ? { details } : {}),
+    },
+    status,
+  );
+
 export async function OPTIONS(req: NextRequest): Promise<NextResponse> {
-  const response = new NextResponse(null, { status: 200 });
-  setCORSHeaders(response, req.headers.get('origin'));
-  return response;
+  const origin = req.headers.get('origin');
+  return corsJson(origin, { success: true, data: {} }, 200);
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -536,26 +556,28 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const { searchParams } = new URL(req.url);
     const query = Object.fromEntries(searchParams.entries());
     const records = await listWorshipRecords(query, auth);
-    return jsonResponse(origin, { records });
+    return corsJson(origin, { success: true, data: records });
 
   } catch (error) {
     console.error('Error in worship-records API:', error);
     if ((error as Error).message === 'Autenticación requerida') {
-      return jsonResponse(origin, { error: 'Token de autenticación requerido' }, 401);
+      return corsError(origin, 'Token de autenticación requerido', 401);
     }
 
     if (error instanceof BadRequestError) {
-      return jsonResponse(origin, { error: error.message }, 400);
+      return corsError(origin, error.message, 400);
     }
 
     if (error instanceof ForbiddenError) {
-      return jsonResponse(origin, { error: error.message }, 403);
+      return corsError(origin, error.message, 403);
     }
 
-    return jsonResponse(origin, {
-      error: 'Error interno del servidor',
-      details: process.env['NODE_ENV'] === 'development' ? (error as Error).message : undefined
-    }, 500);
+    return corsError(
+      origin,
+      'Error interno del servidor',
+      500,
+      process.env['NODE_ENV'] === 'development' ? (error as Error).message : undefined,
+    );
   }
 }
 
@@ -565,28 +587,30 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const auth = await requireAuth(req);
 
     const body = await req.json();
-    const payload = normalizeWorshipPayload(body, auth);
+   const payload = normalizeWorshipPayload(body, auth);
     const result = await saveWorshipRecord(payload, auth);
-    return jsonResponse(origin, result, 201);
+    return corsJson(origin, { success: true, data: result }, 201);
 
   } catch (error) {
     console.error('Error in worship-records API:', error);
 
     if ((error as Error).message === 'Autenticación requerida') {
-      return jsonResponse(origin, { error: 'Token de autenticación requerido' }, 401);
+      return corsError(origin, 'Token de autenticación requerido', 401);
     }
 
     if (error instanceof BadRequestError) {
-      return jsonResponse(origin, { error: error.message }, 400);
+      return corsError(origin, error.message, 400);
     }
 
     if (error instanceof ForbiddenError) {
-      return jsonResponse(origin, { error: error.message }, 403);
+      return corsError(origin, error.message, 403);
     }
 
-    return jsonResponse(origin, {
-      error: 'Error interno del servidor',
-      details: process.env['NODE_ENV'] === 'development' ? (error as Error).message : undefined
-    }, 500);
+    return corsError(
+      origin,
+      'Error interno del servidor',
+      500,
+      process.env['NODE_ENV'] === 'development' ? (error as Error).message : undefined,
+    );
   }
 }

@@ -4,6 +4,7 @@ import { executeWithContext } from '@/lib/db';
 import { firstOrDefault, expectOne } from '@/lib/db-helpers';
 import { buildCorsHeaders, handleCorsPreflight } from '@/lib/cors';
 import { requireAuth, type AuthContext } from '@/lib/auth-context';
+import type { ApiResponse } from '@/types/utils';
 
 type NumericString = string | number | null | undefined;
 
@@ -37,8 +38,22 @@ class BadRequestError extends Error {
   }
 }
 
-const jsonResponse = (data: unknown, origin: string | null, status = 200) =>
-  NextResponse.json(data, { status, headers: buildCorsHeaders(origin) });
+const corsJson = <T extends ApiResponse<unknown>>(
+  payload: T,
+  origin: string | null,
+  status = 200,
+) => NextResponse.json(payload, { status, headers: buildCorsHeaders(origin) });
+
+const corsError = (message: string, origin: string | null, status: number, details?: unknown) =>
+  corsJson<ApiResponse<never>>(
+    {
+      success: false,
+      error: message,
+      ...(details !== undefined ? { details } : {}),
+    },
+    origin,
+    status,
+  );
 
 const toBoolean = (value: unknown, fallback = false) => {
   if (typeof value === 'boolean') {
@@ -250,23 +265,31 @@ const handleMembersRequest = async (auth: AuthContext | null, request: NextReque
     case 'GET': {
       const query = buildMembersQuery(request);
       const result = await fetchMembers(auth, query);
-      return result;
+      return {
+        success: true,
+        data: result.data,
+        pagination: result.pagination,
+      } satisfies ApiResponse<typeof result.data> & { pagination: typeof result.pagination };
     }
     case 'POST': {
       const payload = (await request.json()) as MemberPayload;
       const created = await createMember(auth, payload);
-      return { success: true, data: created };
+      return { success: true, data: created } satisfies ApiResponse<typeof created>;
     }
     case 'PUT': {
       const memberId = parsePositiveInt(request.nextUrl.searchParams.get('id'), 'ID de miembro');
       const payload = (await request.json()) as MemberPayload;
       const updated = await updateMember(auth, memberId, payload);
-      return { success: true, data: updated };
+      return { success: true, data: updated } satisfies ApiResponse<typeof updated>;
     }
     case 'DELETE': {
       const memberId = parsePositiveInt(request.nextUrl.searchParams.get('id'), 'ID de miembro');
       await deleteMember(auth, memberId);
-      return { success: true, message: 'Miembro eliminado exitosamente' };
+      return {
+        success: true,
+        data: {},
+        message: 'Miembro eliminado exitosamente',
+      } satisfies ApiResponse<Record<string, never>> & { message: string };
     }
     default:
       throw new BadRequestError('Método no permitido');
@@ -284,14 +307,14 @@ const handleRequest = async (auth: AuthContext | null, request: NextRequest) => 
 
 const handleError = (error: unknown, origin: string | null) => {
   if (error instanceof BadRequestError) {
-    return jsonResponse({ error: error.message }, origin, 400);
+    return corsError(error.message, origin, 400);
   }
   if (error instanceof Error && error.message.includes('Token')) {
-    return jsonResponse({ error: 'Token inválido o expirado' }, origin, 401);
+    return corsError('Token inválido o expirado', origin, 401);
   }
   console.error('People API error:', error);
   const details = error instanceof Error ? error.message : 'Error interno del servidor';
-  return jsonResponse({ error: 'Error interno del servidor', details }, origin, 500);
+  return corsError('Error interno del servidor', origin, 500, details);
 };
 
 export async function OPTIONS(request: NextRequest): Promise<NextResponse> {
@@ -299,7 +322,7 @@ export async function OPTIONS(request: NextRequest): Promise<NextResponse> {
   if (preflight) {
     return preflight;
   }
-  return jsonResponse({ error: 'Method not allowed' }, request.headers.get('origin'), 405);
+  return corsError('Method not allowed', request.headers.get('origin'), 405);
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -312,7 +335,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     const auth = await requireAuth(request);
     const result = await handleRequest(auth, request);
-    return jsonResponse(result, origin);
+    return corsJson(result, origin);
   } catch (error) {
     return handleError(error, origin);
   }
@@ -328,7 +351,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const auth = await requireAuth(request);
     const result = await handleRequest(auth, request);
-    return jsonResponse(result, origin, 201);
+    return corsJson(result, origin, 201);
   } catch (error) {
     return handleError(error, origin);
   }
@@ -344,7 +367,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   try {
     const auth = await requireAuth(request);
     const result = await handleRequest(auth, request);
-    return jsonResponse(result, origin);
+    return corsJson(result, origin);
   } catch (error) {
     return handleError(error, origin);
   }
@@ -360,7 +383,7 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
   try {
     const auth = await requireAuth(request);
     const result = await handleRequest(auth, request);
-    return jsonResponse(result, origin);
+    return corsJson(result, origin);
   } catch (error) {
     return handleError(error, origin);
   }

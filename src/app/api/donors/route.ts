@@ -3,6 +3,7 @@ import { getAuthContext, type AuthContext } from "@/lib/auth-context";
 import { executeWithContext } from "@/lib/db";
 import { firstOrNull, expectOne } from "@/lib/db-helpers";
 import { setCORSHeaders } from "@/lib/cors";
+import type { ApiResponse } from "@/types/utils";
 
 interface Donor {
   id: number;
@@ -58,6 +59,25 @@ type ContributionUpdatePayload = Partial<Omit<Contribution, "id" | "created_at" 
 
 type DonorAction = "donor" | "contribution";
 
+const corsJson = <T extends ApiResponse<unknown>>(
+  payload: T,
+  init?: ResponseInit,
+): NextResponse => {
+  const response = NextResponse.json(payload, init);
+  setCORSHeaders(response);
+  return response;
+};
+
+const corsError = (message: string, status: number, details?: unknown): NextResponse =>
+  corsJson<ApiResponse<never>>(
+    {
+      success: false,
+      error: message,
+      ...(details !== undefined ? { details } : {}),
+    },
+    { status },
+  );
+
 // GET /api/donors - Search and list donors
 async function handleGet(req: NextRequest) {
   try {
@@ -85,12 +105,11 @@ async function handleGet(req: NextRequest) {
     return await listDonors(auth, church_id, type);
   } catch (error) {
     console.error("Error in donors GET:", error);
-    const response = NextResponse.json(
-      { error: "Error fetching donor data", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+    return corsError(
+      "Error fetching donor data",
+      500,
+      error instanceof Error ? error.message : "Unknown error",
     );
-    setCORSHeaders(response);
-    return response;
   }
 }
 
@@ -126,14 +145,11 @@ async function listDonors(auth: AuthContext | null, church_id: string | null, ty
 
   const result = await executeWithContext(auth, query, params);
 
-  const response = NextResponse.json({
+  return corsJson<ApiResponse<typeof result.rows> & { total: number }>({
     success: true,
     data: result.rows,
-    total: result.rows.length
+    total: result.rows.length,
   });
-
-  setCORSHeaders(response);
-  return response;
 }
 
 // Search donors by name, email, phone, or cedula
@@ -168,14 +184,11 @@ async function searchDonors(auth: AuthContext | null, searchTerm: string, church
 
   const result = await executeWithContext(auth, query, params);
 
-  const response = NextResponse.json({
+  return corsJson<ApiResponse<typeof result.rows> & { searchTerm: string }>({
     success: true,
     data: result.rows,
-    searchTerm
+    searchTerm,
   });
-
-  setCORSHeaders(response);
-  return response;
 }
 
 // Get donor summary with contribution history
@@ -190,9 +203,7 @@ async function getDonorSummary(auth: AuthContext | null, donor_id: string) {
   );
 
   if (donorResult.rows.length === 0) {
-    const response = NextResponse.json({ error: "Donor not found" }, { status: 404 });
-    setCORSHeaders(response);
-    return response;
+    return corsError("Donor not found", 404);
   }
 
   const donor = firstOrNull(donorResult.rows);
@@ -234,18 +245,23 @@ async function getDonorSummary(auth: AuthContext | null, donor_id: string) {
     [donor_id]
   );
 
-  const response = NextResponse.json({
+  return corsJson<
+    ApiResponse<typeof donor> & {
+      summary: {
+        yearlyContributions: typeof yearlyContributions.rows;
+        contributionsByType: typeof contributionsByType.rows;
+        recentContributions: typeof recentContributions.rows;
+      };
+    }
+  >({
     success: true,
-    donor,
+    data: donor,
     summary: {
       yearlyContributions: yearlyContributions.rows,
       contributionsByType: contributionsByType.rows,
-      recentContributions: recentContributions.rows
-    }
+      recentContributions: recentContributions.rows,
+    },
   });
-
-  setCORSHeaders(response);
-  return response;
 }
 
 // Get all contributions for a donor
@@ -261,13 +277,10 @@ async function getDonorContributions(auth: AuthContext | null, donor_id: string)
     [donor_id]
   );
 
-  const response = NextResponse.json({
+  return corsJson<ApiResponse<typeof result.rows>>({
     success: true,
-    data: result.rows
+    data: result.rows,
   });
-
-  setCORSHeaders(response);
-  return response;
 }
 
 // POST /api/donors - Create donor or contribution
@@ -275,16 +288,12 @@ async function handlePost(req: NextRequest) {
   try {
     const user = await getAuthContext(req);
     if (!user) {
-      const response = NextResponse.json({ error: "Authentication required" }, { status: 401 });
-      setCORSHeaders(response);
-      return response;
+      return corsError("Authentication required", 401);
     }
 
     const rawBody = await req.json();
     if (typeof rawBody !== "object" || rawBody === null) {
-      const response = NextResponse.json({ error: "Invalid request payload" }, { status: 400 });
-      setCORSHeaders(response);
-      return response;
+      return corsError("Invalid request payload", 400);
     }
 
     const body = rawBody as Record<string, unknown>;
@@ -298,12 +307,11 @@ async function handlePost(req: NextRequest) {
     return await createDonor(user, body as DonorCreatePayload, user.email || "");
   } catch (error) {
     console.error("Error in donors POST:", error);
-    const response = NextResponse.json(
-      { error: "Error creating donor record", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+    return corsError(
+      "Error creating donor record",
+      500,
+      error instanceof Error ? error.message : "Unknown error",
     );
-    setCORSHeaders(response);
-    return response;
   }
 }
 
@@ -312,9 +320,7 @@ async function createDonor(auth: AuthContext | null, data: DonorCreatePayload, u
   const required: Array<keyof DonorCreatePayload> = ["church_id", "name", "type"];
   for (const field of required) {
     if (data[field] === undefined || data[field] === null || data[field] === "") {
-      const response = NextResponse.json({ error: `${field as string} is required` }, { status: 400 });
-      setCORSHeaders(response);
-      return response;
+      return corsError(`${field as string} is required`, 400);
     }
   }
 
@@ -326,9 +332,7 @@ async function createDonor(auth: AuthContext | null, data: DonorCreatePayload, u
     );
 
     if (existing.rows.length > 0) {
-      const response = NextResponse.json({ error: "A donor with this cedula already exists" }, { status: 409 });
-      setCORSHeaders(response);
-      return response;
+      return corsError("A donor with this cedula already exists", 409);
     }
   }
 
@@ -350,14 +354,14 @@ async function createDonor(auth: AuthContext | null, data: DonorCreatePayload, u
     ]
   );
 
-  const response = NextResponse.json({
-    success: true,
-    data: expectOne(result.rows),
-    message: "Donor created successfully"
-  }, { status: 201 });
-
-  setCORSHeaders(response);
-  return response;
+  return corsJson<ApiResponse<Donor> & { message: string }>(
+    {
+      success: true,
+      data: expectOne(result.rows),
+      message: "Donor created successfully",
+    },
+    { status: 201 },
+  );
 }
 
 // Create contribution
@@ -371,9 +375,7 @@ async function createContribution(auth: AuthContext | null, data: ContributionCr
   ];
   for (const field of required) {
     if (data[field] === undefined || data[field] === null || data[field] === "") {
-      const response = NextResponse.json({ error: `${field as string} is required` }, { status: 400 });
-      setCORSHeaders(response);
-      return response;
+      return corsError(`${field as string} is required`, 400);
     }
   }
 
@@ -399,15 +401,15 @@ async function createContribution(auth: AuthContext | null, data: ContributionCr
     ]
   );
 
-  const response = NextResponse.json({
-    success: true,
-    data: expectOne(result.rows),
-    message: "Contribution recorded successfully",
-    receiptNumber
-  }, { status: 201 });
-
-  setCORSHeaders(response);
-  return response;
+  return corsJson<ApiResponse<Contribution> & { message: string; receiptNumber: string }>(
+    {
+      success: true,
+      data: expectOne(result.rows),
+      message: "Contribution recorded successfully",
+      receiptNumber,
+    },
+    { status: 201 },
+  );
 }
 
 // PUT /api/donors - Update donor or contribution
@@ -415,9 +417,7 @@ async function handlePut(req: NextRequest) {
   try {
     const user = await getAuthContext(req);
     if (!user) {
-      const response = NextResponse.json({ error: "Authentication required" }, { status: 401 });
-      setCORSHeaders(response);
-      return response;
+      return corsError("Authentication required", 401);
     }
 
     const { searchParams } = new URL(req.url);
@@ -430,21 +430,18 @@ async function handlePut(req: NextRequest) {
     }
 
     if (!donor_id) {
-      const response = NextResponse.json({ error: "Donor ID is required" }, { status: 400 });
-      setCORSHeaders(response);
-      return response;
+      return corsError("Donor ID is required", 400);
     }
 
     const payload = (await req.json()) as DonorUpdatePayload;
     return await updateDonor(user, donor_id, payload);
   } catch (error) {
     console.error("Error in donors PUT:", error);
-    const response = NextResponse.json(
-      { error: "Error updating donor record", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+    return corsError(
+      "Error updating donor record",
+      500,
+      error instanceof Error ? error.message : "Unknown error",
     );
-    setCORSHeaders(response);
-    return response;
   }
 }
 
@@ -472,34 +469,27 @@ async function updateDonor(auth: AuthContext | null, donor_id: string, data: Don
   }
 
   if (updates.length === 0) {
-    const response = NextResponse.json({ error: "No fields to update" }, { status: 400 });
-    setCORSHeaders(response);
-    return response;
+    return corsError("No fields to update", 400);
   }
 
   paramCount++;
   updates.push(`updated_at = CURRENT_TIMESTAMP`);
   values.push(donor_id);
 
-  const result = await executeWithContext(auth, 
+  const result = await executeWithContext<Donor>(auth, 
     `UPDATE donors SET ${updates.join(", ")} WHERE id = $${paramCount} RETURNING *`,
     values
   );
 
   if (result.rows.length === 0) {
-    const response = NextResponse.json({ error: "Donor not found" }, { status: 404 });
-    setCORSHeaders(response);
-    return response;
+    return corsError("Donor not found", 404);
   }
 
-  const response = NextResponse.json({
+  return corsJson<ApiResponse<Donor> & { message: string }>({
     success: true,
     data: expectOne(result.rows),
-    message: "Donor updated successfully"
+    message: "Donor updated successfully",
   });
-
-  setCORSHeaders(response);
-  return response;
 }
 
 // Update contribution
@@ -525,33 +515,26 @@ async function updateContribution(auth: AuthContext | null, contribution_id: str
   }
 
   if (updates.length === 0) {
-    const response = NextResponse.json({ error: "No fields to update" }, { status: 400 });
-    setCORSHeaders(response);
-    return response;
+    return corsError("No fields to update", 400);
   }
 
   paramCount++;
   values.push(contribution_id);
 
-  const result = await executeWithContext(auth, 
+  const result = await executeWithContext<Contribution>(auth, 
     `UPDATE contributions SET ${updates.join(", ")} WHERE id = $${paramCount} RETURNING *`,
     values
   );
 
   if (result.rows.length === 0) {
-    const response = NextResponse.json({ error: "Contribution not found" }, { status: 404 });
-    setCORSHeaders(response);
-    return response;
+    return corsError("Contribution not found", 404);
   }
 
-  const response = NextResponse.json({
+  return corsJson<ApiResponse<Contribution> & { message: string }>({
     success: true,
     data: expectOne(result.rows),
-    message: "Contribution updated successfully"
+    message: "Contribution updated successfully",
   });
-
-  setCORSHeaders(response);
-  return response;
 }
 
 // DELETE /api/donors - Delete donor or contribution
@@ -559,9 +542,7 @@ async function handleDelete(req: NextRequest) {
   try {
     const user = await getAuthContext(req);
     if (!user) {
-      const response = NextResponse.json({ error: "Authentication required" }, { status: 401 });
-      setCORSHeaders(response);
-      return response;
+      return corsError("Authentication required", 401);
     }
 
     const { searchParams } = new URL(req.url);
@@ -570,31 +551,32 @@ async function handleDelete(req: NextRequest) {
 
     if (contribution_id) {
       await executeWithContext(user, `DELETE FROM contributions WHERE id = $1`, [contribution_id]);
-      const response = NextResponse.json({ success: true, message: "Contribution deleted" });
-      setCORSHeaders(response);
-      return response;
+      return corsJson<ApiResponse<Record<string, never>> & { message: string }>({
+        success: true,
+        data: {},
+        message: "Contribution deleted",
+      });
     }
 
     if (!donor_id) {
-      const response = NextResponse.json({ error: "ID is required" }, { status: 400 });
-      setCORSHeaders(response);
-      return response;
+      return corsError("ID is required", 400);
     }
 
     // Soft delete donor (mark as inactive)
     await executeWithContext(user, `UPDATE donors SET active = false WHERE id = $1`, [donor_id]);
 
-    const response = NextResponse.json({ success: true, message: "Donor deactivated" });
-    setCORSHeaders(response);
-    return response;
+    return corsJson<ApiResponse<Record<string, never>> & { message: string }>({
+      success: true,
+      data: {},
+      message: "Donor deactivated",
+    });
   } catch (error) {
     console.error("Error in donors DELETE:", error);
-    const response = NextResponse.json(
-      { error: "Error deleting donor record", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+    return corsError(
+      "Error deleting donor record",
+      500,
+      error instanceof Error ? error.message : "Unknown error",
     );
-    setCORSHeaders(response);
-    return response;
   }
 }
 

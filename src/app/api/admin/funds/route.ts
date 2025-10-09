@@ -4,6 +4,7 @@ import { api } from '../../../../../convex/_generated/api';
 import { mapFundsListResponse } from '@/lib/convex-adapters';
 import { normalizeFundsResponse } from '@/types/financial';
 import { handleApiError } from '@/lib/api-errors';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Admin Funds API - Migrated to Convex
@@ -33,11 +34,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const payload = mapFundsListResponse(result);
     const funds = normalizeFundsResponse(payload);
 
-    return NextResponse.json({
-      success: true,
-      data: funds.records,
-      totals: funds.totals,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: funds.records,
+        totals: funds.totals,
+      } satisfies ApiResponse<typeof funds.records> & { totals: typeof funds.totals },
+    );
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'GET /api/admin/funds');
   }

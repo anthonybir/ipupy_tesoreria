@@ -3,6 +3,7 @@ import { getAuthenticatedConvexClient } from '@/lib/convex-server';
 import { api } from '../../../../../../convex/_generated/api';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
 import type { Id } from '../../../../../../convex/_generated/dataModel';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Admin Pastor Profile Linking API - Migrated to Convex
@@ -36,11 +37,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       church_id: church_id as Id<'churches'>,
     });
 
-    return NextResponse.json({
-      success: true,
-      data: user,
-      message: 'Pastor vinculado a iglesia exitosamente',
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: user,
+        message: 'Pastor vinculado a iglesia exitosamente',
+      } satisfies ApiResponse<typeof user> & { message: string },
+    );
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'POST /api/admin/pastors/link-profile');
   }

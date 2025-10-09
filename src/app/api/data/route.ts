@@ -6,6 +6,7 @@ import { getAuthContext, type AuthContext } from "@/lib/auth-context";
 import { executeWithContext } from "@/lib/db";
 import { firstOrNull } from "@/lib/db-helpers";
 import { setCORSHeaders } from "@/lib/cors";
+import type { ApiResponse } from "@/types/utils";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -55,15 +56,34 @@ const toStringValue = (value: unknown, fallback = ""): string => {
   return fallback;
 };
 
-const jsonResponse = (body: unknown, status = 200) => {
-  const response = NextResponse.json(body, { status });
+const respondSuccess = <T>(body: T, status = 200) => {
+  const response = NextResponse.json(
+    {
+      success: true,
+      data: body,
+    } satisfies ApiResponse<T>,
+    { status },
+  );
   setCORSHeaders(response);
   return response;
 };
 
-const unauthorizedResponse = () => jsonResponse({ error: "Authentication required" }, 401);
-const badRequest = (message: string) => jsonResponse({ error: message }, 400);
-const methodNotAllowed = (message: string) => jsonResponse({ error: message }, 405);
+const respondError = (message: string, status: number, details?: unknown) => {
+  const response = NextResponse.json(
+    {
+      success: false,
+      error: message,
+      ...(details !== undefined ? { details } : {}),
+    } satisfies ApiResponse<never>,
+    { status },
+  );
+  setCORSHeaders(response);
+  return response;
+};
+
+const unauthorizedResponse = () => respondError("Authentication required", 401);
+const badRequest = (message: string) => respondError(message, 400);
+const methodNotAllowed = (message: string) => respondError(message, 405);
 const buildBinaryResponse = (buffer: Buffer, filename: string) => {
   const response = new NextResponse(new Uint8Array(buffer), {
     status: 200,
@@ -101,7 +121,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     return handleExportRequest(auth, searchParams);
   } catch (error) {
     console.error("Error in data export handler:", error);
-    return jsonResponse({ error: "Error interno del servidor" }, 500);
+    return respondError("Error interno del servidor", 500);
   }
 }
 
@@ -120,7 +140,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     return handleImportRequest(auth, req);
   } catch (error) {
     console.error("Error in data import handler:", error);
-    return jsonResponse({ error: "Error interno del servidor" }, 500);
+    return respondError("Error interno del servidor", 500);
   }
 }
 async function handleExportRequest(auth: AuthContext | null, searchParams: URLSearchParams) {
@@ -165,7 +185,7 @@ async function handleExportRequest(auth: AuthContext | null, searchParams: URLSe
   }
 
   if (exportData.length === 0) {
-    return jsonResponse({ error: "No se encontraron datos para exportar" }, 404);
+    return respondError("No se encontraron datos para exportar", 404);
   }
 
   const { workbook } = buildWorkbook(exportData, type, yearParam, monthParam ?? "");
@@ -397,18 +417,18 @@ async function handleImportRequest(auth: AuthContext | null, req: NextRequest) {
       }
 
       const result = await importReports(auth, rows, year, month, overwrite);
-      return jsonResponse(result);
+      return respondSuccess(result);
     }
 
     if (type === "churches") {
       const result = await importChurches(auth, rows as ChurchesImportRow[], overwrite);
-      return jsonResponse(result);
+      return respondSuccess(result);
     }
 
     return badRequest('Tipo de importación no válido. Use "reports" o "churches"');
   } catch (error) {
     console.error("Error en import:", error);
-    return jsonResponse({ error: "Error interno del servidor" }, 500);
+    return respondError("Error interno del servidor", 500);
   }
 }
 async function importReports(

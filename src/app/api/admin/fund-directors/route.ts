@@ -3,6 +3,7 @@ import { getAuthenticatedConvexClient } from '@/lib/convex-server';
 import { api } from '../../../../../convex/_generated/api';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
 import type { Id } from '../../../../../convex/_generated/dataModel';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Admin Fund Directors API - Migrated to Convex
@@ -32,11 +33,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       fund_id: fund_id as Id<'funds'>,
     });
 
-    return NextResponse.json({
-      success: true,
-      data: result.user,
-      message: result.message,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: result.user,
+        message: result.message,
+      } satisfies ApiResponse<typeof result.user> & { message: string },
+    );
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'POST /api/admin/fund-directors');
   }

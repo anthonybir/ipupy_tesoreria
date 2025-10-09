@@ -4,6 +4,7 @@ import { executeWithContext } from "@/lib/db";
 import { firstOrNull, firstOrDefault, expectOne } from "@/lib/db-helpers";
 import { setCORSHeaders } from "@/lib/cors";
 import { createTransaction as createLedgerTransaction } from "@/app/api/reports/route-helpers";
+import type { ApiResponse } from "@/types/utils";
 
 interface FundMovement {
   id: number;
@@ -25,6 +26,22 @@ interface FundMovementInput {
   tipo_movimiento?: "entrada" | "salida";
   concepto?: string;
 }
+
+const corsJson = <T extends ApiResponse<unknown>>(payload: T, init?: ResponseInit) => {
+  const response = NextResponse.json(payload, init);
+  setCORSHeaders(response);
+  return response;
+};
+
+const corsError = (message: string, status: number, details?: unknown) =>
+  corsJson<ApiResponse<never>>(
+    {
+      success: false,
+      error: message,
+      ...(details !== undefined ? { details } : {}),
+    },
+    { status },
+  );
 
 // GET /api/financial/fund-movements - Get fund movements
 async function handleGet(req: NextRequest) {
@@ -129,30 +146,31 @@ async function handleGet(req: NextRequest) {
     const totalCount = Number.parseInt(totalsRow.total_count, 10);
     const totalAmount = Number.parseFloat(totalsRow.total_amount);
 
-    const response = NextResponse.json({
+    return corsJson<
+      ApiResponse<typeof result.rows> & {
+        pagination: { limit: number; offset: number; total: number };
+        totals: { count: number; total_amount: number };
+      }
+    >({
       success: true,
       data: result.rows,
       pagination: {
         limit: limitValue,
         offset: offsetValue,
-        total: totalCount
+        total: totalCount,
       },
       totals: {
         count: totalCount,
-        total_amount: totalAmount
-      }
+        total_amount: totalAmount,
+      },
     });
-
-    setCORSHeaders(response);
-    return response;
   } catch (error) {
     console.error("Error fetching fund movements:", error);
-    const response = NextResponse.json(
-      { error: "Error fetching fund movements", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+    return corsError(
+      "Error fetching fund movements",
+      500,
+      error instanceof Error ? error.message : "Unknown error",
     );
-    setCORSHeaders(response);
-    return response;
   }
 }
 
@@ -161,9 +179,7 @@ async function handlePost(req: NextRequest) {
   try {
     const user = await getAuthContext(req);
     if (!user) {
-      const response = NextResponse.json({ error: "Authentication required" }, { status: 401 });
-      setCORSHeaders(response);
-      return response;
+      return corsError("Authentication required", 401);
     }
 
     const rawBody = await req.json();
@@ -176,9 +192,7 @@ async function handlePost(req: NextRequest) {
     ) {
       const reportId = (rawBody as { report_id?: number }).report_id;
       if (!reportId) {
-        const response = NextResponse.json({ error: "report_id is required for process_report" }, { status: 400 });
-        setCORSHeaders(response);
-        return response;
+        return corsError("report_id is required for process_report", 400);
       }
       return processReportMovements(user, reportId, user.email || "");
     }
@@ -258,23 +272,28 @@ async function handlePost(req: NextRequest) {
       }
     }
 
-    const response = NextResponse.json({
-      success: errors.length === 0,
+    const payload: ApiResponse<FundMovement[]> & {
+      created: FundMovement[];
+      errors?: Array<{ movement: unknown; error: string }>;
+      message: string;
+    } = {
+      success: true,
+      data: results,
       created: results,
-      errors: errors.length > 0 ? errors : undefined,
-      message: `Created ${results.length} movement(s)${errors.length > 0 ? `, ${errors.length} failed` : ""}`
-    }, { status: errors.length === 0 ? 201 : 207 });
+      message: `Created ${results.length} movement(s)${
+        errors.length > 0 ? `, ${errors.length} failed` : ""
+      }`,
+      ...(errors.length > 0 ? { errors } : {}),
+    };
 
-    setCORSHeaders(response);
-    return response;
+    return corsJson(payload, { status: errors.length === 0 ? 201 : 207 });
   } catch (error) {
     console.error("Error creating fund movements:", error);
-    const response = NextResponse.json(
-      { error: "Error creating fund movements", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+    return corsError(
+      "Error creating fund movements",
+      500,
+      error instanceof Error ? error.message : "Unknown error",
     );
-    setCORSHeaders(response);
-    return response;
   }
 }
 
@@ -302,9 +321,7 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
 
     const report = firstOrNull(reportResult.rows);
     if (!report) {
-      const response = NextResponse.json({ error: "Report not found" }, { status: 404 });
-      setCORSHeaders(response);
-      return response;
+      return corsError("Report not found", 404);
     }
     const movementDate = report.fecha_deposito
       ? new Date(report.fecha_deposito).toISOString().slice(0, 10)
@@ -320,11 +337,7 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
     const processedCount = existingRow ? Number.parseInt(existingRow.count, 10) : 0;
 
     if (processedCount > 0) {
-      const response = NextResponse.json({
-        error: "Fund movements already processed for this report"
-      }, { status: 409 });
-      setCORSHeaders(response);
-      return response;
+      return corsError("Fund movements already processed for this report", 409);
     }
 
     const movements = [];
@@ -480,22 +493,27 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
       movements.push(created);
     }
 
-    const response = NextResponse.json({
-      success: true,
-      movements,
-      message: `Processed ${movements.length} automatic fund movements for report ${reportId}`
-    }, { status: 201 });
-
-    setCORSHeaders(response);
-    return response;
+    return corsJson<
+      ApiResponse<typeof movements> & {
+        movements: typeof movements;
+        message: string;
+      }
+    >(
+      {
+        success: true,
+        data: movements,
+        movements,
+        message: `Processed ${movements.length} automatic fund movements for report ${reportId}`,
+      },
+      { status: 201 },
+    );
   } catch (error) {
     console.error("Error processing report movements:", error);
-    const response = NextResponse.json(
-      { error: "Error processing fund movements", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+    return corsError(
+      "Error processing fund movements",
+      500,
+      error instanceof Error ? error.message : "Unknown error",
     );
-    setCORSHeaders(response);
-    return response;
   }
 }
 
@@ -504,18 +522,14 @@ async function handleDelete(req: NextRequest) {
   try {
     const user = await getAuthContext(req);
     if (!user) {
-      const response = NextResponse.json({ error: "Authentication required" }, { status: 401 });
-      setCORSHeaders(response);
-      return response;
+      return corsError("Authentication required", 401);
     }
 
     const { searchParams } = new URL(req.url);
     const movementId = searchParams.get("id");
 
     if (!movementId) {
-      const response = NextResponse.json({ error: "Movement ID is required" }, { status: 400 });
-      setCORSHeaders(response);
-      return response;
+      return corsError("Movement ID is required", 400);
     }
 
     // Get movement details
@@ -526,9 +540,7 @@ async function handleDelete(req: NextRequest) {
 
     const mov = firstOrNull(movement.rows);
     if (!mov) {
-      const response = NextResponse.json({ error: "Fund movement not found" }, { status: 404 });
-      setCORSHeaders(response);
-      return response;
+      return corsError("Fund movement not found", 404);
     }
 
     // Delete the movement
@@ -546,21 +558,18 @@ async function handleDelete(req: NextRequest) {
       [mov.report_id, mov.fund_category_id, mov.monto]
     );
 
-    const response = NextResponse.json({
+    return corsJson<ApiResponse<Record<string, never>> & { message: string }>({
       success: true,
-      message: "Fund movement reversed successfully"
+      data: {},
+      message: "Fund movement reversed successfully",
     });
-
-    setCORSHeaders(response);
-    return response;
   } catch (error) {
     console.error("Error reversing fund movement:", error);
-    const response = NextResponse.json(
-      { error: "Error reversing fund movement", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+    return corsError(
+      "Error reversing fund movement",
+      500,
+      error instanceof Error ? error.message : "Unknown error",
     );
-    setCORSHeaders(response);
-    return response;
   }
 }
 

@@ -4,6 +4,7 @@ import { getAuthenticatedConvexClient } from '@/lib/convex-server';
 import { mapChurchDocumentToRaw } from '@/lib/convex-adapters';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
 import { normalizeChurchRecord } from '@/types/api';
+import type { ApiResponse } from '@/types/utils';
 import { api } from '../../../../convex/_generated/api';
 import type { Id } from '../../../../convex/_generated/dataModel';
 
@@ -226,10 +227,13 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
       id: churchIdStr as Id<'churches'>,
     });
 
-    return NextResponse.json({
-      success: true,
-      data: { message: 'Iglesia desactivada exitosamente' },
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: {},
+        message: 'Iglesia desactivada exitosamente',
+      } satisfies ApiResponse<Record<string, never>> & { message: string },
+    );
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'DELETE /api/churches');
   }

@@ -155,9 +155,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Validate and process each transaction
     const results: unknown[] = [];
-    const errors: { transaction: unknown; error: string }[] = [];
+    const errors: Array<{ index: number; transaction: unknown; error: string }> = [];
 
-    for (const transaction of inputArray) {
+    for (const [index, transaction] of inputArray.entries()) {
       try {
         // Validate required fields
         if (!transaction['date']) {
@@ -223,28 +223,39 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         results.push(created);
       } catch (error) {
         errors.push({
+          index,
           transaction,
           error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     }
 
-    // ApiResponse envelope with batch creation results
-    type BatchCreateResponse = {
-      success: boolean;
-      created: unknown[];
-      errors?: { transaction: unknown; error: string }[] | undefined;
-      message: string;
-    };
-    const response: BatchCreateResponse = {
-      success: errors.length === 0,
+    const createdCount = results.length;
+    const failedCount = errors.length;
+
+    const payload = {
       created: results,
-      ...(errors.length > 0 ? { errors } : {}),
-      message: `Created ${results.length} transaction(s)${
-        errors.length > 0 ? `, ${errors.length} failed` : ''
+      createdCount,
+      failedCount,
+      ...(errors.length > 0
+        ? {
+            errors: errors.map(({ index, error }) => ({ index, error })),
+            errorDetails: errors,
+          }
+        : {}),
+    };
+
+    const response: ApiResponse<typeof payload> & { message: string } = {
+      success: true,
+      data: payload,
+      message: `Created ${createdCount} transaction(s)${
+        failedCount > 0 ? `, ${failedCount} failed` : ''
       }`,
     };
-    return NextResponse.json(response, { status: errors.length === 0 ? 201 : 207 });
+
+    return NextResponse.json(response, {
+      status: failedCount === 0 ? 201 : 207,
+    });
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'POST /api/financial/transactions');
   }

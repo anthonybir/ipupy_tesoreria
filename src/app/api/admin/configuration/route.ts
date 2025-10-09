@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedConvexClient } from '@/lib/convex-server';
 import { api } from '../../../../../convex/_generated/api';
-import { handleApiError } from '@/lib/api-errors';
+import { handleApiError, ValidationError } from '@/lib/api-errors';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Admin Configuration API - Migrated to Convex
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     };
 
     if (!section) {
-      throw new Error('section es requerido');
+      throw new ValidationError('section es requerido');
     }
 
     const result = await client.mutation(api.admin.updateSystemConfig, {
@@ -48,10 +49,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       data,
     });
 
-    return NextResponse.json({
-      success: true,
-      message: result.message,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: {},
+        message: result.message,
+      } satisfies ApiResponse<Record<string, never>> & { message: string },
+    );
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'POST /api/admin/configuration');
   }

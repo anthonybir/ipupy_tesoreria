@@ -6,6 +6,7 @@ import type { Id } from '../../../../../convex/_generated/dataModel';
 import { getFundConvexId, getChurchConvexId, createReverseLookupMaps } from '@/lib/convex-id-mapping';
 import { mapTransactionsListResponse } from '@/lib/convex-adapters';
 import { normalizeTransactionsResponse } from '@/types/financial';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Admin Transactions API - Migrated to Convex
@@ -114,12 +115,17 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const payload = mapTransactionsListResponse(result, { fundMap, churchMap });
     const transactions = normalizeTransactionsResponse(payload);
 
-    return NextResponse.json({
-      success: true,
-      data: transactions.records,
-      pagination: transactions.pagination,
-      totals: transactions.totals,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: transactions.records,
+        pagination: transactions.pagination,
+        totals: transactions.totals,
+      } satisfies ApiResponse<typeof transactions.records> & {
+        pagination: typeof transactions.pagination;
+        totals: typeof transactions.totals;
+      },
+    );
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'GET /api/admin/transactions');
   }

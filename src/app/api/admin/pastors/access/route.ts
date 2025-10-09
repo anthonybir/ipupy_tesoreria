@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedConvexClient } from '@/lib/convex-server';
 import { api } from '../../../../../../convex/_generated/api';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Admin Pastor Access Management API - Migrated to Convex
@@ -30,19 +31,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const result = await client.mutation(api.admin.deactivateUser, {
         user_id,
       });
-      return NextResponse.json({
-        success: true,
-        message: result.message,
-      });
+      return NextResponse.json(
+        {
+          success: true,
+          data: {},
+          message: result.message,
+        } satisfies ApiResponse<Record<string, never>> & { message: string },
+      );
     }
 
     // Reactivate user by updating profile (assumes user exists)
     // NOTE: Convex doesn't have a reactivate function, would need to be added
     // For now, this is a placeholder
-    return NextResponse.json({
-      success: true,
-      message: 'Acceso de pastor actualizado',
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: {},
+        message: 'Acceso de pastor actualizado',
+      } satisfies ApiResponse<Record<string, never>> & { message: string },
+    );
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'POST /api/admin/pastors/access');
   }

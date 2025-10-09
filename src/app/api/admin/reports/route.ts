@@ -3,6 +3,7 @@ import { getAuthenticatedConvexClient } from '@/lib/convex-server';
 import { api } from '../../../../../convex/_generated/api';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
 import type { Id } from '../../../../../convex/_generated/dataModel';
+import type { ApiResponse } from '@/types/utils';
 import {
   mapReportDocumentToRaw,
   type ConvexReportDocument,
@@ -68,10 +69,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         estado ? report.status.toLowerCase() === estado.toLowerCase() : true
       );
 
-    return NextResponse.json({
-      success: true,
-      data: reports,
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        data: reports,
+      } satisfies ApiResponse<typeof reports>,
+    );
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'GET /api/admin/reports');
   }

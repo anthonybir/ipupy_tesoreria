@@ -3,6 +3,7 @@ import { getAuthenticatedConvexClient } from '@/lib/convex-server';
 import { api } from '../../../../../../convex/_generated/api';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
 import type { Id } from '../../../../../../convex/_generated/dataModel';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Fund Event Actuals API - Migrated to Convex
@@ -66,8 +67,8 @@ export async function POST(
       {
         success: true,
         data: actual,
-      },
-      { status: 201 }
+      } satisfies ApiResponse<typeof actual>,
+      { status: 201 },
     );
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'POST /api/fund-events/[id]/actuals');
