@@ -57,10 +57,10 @@
 - Sprint 2: 11 endpoints (Funds, Transactions, Fund Events, Admin) = **19/27 total**
 - Sprint 3 remaining: 8 endpoints (Reconciliation, Ledger, Dashboard, Export, Login)
 
-### Added - API Response Standardization (Sprint 3 - Complete)
+### Added - API Response Standardization (Sprint 3 - Partial)
 
-**WS-1: Dashboard & Specialized Endpoints**
-- ✅ **API Standardization COMPLETE** - All 20 active endpoints now use `ApiResponse<T>` pattern
+**WS-1: Dashboard & Core Endpoints**
+- ⚠️ **API Standardization PARTIAL** - 9 core endpoint groups migrated, ~15 secondary endpoints remain
 - Migrated `/api/dashboard` GET endpoint with legacy compatibility fields
 - Verified `/api/admin/reconciliation` already returns 503 with `ApiResponse<never>` envelope
 - Confirmed non-existent endpoints: `/api/ledger`, `/api/export`, `/api/login` (NextAuth handles auth)
@@ -72,17 +72,21 @@
 
 **Files Modified:**
 - `src/app/api/dashboard/route.ts` - Dashboard API migration
-- `docs/TASK_TRACKER.md` - Sprint 3 completion, WS-1 marked complete
+- `docs/TASK_TRACKER.md` - Sprint 3 completion, scope corrected to partial
 
-**Final Statistics:**
-- **Total Endpoints Migrated**: 20 active endpoints across 3 sprints
-- **Actual Time**: 6 hours (vs 22h estimated = 73% time savings)
+**Statistics:**
+- **Core Endpoints Migrated**: 9 endpoint groups (reports, providers, funds, transactions, fund-events, admin users/reports/approve, dashboard)
+- **Actual Time**: 6 hours for core endpoints
 - **Breakdown**:
-  - Sprint 1: 8 endpoints in 3 hours
-  - Sprint 2: 11 endpoints in 2.5 hours
-  - Sprint 3: 1 endpoint in 0.5 hours
+  - Sprint 1: Reports (4), Providers (4) in 3 hours
+  - Sprint 2: Funds (4), Transactions (4), Fund Events (6), Admin (2) in 2.5 hours
+  - Sprint 3: Dashboard (1) in 0.5 hours
 - **Type Safety**: Zero TypeScript errors, all strict mode checks pass
 - **Backward Compatibility**: DELETE endpoints preserve `message` at top level, dashboard preserves legacy fields
+
+**Remaining Work:**
+- ❌ Secondary endpoints not migrated: `/api/donors`, `/api/accounting`, `/api/people`, `/api/worship-records`, `/api/churches`, `/api/admin/configuration`, `/api/admin/fund-directors`, `/api/admin/funds`, `/api/admin/reports`, `/api/admin/transactions`, `/api/financial/fund-movements`, `/api/providers/check-ruc`, `/api/providers/search`
+- ⚠️ Known Issues: `/api/financial/transactions` POST uses custom `BatchCreateResponse` instead of `ApiResponse<T>`
 
 ### Documentation
 

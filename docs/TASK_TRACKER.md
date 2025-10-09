@@ -1,7 +1,7 @@
 # IPU PY Tesorería – Task Tracker
 
 **Created:** October 8, 2025
-**Last Updated:** October 8, 2025 (API Standardization Complete)
+**Last Updated:** October 8, 2025 (Corrected API Standardization Scope)
 **Maintainers:** _(add primary owner + backup when assigned)_
 
 ---
@@ -17,7 +17,7 @@ This tracker manages three critical infrastructure workstreams:
 2. **Role System Restoration** (17h) - Implement 6-role auto-provisioning and admin management UI
 3. **Documentation Cleanup** (3h) - Create authoritative docs and archive outdated references
 
-**Current Status:** ✅ WS-1 API Standardization Complete (20/20 active endpoints) | Phase 2 Ready
+**Current Status:** ⚠️ WS-1 API Standardization **Partial** (9 core endpoint groups migrated, ~15 secondary endpoints remain) | Phase 2 Ready
 
 ---
 
@@ -33,7 +33,7 @@ This tracker manages three critical infrastructure workstreams:
 
 | ID | Workstream | Objective | Success Criteria | Effort | Status |
 | --- | --- | --- | --- | --- | --- |
-| WS-1 | API Response Standardization | Migrate all active REST endpoints to `ApiResponse<T>` envelope pattern | All endpoints return `{ success, data }` or `{ success, error }`, hooks use type-safe unwrapping, zero TypeScript errors | 20h | ✅ Complete (20 endpoints) |
+| WS-1 | API Response Standardization | Migrate core REST endpoints to `ApiResponse<T>` envelope pattern | All endpoints return `{ success, data }` or `{ success, error }`, hooks use type-safe unwrapping, zero TypeScript errors | 20h | ⚠️ Partial (9 core groups done, ~15 secondary remain) |
 | WS-2 | Role System Restoration | Implement 6-role auto-provisioning, admin UI, and permission enforcement | Profiles auto-created on sign-in, admin can assign roles, historical profiles migrated, permissions enforced | 17h | Phase 1 ✅ / Phase 2 Ready |
 | WS-3 | Documentation Cleanup | Create authoritative docs and deprecate outdated references | `ROLE_SYSTEM_REFERENCE.md` created, legacy docs have warning banners, `API_CONTRACTS.md` exists | 3h | Backlog |
 
@@ -144,7 +144,18 @@ This tracker manages three critical infrastructure workstreams:
 
 **Sprint 3 Actual:** 0.5 hours (vs 6h estimated)
 
-**API Standardization Complete:** 20 active endpoints migrated across 3 sprints (6 hours total vs 22h estimated)
+**Core Endpoints Migrated:** 9 core endpoint groups across 3 sprints (6 hours total)
+
+**Remaining Endpoints** (~15 secondary endpoints not yet migrated):
+- `/api/accounting`, `/api/donors`, `/api/people`, `/api/worship-records`
+- `/api/churches` (partial - no ApiResponse)
+- `/api/admin/configuration`, `/api/admin/fund-directors`, `/api/admin/funds`, `/api/admin/reports`, `/api/admin/transactions`
+- `/api/financial/fund-movements`
+- `/api/providers/check-ruc`, `/api/providers/search`
+- Auth/system endpoints: `/api/auth/*`, `/api/openid/*`, `/api/health`, `/api/data`
+
+**Known Issues:**
+- `/api/financial/transactions` POST uses custom `BatchCreateResponse` (not `ApiResponse<T>`)
 
 ---
 
@@ -196,7 +207,8 @@ This tracker manages three critical infrastructure workstreams:
 | Oct 8, 2025 (afternoon) | Anthony + Claude | **Major planning session**: Analyzed `/api/churches` standardization, researched role system history across 15+ files, resolved 6 vs 7 role ambiguity, created comprehensive 3-scope plan | **CRITICAL**: Confirmed 6-role system (treasurer is NATIONAL scope), only 2 profiles migrated (need ~40), ApiResponse pattern ready for system-wide rollout | Start Sprint 1 (T-101-T-111) |
 | Oct 8, 2025 (evening) | Anthony + Claude | **Sprint 1 Execution**: Completed all 11 tasks in 3 hours. Migrated reports & providers APIs to ApiResponse pattern. Created authoritative role docs. **CRITICAL FIX**: Flattened providers GET response to maintain backward compatibility | Providers response shape: `{ success, data: Provider[], count }` instead of double-wrapped structure | Start Sprint 2 (T-110-T-114) |
 | Oct 8, 2025 (night #1) | Claude | **Sprint 2 Execution**: Completed all 5 tasks in 2.5 hours. Migrated financial endpoints (`/api/financial/funds`, `/api/financial/transactions`), fund events endpoints (GET, POST, PATCH, DELETE with workflow actions), and admin endpoints (`/api/admin/users`, `/api/admin/reports/approve`). All responses now use ApiResponse<T> pattern with proper type annotations | Financial APIs support batch operations, fund events include approval workflow, admin endpoints maintain existing behavior | Start Sprint 3 (T-115-T-120) |
-| Oct 8, 2025 (night #2) | Anthony + Claude | **Documentation Accuracy Review + Sprint 3**: Anthony identified that TASK_TRACKER claimed completion without committed changes. Validated all changes existed as uncommitted work, ran validation (typecheck + lint), fixed 3 TypeScript errors (null checks, exactOptionalPropertyTypes), committed Sprints 1-2 (commit `0771725`). Completed Sprint 3 by migrating `/api/dashboard` - discovered original Sprint 3 scope included non-existent endpoints (`/api/ledger`, `/api/export`, `/api/login` don't exist, reconciliation already uses ApiResponse) | **WS-1 API Standardization COMPLETE**: 20 active endpoints migrated (8 Sprint 1 + 11 Sprint 2 + 1 Sprint 3). Total actual effort: 6 hours vs 22h estimated (73% efficiency gain). DELETE endpoints use top-level `message` for backward compatibility. Dashboard preserves legacy fields for existing consumers | Begin WS-2 Phase 2 (auto-provisioning) |
+| Oct 8, 2025 (night #2) | Anthony + Claude | **Documentation Accuracy Review + Sprint 3**: Anthony identified that TASK_TRACKER claimed completion without committed changes. Validated all changes existed as uncommitted work, ran validation (typecheck + lint), fixed 3 TypeScript errors (null checks, exactOptionalPropertyTypes), committed Sprints 1-2 (commit `0771725`). Completed Sprint 3 by migrating `/api/dashboard` - discovered original Sprint 3 scope included non-existent endpoints (`/api/ledger`, `/api/export`, `/api/login` don't exist, reconciliation already uses ApiResponse) | ~~WS-1 API Standardization COMPLETE~~: 20 active endpoints migrated (8 Sprint 1 + 11 Sprint 2 + 1 Sprint 3). Total actual effort: 6 hours vs 22h estimated (73% efficiency gain). DELETE endpoints use top-level `message` for backward compatibility. Dashboard preserves legacy fields for existing consumers. **Committed as `21b192e`** | Begin WS-2 Phase 2 (auto-provisioning) |
+| Oct 8, 2025 (night #3) | Anthony + Claude | **Scope Correction**: Anthony identified overstated claims in documentation - audit revealed ~15 secondary endpoints still use legacy response formats (`/api/donors`, `/api/accounting`, `/api/people`, `/api/worship-records`, `/api/churches`, `/api/admin/*`, etc.). Also `/api/financial/transactions` POST uses custom `BatchCreateResponse` not `ApiResponse<T>` | **CORRECTED**: WS-1 is **PARTIAL** not complete. 9 core endpoint groups migrated (reports, providers, financial funds/transactions, fund-events, admin users/reports/approve, dashboard). Updated TASK_TRACKER and CHANGELOG to accurately reflect partial completion | Complete remaining secondary endpoints OR narrow WS-1 scope definition |
 
 ---
 
@@ -260,15 +272,17 @@ This tracker manages three critical infrastructure workstreams:
 ## Appendix B — Key Deliverables
 
 ### WS-1 Deliverables
-- [x] ~~All active REST endpoints migrated to ApiResponse<T>~~ **COMPLETE** ✅
-  - Sprint 1: Reports (4), Providers (4) = 8 endpoints
-  - Sprint 2: Funds (4), Transactions (4), Fund Events (6), Admin (5) = 19 endpoints
-  - Sprint 3: Dashboard (1), Reconciliation (already compliant) = 20 total
-  - **Efficiency**: 6 hours actual vs 22h estimated (73% time savings)
+- [ ] ~~All active REST endpoints migrated to ApiResponse<T>~~ **PARTIAL** ⚠️
+  - ✅ Sprint 1: Reports (4), Providers (4) = 8 endpoints
+  - ✅ Sprint 2: Funds (4), Transactions (4), Fund Events (6), Admin (2) = 16 endpoints (24 cumulative)
+  - ✅ Sprint 3: Dashboard (1) = 25 total endpoints migrated
+  - ❌ Remaining: ~15 secondary endpoints (`/api/donors`, `/api/accounting`, `/api/people`, `/api/worship-records`, `/api/churches`, `/api/admin/*`, etc.)
+  - ⚠️ Known Issues: `/api/financial/transactions` POST uses custom `BatchCreateResponse`
+  - **Efficiency**: 6 hours actual for core endpoints
 - [x] All TanStack Query hooks updated to unwrap responses (N/A - using Convex hooks directly)
-- [ ] `docs/API_CONTRACTS.md` created (Deferred to WS-3)
+- [ ] `docs/API_CONTRACTS.md` created (Deferred)
 - [x] Zero TypeScript errors on build ✅
-- [x] Updated CHANGELOG.md (Sprints 1-2 ✅, Sprint 3 pending)
+- [x] Updated CHANGELOG.md (Sprints 1-3, needs scope correction)
 
 ### WS-2 Deliverables
 - [x] `docs/ROLE_SYSTEM_REFERENCE.md` (authoritative) - Sprint 1 ✅
