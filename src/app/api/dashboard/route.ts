@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedConvexClient } from '@/lib/convex-server';
 import { api } from '../../../../convex/_generated/api';
 import { handleApiError } from '@/lib/api-errors';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Dashboard API Routes - Migrated to Convex
@@ -29,8 +30,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // getDashboardStats handles admin authorization internally
     const stats = await client.query(api.admin.getDashboardStats, {});
 
-    return NextResponse.json({
+    // ApiResponse envelope with legacy compatibility fields
+    type DashboardStats = typeof stats;
+    const response: ApiResponse<DashboardStats> & {
+      summary: DashboardStats;
+      totalChurches: number;
+      reportedChurches: number;
+      monthTotal: number;
+      nationalFund: number;
+      overview: typeof stats.overview;
+      currentMonth: typeof stats.currentMonth;
+      fundOverview: typeof stats.fundOverview;
+    } = {
       success: true,
+      data: stats,
       summary: stats,
       // Legacy compatibility - some clients expect specific keys
       totalChurches: stats.totalChurches,
@@ -40,7 +53,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       overview: stats.overview,
       currentMonth: stats.currentMonth,
       fundOverview: stats.fundOverview,
-    });
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'GET /api/dashboard');
   }
