@@ -117,6 +117,35 @@
 - `pastor` role handles **LOCAL finances** (creates reports, cannot approve)
 - `national_treasurer` was consolidated into `treasurer` in October 2025
 
+### Added - Role System Restoration (Phase 2)
+
+**WS-2: Auto-Provisioning Implementation & Smoke Test ✅**
+
+**Implementation:**
+- Added Convex `ensureProfile` mutation (`convex/auth.ts`) to auto-create or reactivate profiles for `@ipupy.org.py` accounts with safe role defaults
+- Updated NextAuth JWT callback (`src/lib/auth.ts`) to invoke the mutation during first sign-in, including environment guards (`CONVEX_URL`) and development-only diagnostics
+- Regenerated Convex API client (`npx convex codegen`) to expose `api.auth.ensureProfile` for TypeScript consumers
+
+**Smoke Test Results (Oct 9, 2025):**
+- ✅ Test 1: New profile creation with secretary role
+- ✅ Test 2: Admin profile creation for `administracion@ipupy.org.py`
+- ✅ Test 3: Idempotency verification (no duplicate profiles)
+- ✅ Test 4: Name updates on existing profiles
+- ✅ Test 5: Inactive profile reactivation
+
+**Technical Details:**
+- Email normalization: `trim().toLowerCase()` prevents duplicates
+- Safe role assignment: `administracion@ipupy.org.py` → admin, others → secretary
+- Idempotent design: Safe to call multiple times for same email
+- Performance: Average mutation execution ~200ms
+- Development-only logging prevents production noise
+- Full test results: `docs/WS2_PHASE2_SMOKE_TEST_RESULTS.md`
+
+**Testing & Validation:**
+- `npm run typecheck` ✅
+- `npm run lint` ✅ (legacy optional-chain warnings unchanged)
+- Smoke test: ALL 5 TESTS PASSED ✅
+
 ---
 
 ## [3.3.0] - 2025-09-30

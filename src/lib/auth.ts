@@ -15,6 +15,8 @@
 import NextAuth, { type DefaultSession } from "next-auth";
 import Google from "next-auth/providers/google";
 import type { JWT } from "next-auth/jwt";
+import { ConvexHttpClient } from "convex/browser";
+import { api } from "../../convex/_generated/api";
 
 // NextAuth logger interface
 type LoggerInstance = {
@@ -121,7 +123,60 @@ function isAllowedEmail(email: string | null | undefined): boolean {
   return email.toLowerCase().endsWith(ALLOWED_DOMAIN);
 }
 
-/**
+let convexClient: ConvexHttpClient | null = null;
+let reportedMissingConvexUrl = false;
+
+function getConvexClient(): ConvexHttpClient | null {
+  const convexUrl = process.env["CONVEX_URL"];
+  if (!convexUrl) {
+    if (!reportedMissingConvexUrl) {
+      console.error("[NextAuth] CONVEX_URL not set; skipping Convex profile provisioning");
+      reportedMissingConvexUrl = true;
+    }
+    return null;
+  }
+
+  if (!convexClient) {
+    convexClient = new ConvexHttpClient(convexUrl);
+  }
+
+  return convexClient;
+}
+
+async function ensureUserProfile(email: string, name?: string | null): Promise<void> {
+  const client = getConvexClient();
+  if (!client) {
+    return;
+  }
+
+  const trimmedName = typeof name === "string" ? name.trim() : undefined;
+  const fullName = trimmedName && trimmedName.length > 0 ? trimmedName : undefined;
+
+  try {
+    const mutationArgs: {
+      email: string;
+      full_name?: string;
+    } = { email };
+
+    if (fullName) {
+      mutationArgs.full_name = fullName;
+    }
+
+    const result = await client.mutation(api.auth.ensureProfile, mutationArgs);
+
+    if (process.env.NODE_ENV === "development") {
+      let action = result.created ? "created" : "updated";
+      if (!result.created && "reactivated" in result && result.reactivated) {
+        action = "reactivated";
+      }
+      console.warn(`[NextAuth] ensureProfile ${action} profile for ${email}`);
+    }
+  } catch (error) {
+    console.error("[NextAuth] Failed to ensure Convex profile", error);
+  }
+}
+
+/** 
  * Refresh Google access token using refresh token
  *
  * Google's token endpoint returns a new id_token when refreshing.
@@ -251,9 +306,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // NextAuth provides `user` during the initial sign-in, but keep a defensive
         // guard in case future changes ever omit it.
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-        if (!user) {
+        if (!user || !user.email) {
+          console.error("[NextAuth] Sign-in missing user email; skipping Convex profile provisioning");
           return token;
         }
+        await ensureUserProfile(user.email, user.name);
         return {
           ...token,
           id: user.id,
