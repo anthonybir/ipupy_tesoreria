@@ -5,6 +5,7 @@ import { api } from '../../../../convex/_generated/api';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
 import type { Id } from '../../../../convex/_generated/dataModel';
 import { getChurchConvexId } from '@/lib/convex-id-mapping';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Report API Routes - Migrated to Convex
@@ -92,10 +93,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     if (lastReportParam === 'true') {
       const churchIdStr = searchParams.get('church_id');
       if (!churchIdStr) {
-        return NextResponse.json(
-          { error: 'church_id is required for last_report query' },
-          { status: 400 }
-        );
+        const response: ApiResponse<never> = {
+          success: false,
+          error: 'church_id is required for last_report query'
+        };
+        return NextResponse.json(response, { status: 400 });
       }
 
       const churchConvexId = await resolveChurchConvexId(client, churchIdStr);
@@ -106,17 +108,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       });
 
       if (reports.length === 0) {
-        return NextResponse.json({ lastReport: null });
+        const response: ApiResponse<{ lastReport: null }> = {
+          success: true,
+          data: { lastReport: null }
+        };
+        return NextResponse.json(response);
       }
 
       // Find most recent report (already sorted by year desc, month desc)
       const lastReport = reports[0];
-      return NextResponse.json({
-        lastReport: {
-          year: lastReport?.year,
-          month: lastReport?.month,
-        },
-      });
+      const response: ApiResponse<{ lastReport: { year?: number | undefined; month?: number | undefined } }> = {
+        success: true,
+        data: {
+          lastReport: {
+            ...(lastReport?.year !== undefined ? { year: lastReport.year } : {}),
+            ...(lastReport?.month !== undefined ? { month: lastReport.month } : {}),
+          },
+        }
+      };
+      return NextResponse.json(response);
     }
 
     // Build filter args
@@ -151,7 +161,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     // Query reports via Convex
     const reports = await client.query(api.reports.list, args);
 
-    return NextResponse.json(reports);
+    // Wrap in ApiResponse envelope
+    type Report = typeof reports[number];
+    const response: ApiResponse<Report[]> = {
+      success: true,
+      data: reports
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'GET /api/reports');
   }
@@ -262,7 +278,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       args as typeof api.reports.create._args
     );
 
-    return NextResponse.json({ success: true, report }, { status: 201 });
+    // Wrap in ApiResponse envelope
+    type Report = typeof report;
+    const response: ApiResponse<Report> = {
+      success: true,
+      data: report
+    };
+    return NextResponse.json(response, { status: 201 });
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'POST /api/reports');
   }
@@ -359,7 +381,12 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
         id: reportIdStr as Id<'reports'>,
       });
 
-      return NextResponse.json({ success: true, report });
+      type Report = typeof report;
+      const response: ApiResponse<Report> = {
+        success: true,
+        data: report
+      };
+      return NextResponse.json(response);
     } else if (estadoValue === 'rechazado') {
       // Admin rejection - use dedicated reject mutation
       const observacionesValue = body['observaciones'];
@@ -373,7 +400,12 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
         id: reportIdStr as Id<'reports'>,
       });
 
-      return NextResponse.json({ success: true, report });
+      type Report = typeof report;
+      const response: ApiResponse<Report> = {
+        success: true,
+        data: report
+      };
+      return NextResponse.json(response);
     }
 
     // Regular update via Convex
@@ -384,10 +416,19 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
     );
 
     if (!report) {
-      return NextResponse.json({ error: 'Informe no encontrado' }, { status: 404 });
+      const response: ApiResponse<never> = {
+        success: false,
+        error: 'Informe no encontrado'
+      };
+      return NextResponse.json(response, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, report });
+    type Report = typeof report;
+    const response: ApiResponse<Report> = {
+      success: true,
+      data: report
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'PUT /api/reports');
   }
@@ -415,7 +456,13 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
       id: reportIdStr as Id<'reports'>,
     });
 
-    return NextResponse.json({ message: 'Informe eliminado exitosamente' });
+    // Wrap in ApiResponse envelope with message at top level (backward compatibility)
+    const response: ApiResponse<Record<string, never>> & { message: string } = {
+      success: true,
+      data: {},
+      message: 'Informe eliminado exitosamente'
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'DELETE /api/reports');
   }

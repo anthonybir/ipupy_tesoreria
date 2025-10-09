@@ -4,6 +4,7 @@ import { getAuthenticatedConvexClient } from '@/lib/convex-server';
 import { api } from '../../../../../convex/_generated/api';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
 import type { Id } from '../../../../../convex/_generated/dataModel';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Admin User Management API Routes - Migrated to Convex
@@ -65,10 +66,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     // Call Convex query - returns { data, total }
     const result = await client.query(api.admin.getUsers, queryArgs);
 
-    return NextResponse.json({
+    // ApiResponse envelope
+    type User = typeof result.data[number];
+    const response: ApiResponse<User[]> = {
       success: true,
       data: result.data,
-    });
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'GET /api/admin/users');
   }
@@ -119,14 +123,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // Create via Convex (includes role validation and duplicate check)
     const result = await client.mutation(api.admin.createUser, args);
 
-    return NextResponse.json(
-      {
-        success: true,
-        data: result.user,
-        message: result.message,
-      },
-      { status: 201 }
-    );
+    // ApiResponse envelope with message
+    type User = typeof result.user;
+    const response: ApiResponse<User> & { message: string } = {
+      success: true,
+      data: result.user,
+      message: result.message,
+    };
+    return NextResponse.json(response, { status: 201 });
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'POST /api/admin/users');
   }
@@ -167,11 +171,14 @@ export async function PUT(req: NextRequest): Promise<NextResponse> {
 
     const user = await client.mutation(api.admin.updateUserRole, payload);
 
-    return NextResponse.json({
+    // ApiResponse envelope with message
+    type User = typeof user;
+    const response: ApiResponse<User> & { message: string } = {
       success: true,
       data: user,
       message: 'Usuario actualizado exitosamente',
-    });
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'PUT /api/admin/users');
   }
@@ -193,10 +200,13 @@ export async function DELETE(req: NextRequest): Promise<NextResponse> {
       user_id: userId,
     });
 
-    return NextResponse.json({
+    // ApiResponse envelope with message at top level (backward compatibility)
+    const response: ApiResponse<Record<string, never>> & { message: string } = {
       success: true,
+      data: {},
       message: result.message,
-    });
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'DELETE /api/admin/users');
   }

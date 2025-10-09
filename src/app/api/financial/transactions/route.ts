@@ -7,6 +7,7 @@ import type { Id } from '../../../../../convex/_generated/dataModel';
 import { createReverseLookupMaps, getFundConvexId, getChurchConvexId } from '@/lib/convex-id-mapping';
 import { mapTransactionsListResponse } from '@/lib/convex-adapters';
 import { normalizeTransactionsResponse } from '@/types/financial';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Transaction API Routes - Migrated to Convex
@@ -130,12 +131,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const payload = mapTransactionsListResponse(result, { fundMap, churchMap });
     const transactions = normalizeTransactionsResponse(payload);
 
-    return NextResponse.json({
+    // ApiResponse envelope with metadata
+    type Transaction = typeof transactions.records[number];
+    type Pagination = typeof transactions.pagination;
+    type Totals = typeof transactions.totals;
+    const response: ApiResponse<Transaction[]> & { pagination: Pagination; totals: Totals } = {
       success: true,
       data: transactions.records,
       pagination: transactions.pagination,
       totals: transactions.totals,
-    });
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'GET /api/financial/transactions');
   }
@@ -223,17 +229,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
     }
 
-    return NextResponse.json(
-      {
-        success: errors.length === 0,
-        created: results,
-        errors: errors.length > 0 ? errors : undefined,
-        message: `Created ${results.length} transaction(s)${
-          errors.length > 0 ? `, ${errors.length} failed` : ''
-        }`,
-      },
-      { status: errors.length === 0 ? 201 : 207 }
-    );
+    // ApiResponse envelope with batch creation results
+    type BatchCreateResponse = {
+      success: boolean;
+      created: unknown[];
+      errors?: { transaction: unknown; error: string }[] | undefined;
+      message: string;
+    };
+    const response: BatchCreateResponse = {
+      success: errors.length === 0,
+      created: results,
+      ...(errors.length > 0 ? { errors } : {}),
+      message: `Created ${results.length} transaction(s)${
+        errors.length > 0 ? `, ${errors.length} failed` : ''
+      }`,
+    };
+    return NextResponse.json(response, { status: errors.length === 0 ? 201 : 207 });
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'POST /api/financial/transactions');
   }
@@ -289,11 +300,14 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       } satisfies UpdateTransactionArgs
     );
 
-    return NextResponse.json({
+    // ApiResponse envelope with message
+    type Transaction = typeof transaction;
+    const response: ApiResponse<Transaction> & { message: string } = {
       success: true,
       data: transaction,
       message: 'Transacción actualizada exitosamente',
-    });
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'PUT /api/financial/transactions');
   }
@@ -314,10 +328,13 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
       id: transactionId as Id<'transactions'>,
     });
 
-    return NextResponse.json({
+    // ApiResponse envelope with message at top level (backward compatibility)
+    const response: ApiResponse<Record<string, never>> & { message: string } = {
       success: true,
+      data: {},
       message: 'Transacción eliminada exitosamente',
-    });
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'DELETE /api/financial/transactions');
   }

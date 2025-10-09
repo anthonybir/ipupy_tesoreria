@@ -1,5 +1,78 @@
 # CHANGELOG
 
+## [Unreleased]
+
+### Added - API Response Standardization (Sprint 1)
+
+**WS-1: API Response Standardization**
+- Implemented `ApiResponse<T>` discriminated union pattern across Reports and Providers APIs
+- Migrated `/api/reports` endpoints (GET, POST, PUT, DELETE) to return `{ success: true, data }` or `{ success: false, error }`
+- Migrated `/api/providers` endpoints (GET, POST, PUT, DELETE) to standardized response envelope
+- All error responses now use consistent `{ success: false, error: string }` format
+
+**Technical Details:**
+- Updated `handleApiError()` in `src/lib/api-errors.ts` to return `ApiResponse<never>` for all error cases
+- Updated `handleDatabaseError()` to use same envelope pattern
+- Added `ApiResponse<T>` import to all migrated route files
+- Type-safe response handling with TypeScript discriminated unions
+- **Backward compatibility:** Providers GET flattened to `{ success, data: Provider[], count }` to avoid breaking existing consumers
+
+**Files Modified:**
+- `src/lib/api-errors.ts` - Error handler standardization
+- `src/app/api/reports/route.ts` - Reports API migration
+- `src/app/api/providers/route.ts` - Providers API migration
+
+### Added - API Response Standardization (Sprint 2)
+
+**WS-1: Financial & Admin API Migration**
+- Extended `ApiResponse<T>` pattern to Financial and Admin endpoints
+- Migrated `/api/financial/funds` endpoints (GET, POST, PUT, DELETE) with totals metadata
+- Migrated `/api/financial/transactions` endpoints (GET, POST, PUT, DELETE) with batch creation support
+- Migrated `/api/fund-events` endpoints (GET, POST, PATCH, DELETE) with workflow actions (submit, approve, reject)
+- Migrated `/api/admin/users` endpoints (GET, POST, PUT, DELETE) for user management
+- Migrated `/api/admin/reports/approve` POST endpoint for report approval workflow
+
+**Technical Details:**
+- Funds API includes `totals` metadata using intersection type `ApiResponse<Fund[]> & { totals }`
+- Transactions API supports batch operations with partial failure handling
+- Fund Events API includes pagination and stats aggregation
+- Admin Users API maintains existing domain validation and role assignment logic
+- All responses maintain backward compatibility with existing consumers
+
+**Response Patterns Established:**
+- Standard: `{ success: true, data: T }` or `{ success: false, error: string }`
+- With metadata: `ApiResponse<T[]> & { count }` or `ApiResponse<T[]> & { pagination, totals, stats }`
+- With message: `ApiResponse<T> & { message: string }`
+
+**Files Modified:**
+- `src/app/api/financial/funds/route.ts` - Funds API migration
+- `src/app/api/financial/transactions/route.ts` - Transactions API migration
+- `src/app/api/fund-events/route.ts` - Fund Events list/create
+- `src/app/api/fund-events/[id]/route.ts` - Fund Events detail/update/delete
+- `src/app/api/admin/users/route.ts` - User management migration
+- `src/app/api/admin/reports/approve/route.ts` - Report approval migration
+
+**Progress:**
+- Sprint 1: 8 endpoints (Reports, Providers)
+- Sprint 2: 11 endpoints (Funds, Transactions, Fund Events, Admin) = **19/27 total**
+- Sprint 3 remaining: 8 endpoints (Reconciliation, Ledger, Dashboard, Export, Login)
+
+### Documentation
+
+**WS-2: Role System Documentation**
+- Created authoritative `docs/ROLE_SYSTEM_REFERENCE.md` documenting 6-role hierarchy
+- Confirmed treasurer role is NATIONAL scope (not church-level)
+- Documented role consolidation from migrations 051-054
+- Added permission matrix and code references for all 6 roles
+
+**Key Clarifications:**
+- System has exactly **6 roles** (not 7)
+- `treasurer` role is **NATIONAL scope** (approves reports, manages all funds)
+- `pastor` role handles **LOCAL finances** (creates reports, cannot approve)
+- `national_treasurer` was consolidated into `treasurer` in October 2025
+
+---
+
 ## [3.3.0] - 2025-09-30
 
 ### Comprehensive UX & Design System Improvements

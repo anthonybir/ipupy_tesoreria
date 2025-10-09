@@ -3,6 +3,7 @@ import { getAuthenticatedConvexClient } from '@/lib/convex-server';
 import { api } from '../../../../../../convex/_generated/api';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
 import type { Id } from '../../../../../../convex/_generated/dataModel';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Admin Report Approval API - Migrated to Convex
@@ -25,11 +26,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       id: report_id as Id<'reports'>,
     });
 
-    return NextResponse.json({
+    // ApiResponse envelope with message
+    type Report = typeof report;
+    const response: ApiResponse<Report> & { message: string } = {
       success: true,
       data: report,
       message: 'Informe aprobado exitosamente',
-    });
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'POST /api/admin/reports/approve');
   }

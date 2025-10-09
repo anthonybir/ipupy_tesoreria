@@ -6,6 +6,7 @@ import { handleApiError, ValidationError } from '@/lib/api-errors';
 import { getFundConvexId } from '@/lib/convex-id-mapping';
 import { mapFundsListResponse } from '@/lib/convex-adapters';
 import { normalizeFundsResponse } from '@/types/financial';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Fund API Routes - Migrated to Convex
@@ -43,11 +44,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const payload = mapFundsListResponse(convexResult);
     const fundsCollection = normalizeFundsResponse(payload);
 
-    return NextResponse.json({
+    // ApiResponse envelope with additional metadata
+    type FundRecord = typeof fundsCollection.records[number];
+    type Totals = typeof fundsCollection.totals;
+    const response: ApiResponse<FundRecord[]> & { totals: Totals } = {
       success: true,
       data: fundsCollection.records,
       totals: fundsCollection.totals,
-    });
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'GET /api/financial/funds');
   }
@@ -113,14 +118,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       created_by: convexFund.created_by || 'system',
     };
 
-    return NextResponse.json(
-      {
-        success: true,
-        data: fund,
-        message: 'Fondo creado exitosamente',
-      },
-      { status: 201 }
-    );
+    // ApiResponse envelope with message
+    type Fund = typeof fund;
+    const response: ApiResponse<Fund> & { message: string } = {
+      success: true,
+      data: fund,
+      message: 'Fondo creado exitosamente',
+    };
+    return NextResponse.json(response, { status: 201 });
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'POST /api/financial/funds');
   }
@@ -195,11 +200,14 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       created_by: convexFund.created_by || 'system',
     };
 
-    return NextResponse.json({
+    // ApiResponse envelope with message
+    type Fund = typeof fund;
+    const response: ApiResponse<Fund> & { message: string } = {
       success: true,
       data: fund,
       message: 'Fondo actualizado exitosamente',
-    });
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'PUT /api/financial/funds');
   }
@@ -227,12 +235,15 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
       id: convexId,
     });
 
-    return NextResponse.json({
+    // ApiResponse envelope with message at top level (backward compatibility)
+    const response: ApiResponse<Record<string, never>> & { message: string } = {
       success: true,
+      data: {},
       message: result.deleted
         ? 'Fondo eliminado permanentemente'
         : 'Fondo desactivado (tiene transacciones)',
-    });
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'DELETE /api/financial/funds');
   }

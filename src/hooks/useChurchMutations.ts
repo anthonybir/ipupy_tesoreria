@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 
 import { fetchJson } from '@/lib/api-client';
 import type { ChurchRecord } from '@/types/api';
+import type { ApiResponse } from '@/types/utils';
 
 const invalidateChurches = (queryClient: QueryClient) => {
   queryClient.invalidateQueries({ queryKey: ['churches'], exact: false }).catch(() => {});
@@ -48,14 +49,17 @@ export function useCreateChurch(): UseMutationResult<ChurchRecord, unknown, Crea
 
   return useMutation<ChurchRecord, unknown, CreateChurchPayload>({
     mutationFn: async (payload) => {
-      const response = await fetchJson<ChurchRecord>('/api/churches', {
+      const response = await fetchJson<ApiResponse<ChurchRecord>>('/api/churches', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(payload)
       });
-      return response;
+      if (!response.success) {
+        throw new Error(response.error ?? 'No se pudo registrar la iglesia');
+      }
+      return response.data;
     },
     onSuccess: () => {
       invalidateChurches(queryClient);
@@ -74,14 +78,17 @@ export function useUpdateChurch(churchId: number): UseMutationResult<ChurchRecor
   return useMutation<ChurchRecord, unknown, UpdateChurchPayload>({
     mutationFn: async (payload) => {
       const params = new URLSearchParams({ id: String(churchId) });
-      const response = await fetchJson<ChurchRecord>(`/api/churches?${params}`, {
+      const response = await fetchJson<ApiResponse<ChurchRecord>>(`/api/churches?${params}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(payload)
       });
-      return response;
+      if (!response.success) {
+        throw new Error(response.error ?? 'No se pudo actualizar la iglesia');
+      }
+      return response.data;
     },
     onSuccess: () => {
       invalidateChurches(queryClient);
@@ -100,9 +107,13 @@ export function useDeactivateChurch(): UseMutationResult<{ message: string }, un
   return useMutation<{ message: string }, unknown, { churchId: number }>({
     mutationFn: async ({ churchId }) => {
       const params = new URLSearchParams({ id: String(churchId) });
-      return fetchJson<{ message: string }>(`/api/churches?${params}`, {
+      const response = await fetchJson<ApiResponse<{ message: string }>>(`/api/churches?${params}`, {
         method: 'DELETE'
       });
+      if (!response.success) {
+        throw new Error(response.error ?? 'No se pudo desactivar la iglesia');
+      }
+      return response.data;
     },
     onSuccess: () => {
       invalidateChurches(queryClient);

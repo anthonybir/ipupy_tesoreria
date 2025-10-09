@@ -4,6 +4,7 @@ import { getAuthenticatedConvexClient } from '@/lib/convex-server';
 import { api } from '../../../../convex/_generated/api';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
 import type { Id } from '../../../../convex/_generated/dataModel';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Provider API Routes - Migrated to Convex
@@ -50,8 +51,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     const result = await client.query(api.providers.list, queryArgs);
 
-    // Result already has { data, count } structure
-    return NextResponse.json(result);
+    // Convex returns { data: Provider[], count: number }
+    // Flatten into ApiResponse to maintain backward compatibility
+    type Provider = typeof result.data[number];
+    const response: ApiResponse<Provider[]> & { count: number } = {
+      success: true,
+      data: result.data,
+      count: result.count
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'GET /api/providers');
   }
@@ -80,10 +88,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Check for duplicate RUC
     const existing = await client.query(api.providers.searchByRUC, { ruc });
     if (existing) {
-      return NextResponse.json(
-        { error: 'Ya existe un proveedor con este RUC' },
-        { status: 409 }
-      );
+      const response: ApiResponse<never> = {
+        success: false,
+        error: 'Ya existe un proveedor con este RUC'
+      };
+      return NextResponse.json(response, { status: 409 });
     }
 
     // Create provider via Convex
@@ -99,7 +108,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       notas: notas ?? undefined,
     });
 
-    return NextResponse.json({ data: provider }, { status: 201 });
+    // Wrap in ApiResponse envelope
+    type Provider = typeof provider;
+    const response: ApiResponse<Provider> = {
+      success: true,
+      data: provider
+    };
+    return NextResponse.json(response, { status: 201 });
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'POST /api/providers');
   }
@@ -157,10 +172,20 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
     });
 
     if (!provider) {
-      return NextResponse.json({ error: 'Proveedor no encontrado' }, { status: 404 });
+      const response: ApiResponse<never> = {
+        success: false,
+        error: 'Proveedor no encontrado'
+      };
+      return NextResponse.json(response, { status: 404 });
     }
 
-    return NextResponse.json({ data: provider });
+    // Wrap in ApiResponse envelope
+    type Provider = typeof provider;
+    const response: ApiResponse<Provider> = {
+      success: true,
+      data: provider
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'PUT /api/providers');
   }
@@ -181,7 +206,13 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
       id: idParam as Id<'providers'>,
     });
 
-    return NextResponse.json({ success: true });
+    // Wrap in ApiResponse envelope with message at top level (backward compatibility)
+    const response: ApiResponse<Record<string, never>> & { message: string } = {
+      success: true,
+      data: {},
+      message: 'Proveedor archivado exitosamente'
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'DELETE /api/providers');
   }

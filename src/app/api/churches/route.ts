@@ -1,8 +1,10 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
 import { getAuthenticatedConvexClient } from '@/lib/convex-server';
-import { api } from '../../../../convex/_generated/api';
+import { mapChurchDocumentToRaw } from '@/lib/convex-adapters';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
+import { normalizeChurchRecord } from '@/types/api';
+import { api } from '../../../../convex/_generated/api';
 import type { Id } from '../../../../convex/_generated/dataModel';
 
 /**
@@ -32,8 +34,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     // Call Convex list query (returns only active churches by default)
     const churches = await client.query(api.churches.list);
+    const data = churches.map((doc) =>
+      normalizeChurchRecord(mapChurchDocumentToRaw(doc))
+    );
 
-    return NextResponse.json(churches);
+    return NextResponse.json({ success: true, data });
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'GET /api/churches');
   }
@@ -95,7 +100,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       active: active ?? true,
     });
 
-    return NextResponse.json(church, { status: 201 });
+    if (!church) {
+      throw new Error('Church creation failed');
+    }
+    const normalized = normalizeChurchRecord(mapChurchDocumentToRaw(church));
+
+    return NextResponse.json({ success: true, data: normalized }, { status: 201 });
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'POST /api/churches');
   }
@@ -180,10 +190,15 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
     });
 
     if (!church) {
-      return NextResponse.json({ error: 'Iglesia no encontrada' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, error: 'Iglesia no encontrada' },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json(church);
+    const normalized = normalizeChurchRecord(mapChurchDocumentToRaw(church));
+
+    return NextResponse.json({ success: true, data: normalized });
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'PUT /api/churches');
   }
@@ -211,7 +226,10 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
       id: churchIdStr as Id<'churches'>,
     });
 
-    return NextResponse.json({ message: 'Iglesia desactivada exitosamente' });
+    return NextResponse.json({
+      success: true,
+      data: { message: 'Iglesia desactivada exitosamente' },
+    });
   } catch (error) {
     return handleApiError(error, request.headers.get('origin'), 'DELETE /api/churches');
   }

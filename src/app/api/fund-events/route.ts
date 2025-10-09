@@ -9,6 +9,7 @@ import {
   createReverseLookupMaps,
   mapEventToSupabaseShape,
 } from '@/lib/convex-id-mapping';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Fund Events API Routes - Migrated to Convex
@@ -109,7 +110,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       pending_revision: aggregateStats.pending_revision,
     };
 
-    return NextResponse.json({
+    // ApiResponse envelope with pagination and stats
+    type Event = typeof mappedEvents[number];
+    type Pagination = { total: number; limit: number; offset: number };
+    type Stats = typeof stats;
+    const response: ApiResponse<Event[]> & { pagination: Pagination; stats: Stats } = {
       success: true,
       data: mappedEvents,
       pagination: {
@@ -118,7 +123,8 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         offset,
       },
       stats,
-    });
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'GET /api/fund-events');
   }
@@ -236,13 +242,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const { fundMap, churchMap } = await createReverseLookupMaps(client);
     const mappedEvent = mapEventToSupabaseShape(completeEvent, { fundMap, churchMap });
 
-    return NextResponse.json(
-      {
-        success: true,
-        data: mappedEvent,
-      },
-      { status: 201 }
-    );
+    // ApiResponse envelope
+    type Event = typeof mappedEvent;
+    const response: ApiResponse<Event> = {
+      success: true,
+      data: mappedEvent,
+    };
+    return NextResponse.json(response, { status: 201 });
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'POST /api/fund-events');
   }

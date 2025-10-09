@@ -4,6 +4,7 @@ import { api } from '../../../../../convex/_generated/api';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
 import type { Id } from '../../../../../convex/_generated/dataModel';
 import { createReverseLookupMaps, mapEventToSupabaseShape } from '@/lib/convex-id-mapping';
+import type { ApiResponse } from '@/types/utils';
 
 /**
  * Fund Event Detail API Routes - Migrated to Convex
@@ -35,11 +36,15 @@ export async function GET(
     });
 
     const lookupMaps = await createReverseLookupMaps(client);
+    const mappedEvent = mapEventToSupabaseShape(event, lookupMaps);
 
-    return NextResponse.json({
+    // ApiResponse envelope
+    type Event = typeof mappedEvent;
+    const response: ApiResponse<Event> = {
       success: true,
-      data: mapEventToSupabaseShape(event, lookupMaps),
-    });
+      data: mappedEvent,
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'GET /api/fund-events/[id]');
   }
@@ -73,11 +78,15 @@ export async function PATCH(
         throw new ValidationError('Evento no encontrado después de la mutación');
       }
       const lookupMaps = await createReverseLookupMaps(client);
-      return NextResponse.json({
+      const mappedEvent = mapEventToSupabaseShape(event, lookupMaps);
+      // ApiResponse envelope with message
+      type Event = typeof mappedEvent;
+      const response: ApiResponse<Event> & { message: string } = {
         success: true,
-        data: mapEventToSupabaseShape(event, lookupMaps),
+        data: mappedEvent,
         message: 'Evento enviado para aprobación',
-      });
+      };
+      return NextResponse.json(response);
     }
 
     if (action === 'approve') {
@@ -88,11 +97,15 @@ export async function PATCH(
         throw new ValidationError('Evento no encontrado después de la mutación');
       }
       const lookupMaps = await createReverseLookupMaps(client);
-      return NextResponse.json({
+      const mappedEvent = mapEventToSupabaseShape(event, lookupMaps);
+      // ApiResponse envelope with message
+      type Event = typeof mappedEvent;
+      const response: ApiResponse<Event> & { message: string } = {
         success: true,
-        data: mapEventToSupabaseShape(event, lookupMaps),
+        data: mappedEvent,
         message: 'Evento aprobado',
-      });
+      };
+      return NextResponse.json(response);
     }
 
     if (action === 'reject') {
@@ -107,11 +120,15 @@ export async function PATCH(
         throw new ValidationError('Evento no encontrado después de la mutación');
       }
       const lookupMaps = await createReverseLookupMaps(client);
-      return NextResponse.json({
+      const mappedEvent = mapEventToSupabaseShape(event, lookupMaps);
+      // ApiResponse envelope with message
+      type Event = typeof mappedEvent;
+      const response: ApiResponse<Event> & { message: string } = {
         success: true,
-        data: mapEventToSupabaseShape(event, lookupMaps),
+        data: mappedEvent,
         message: 'Evento rechazado',
-      });
+      };
+      return NextResponse.json(response);
     }
 
     // Handle regular update
@@ -144,11 +161,15 @@ export async function PATCH(
     }
 
     const lookupMaps = await createReverseLookupMaps(client);
+    const mappedEvent = mapEventToSupabaseShape(event, lookupMaps);
 
-    return NextResponse.json({
+    // ApiResponse envelope
+    type Event = typeof mappedEvent;
+    const response: ApiResponse<Event> = {
       success: true,
-      data: mapEventToSupabaseShape(event, lookupMaps),
-    });
+      data: mappedEvent,
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'PATCH /api/fund-events/[id]');
   }
@@ -167,10 +188,13 @@ export async function DELETE(
       id: eventId as Id<'fund_events'>,
     });
 
-    return NextResponse.json({
+    // ApiResponse envelope with message at top level (backward compatibility)
+    const response: ApiResponse<Record<string, never>> & { message: string } = {
       success: true,
+      data: {},
       message: 'Evento eliminado exitosamente',
-    });
+    };
+    return NextResponse.json(response);
   } catch (error) {
     return handleApiError(error, req.headers.get('origin'), 'DELETE /api/fund-events/[id]');
   }
