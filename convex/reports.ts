@@ -14,17 +14,16 @@ import { v } from "convex/values";
 import { query, mutation, type MutationCtx } from "./_generated/server";
 import { getAuthContext, type AuthContext } from "./lib/auth";
 import { api } from "./_generated/api";
+import { encodeActorId } from "./lib/audit";
 import { type Doc, type Id } from "./_generated/dataModel";
-import {
-  requireAdmin,
-  isAdmin,
-} from "./lib/permissions";
+import { requireAdmin, isAdmin, requireReportApproval } from "./lib/permissions";
 import {
   validateRequired,
   validateMonth,
   validateYear,
 } from "./lib/validators";
-import { NotFoundError, ValidationError, ConflictError } from "./lib/errors";
+import { NotFoundError, ValidationError, ConflictError, AuthorizationError } from "./lib/errors";
+import { enforceRateLimit } from "./rateLimiter";
 // import { Id } from "./_generated/dataModel";
 
 // ============================================================================
@@ -536,20 +535,21 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const auth = await getAuthContext(ctx);
+    await enforceRateLimit(ctx, "reportCreate", auth.userId as string);
 
     // Authorization: pastors can create for their church, admins for any
     const isPastor = auth.role === "pastor";
     const isAdminRole = isAdmin(auth);
 
     if (!isPastor && !isAdminRole) {
-      throw new ValidationError(
+      throw new AuthorizationError(
         "No tiene permisos para crear informes"
       );
     }
 
     // Pastors can only create for their own church
     if (isPastor && auth.churchId !== args.church_id) {
-      throw new ValidationError(
+      throw new AuthorizationError(
         "No puede crear informes para otra iglesia"
       );
     }
@@ -762,11 +762,11 @@ export const update = mutation({
     const isAdminRole = isAdmin(auth);
 
     if (!isPastor && !isAdminRole) {
-      throw new ValidationError("No tiene permisos para modificar este informe");
+      throw new AuthorizationError("No tiene permisos para modificar este informe");
     }
 
     if (isPastor && auth.churchId !== report.church_id) {
-      throw new ValidationError("No tiene permisos para modificar este informe");
+      throw new AuthorizationError("No tiene permisos para modificar este informe");
     }
 
     // Merge with existing data for calculation
@@ -987,11 +987,11 @@ export const submit = mutation({
 
     // Only pastors can submit
     if (auth.role !== "pastor") {
-      throw new ValidationError("Solo pastores pueden enviar informes");
+      throw new AuthorizationError("Solo pastores pueden enviar informes");
     }
 
     if (auth.churchId !== report.church_id) {
-      throw new ValidationError("No puede enviar informes de otra iglesia");
+      throw new AuthorizationError("No puede enviar informes de otra iglesia");
     }
 
     // Check current status
@@ -1010,7 +1010,7 @@ export const submit = mutation({
 });
 
 /**
- * Approve report (admin only)
+ * Approve report (admin or national treasurer)
  *
  * Creates transactions on approval
  */
@@ -1018,15 +1018,15 @@ export const approve = mutation({
   args: { id: v.id("reports") },
   handler: async (ctx, { id }) => {
     const auth = await getAuthContext(ctx);
-
-    // Only admins can approve
-    requireAdmin(auth);
+    await enforceRateLimit(ctx, "adminActions", auth.userId as string);
 
     const report = await ctx.db.get(id);
 
     if (!report) {
       throw new NotFoundError("Informe");
     }
+
+    requireReportApproval(auth, report.church_id);
 
     // Validate bank deposit exists
     if (!report.foto_deposito) {
@@ -1067,7 +1067,7 @@ export const approve = mutation({
 });
 
 /**
- * Reject report (admin only)
+ * Reject report (admin or national treasurer)
  */
 export const reject = mutation({
   args: {
@@ -1076,15 +1076,15 @@ export const reject = mutation({
   },
   handler: async (ctx, { id, observaciones }) => {
     const auth = await getAuthContext(ctx);
-
-    // Only admins can reject
-    requireAdmin(auth);
+    await enforceRateLimit(ctx, "adminActions", auth.userId as string);
 
     const report = await ctx.db.get(id);
 
     if (!report) {
       throw new NotFoundError("Informe");
     }
+
+    requireReportApproval(auth, report.church_id);
 
     // Update status and reset transaction flags
     // Report will likely be edited and resubmitted, so ledger needs to be regenerated
@@ -1126,11 +1126,11 @@ export const deleteReport = mutation({
     const isAdminRole = isAdmin(auth);
 
     if (!isPastor && !isAdminRole) {
-      throw new ValidationError("No tiene permisos para eliminar este informe");
+      throw new AuthorizationError("No tiene permisos para eliminar este informe");
     }
 
     if (isPastor && auth.churchId !== report.church_id) {
-      throw new ValidationError("No tiene permisos para eliminar este informe");
+      throw new AuthorizationError("No tiene permisos para eliminar este informe");
     }
 
     // Delete report
@@ -1324,7 +1324,7 @@ async function createReportTransactions(
   await ctx.db.patch(report._id, {
     transactions_created: true,
     transactions_created_at: Date.now(),
-    transactions_created_by: auth.email,
+    transactions_created_by: encodeActorId(auth.userId),
   });
 }
 

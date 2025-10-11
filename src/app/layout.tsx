@@ -1,9 +1,10 @@
 import type { JSX } from 'react';
 import type { Metadata } from "next";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
+import { ConvexAuthNextjsServerProvider } from "@convex-dev/auth/nextjs/server";
 
-import { Providers } from "./providers";
 import AppLayout from "@/components/Layout/AppLayout";
+import { Providers } from "./providers";
 import "./globals.css";
 
 const inter = Inter({
@@ -29,12 +30,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>): JSX.Element {
   return (
-    <html lang="es">
-      <body className={`${inter.variable} ${plusJakarta.variable} antialiased`}>
-        <Providers>
-          <AppLayout>{children}</AppLayout>
-        </Providers>
-      </body>
-    </html>
+    <ConvexAuthNextjsServerProvider>
+      <html lang="es">
+        <body className={`${inter.variable} ${plusJakarta.variable} antialiased`}>
+          <Providers>
+            <AppLayout>{children}</AppLayout>
+          </Providers>
+        </body>
+      </html>
+    </ConvexAuthNextjsServerProvider>
   );
 }

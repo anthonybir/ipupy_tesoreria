@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, type JSX } from "react";
-import { useAuth } from "@/components/Auth/SupabaseAuthProvider";
+import { useAuth } from "@/components/Auth/AuthProvider";
 import { Menu, Transition } from "@headlessui/react";
 import {
   UserCircleIcon,
@@ -45,8 +45,9 @@ export default function UserMenu(): JSX.Element | null {
           <div className="px-4 py-3">
             <p className="text-sm">Conectado como</p>
             <p className="text-sm font-medium text-gray-900 truncate">
-              {user.email}
+              {user.fullName ?? user.userName ?? user.email}
             </p>
+            <p className="text-xs text-gray-500 truncate">{user.email}</p>
           </div>
           <div className="border-t border-gray-200" />
           <Menu.Item>

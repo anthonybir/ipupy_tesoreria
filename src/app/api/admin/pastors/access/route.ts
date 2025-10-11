@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { getAuthenticatedConvexClient } from '@/lib/convex-server';
 import { api } from '../../../../../../convex/_generated/api';
 import { handleApiError, ValidationError } from '@/lib/api-errors';
+import type { Id } from '../../../../../../convex/_generated/dataModel';
 import type { ApiResponse } from '@/types/utils';
 
 /**
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // Update user active status
     if (active === false) {
       const result = await client.mutation(api.admin.deactivateUser, {
-        user_id,
+        user_id: user_id as Id<'users'>,
       });
       return NextResponse.json(
         {

@@ -880,7 +880,11 @@ const UserManagementSection = () => {
     queryFn: async () => {
       const response = await fetchJson<ApiResponse<ChurchRecord[]>>('/api/churches');
       const churches = response.data ?? [];
-      return churches.map((church) => ({ id: church.id, name: church.name || null }));
+      return churches.map((church) => ({
+        id: church.convexId ?? String(church.id),
+        name: church.name || null,
+        city: church.city ?? null,
+      }));
     },
     staleTime: 60_000,
   });
@@ -910,9 +914,13 @@ const UserManagementSection = () => {
     setActionUserId(user.id);
     try {
       if (user.is_active) {
-        await deactivateMutation.mutateAsync({ id: user.id });
+        await deactivateMutation.mutateAsync({ user_id: user.id });
       } else {
-        await reactivateMutation.mutateAsync({ id: user.id, is_active: true });
+        await reactivateMutation.mutateAsync({
+          user_id: user.id,
+          role: user.role,
+          church_id: user.church_id,
+        });
       }
     } catch (error) {
       console.error('Error updating user state:', error);

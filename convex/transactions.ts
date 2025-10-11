@@ -13,11 +13,13 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { getAuthContext } from "./lib/auth";
+import { encodeActorId } from "./lib/audit";
 import { isAdmin, requireMinRole } from "./lib/permissions";
 import { validateRequired } from "./lib/validators";
-import { NotFoundError, ValidationError } from "./lib/errors";
+import { NotFoundError, ValidationError, AuthorizationError } from "./lib/errors";
 import { type Id, type Doc } from "./_generated/dataModel";
 import { api } from "./_generated/api";
+import { enforceRateLimit } from "./rateLimiter";
 
 // ============================================================================
 // TYPES
@@ -143,7 +145,23 @@ export const list = query({
     // Collect all matching transactions
     let transactions = await txQuery.collect();
 
-    // Apply church scoping (after collection since Convex can't do OR filters)
+    /**
+     * POST-COLLECTION FILTERING: Church Access Control
+     *
+     * RATIONALE: Convex doesn't support OR conditions in database filters.
+     * We need to match: (tx.church_id === auth.churchId) OR (tx.church_id === null)
+     *
+     * PERFORMANCE: This is acceptable for current data volume (~1000 transactions/month).
+     * The query is already filtered by fund_id, church_id, dates, etc., so the
+     * collection size is manageable before we apply the in-memory OR filter.
+     *
+     * ALTERNATIVES CONSIDERED:
+     * - Two separate queries + merge: More complex code, similar performance
+     * - Pre-filter in Convex: Not supported (no OR in database filters)
+     *
+     * PATTERN: Non-admins see transactions for (their church OR national level)
+     * This is a defense-in-depth pattern - endpoint authorization happens first.
+     */
     if (!isAdmin(auth) && auth.churchId) {
       transactions = transactions.filter((tx) =>
         // User's church transactions OR national transactions (church_id undefined/null)
@@ -247,7 +265,7 @@ export const get = query({
     // Check church access (unless admin or national transaction)
     if (!isAdmin(auth) && transaction.church_id) {
       if (transaction.church_id !== auth.churchId) {
-        throw new Error("Acceso denegado: no pertenece a esta iglesia");
+        throw new AuthorizationError("No pertenece a esta iglesia");
       }
     }
 
@@ -289,7 +307,12 @@ export const getByFund = query({
       .filter((q) => q.eq(q.field("fund_id"), fund_id))
       .collect();
 
-    // Apply church scoping for non-admins
+    /**
+     * POST-COLLECTION FILTERING: Church Access Control
+     *
+     * Same OR-filter pattern as list() query above.
+     * See list() handler for full rationale.
+     */
     if (!isAdmin(auth) && auth.churchId) {
       transactions = transactions.filter((tx) =>
         tx.church_id === auth.churchId || !tx.church_id
@@ -354,7 +377,7 @@ export const getByReport = query({
     }
 
     if (!isAdmin(auth) && report.church_id !== auth.churchId) {
-      throw new Error("Acceso denegado: el reporte no pertenece a su iglesia");
+      throw new AuthorizationError("El reporte no pertenece a su iglesia");
     }
 
     const transactions = await ctx.db
@@ -409,7 +432,12 @@ export const getLedger = query({
 
     let transactions = await txQuery.collect();
 
-    // Apply church scoping for non-admins
+    /**
+     * POST-COLLECTION FILTERING: Church Access Control
+     *
+     * Same OR-filter pattern as list() query above.
+     * See list() handler for full rationale.
+     */
     if (!isAdmin(auth) && auth.churchId) {
       transactions = transactions.filter((tx) =>
         tx.church_id === auth.churchId || !tx.church_id
@@ -522,12 +550,13 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const auth = await getAuthContext(ctx);
     requireMinRole(auth, "treasurer");
+    await enforceRateLimit(ctx, "transactionCreate", auth.userId as string);
 
     // Validate church ownership for non-admins
     if (args.church_id && !isAdmin(auth)) {
       if (args.church_id !== auth.churchId) {
-        throw new Error(
-          "Acceso denegado: solo puede crear transacciones para su iglesia"
+        throw new AuthorizationError(
+          "Solo puede crear transacciones para su iglesia"
         );
       }
     }
@@ -581,7 +610,7 @@ export const create = mutation({
       amount_in,
       amount_out,
       balance: newBalance,
-      created_by: args.created_by || auth.email || "system",
+      created_by: args.created_by ?? encodeActorId(auth.userId),
       created_at: now,
       updated_at: now,
     });
@@ -627,8 +656,8 @@ export const update = mutation({
     // Validate church ownership for non-admins
     if (!isAdmin(auth) && transaction.church_id) {
       if (transaction.church_id !== auth.churchId) {
-        throw new Error(
-          "Acceso denegado: solo puede modificar transacciones de su iglesia"
+        throw new AuthorizationError(
+          "Solo puede modificar transacciones de su iglesia"
         );
       }
     }
@@ -718,8 +747,8 @@ export const deleteTransaction = mutation({
     // Validate church ownership for non-admins
     if (!isAdmin(auth) && transaction.church_id) {
       if (transaction.church_id !== auth.churchId) {
-        throw new Error(
-          "Acceso denegado: solo puede eliminar transacciones de su iglesia"
+        throw new AuthorizationError(
+          "Solo puede eliminar transacciones de su iglesia"
         );
       }
     }
@@ -793,8 +822,8 @@ export const bulkCreate = mutation({
     if (!isAdmin(auth)) {
       for (const tx of transactions) {
         if (tx.church_id && tx.church_id !== auth.churchId) {
-          throw new Error(
-            "Acceso denegado: solo puede crear transacciones para su iglesia"
+          throw new AuthorizationError(
+            "Solo puede crear transacciones para su iglesia"
           );
         }
       }

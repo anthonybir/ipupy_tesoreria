@@ -551,7 +551,7 @@ export async function OPTIONS(req: NextRequest): Promise<NextResponse> {
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const origin = req.headers.get('origin');
   try {
-    const auth = await requireAuth(req);
+    const auth = await requireAuth();
 
     const { searchParams } = new URL(req.url);
     const query = Object.fromEntries(searchParams.entries());
@@ -584,7 +584,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const origin = req.headers.get('origin');
   try {
-    const auth = await requireAuth(req);
+    const auth = await requireAuth();
 
     const body = await req.json();
    const payload = normalizeWorshipPayload(body, auth);

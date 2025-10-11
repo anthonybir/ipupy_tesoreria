@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { authTables } from "@convex-dev/auth/server";
 
 /**
  * IPU PY Tesorería - Convex Schema
@@ -15,6 +16,7 @@ import { v } from "convex/values";
  */
 
 export default defineSchema({
+  ...authTables,
   // ============================================================================
   // FUND CATEGORIES - Categorías de fondos
   // ============================================================================
@@ -162,7 +164,7 @@ export default defineSchema({
     // Transaction tracking (relación con ledger)
     transactions_created: v.optional(v.boolean()),
     transactions_created_at: v.optional(v.number()),
-    transactions_created_by: v.optional(v.string()),
+    transactions_created_by: v.optional(v.string()), // Convex user ID string (legacy email/system)
 
     // Source tracking (manual vs online)
     submission_source: v.optional(v.string()), // "church_online", "admin_manual"
@@ -251,11 +253,26 @@ export default defineSchema({
     es_honorario_pastoral: v.boolean(),
     observaciones: v.optional(v.string()),
     created_at: v.number(),
+
+    // Contabilidad (alias y metadatos para compatibilidad con la API histórica)
+    category: v.optional(v.string()),
+    approved_by: v.optional(v.string()),
+    date: v.optional(v.number()),
+    amount: v.optional(v.number()),
+    provider: v.optional(v.string()),
+    document_number: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    provider_id: v.optional(v.id("providers")),
+    supabase_id: v.optional(v.number()),
   })
     .index("by_church", ["church_id"])
     .index("by_report", ["report_id"])
     .index("by_fecha", ["fecha_comprobante"])
-    .index("by_proveedor", ["ruc_ci_proveedor"]),
+    .index("by_proveedor", ["ruc_ci_proveedor"])
+    .index("by_provider", ["provider_id"])
+    .index("by_category", ["category"])
+    .index("by_date", ["date"])
+    .index("by_supabase_id", ["supabase_id"]),
 
   // ============================================================================
   // FUND MOVEMENTS - Control multi-fondo (entradas/salidas/transferencias)
@@ -293,7 +310,7 @@ export default defineSchema({
     type: v.optional(v.string()), // "restricted", "general", "operating"
     current_balance: v.number(),
     is_active: v.boolean(),
-    created_by: v.optional(v.string()),
+    created_by: v.optional(v.string()), // Convex user ID string (legacy email/system)
     created_at: v.number(),
     updated_at: v.number(),
   })
@@ -317,7 +334,7 @@ export default defineSchema({
     amount_in: v.number(),
     amount_out: v.number(),
     balance: v.number(), // balance después de esta transacción
-    created_by: v.optional(v.string()),
+    created_by: v.optional(v.string()), // Convex user ID string (legacy email/system)
     created_at: v.number(),
     updated_at: v.number(),
   })
@@ -327,6 +344,162 @@ export default defineSchema({
     .index("by_date", ["date"])
     .index("by_provider", ["provider_id"])
     .index("by_created_at", ["created_at"]),
+
+  // ============================================================================
+  // MONTHLY LEDGERS - Gestión de periodos financieros
+  // ============================================================================
+  monthlyLedgers: defineTable({
+    church_id: v.id("churches"),
+    month: v.number(),
+    year: v.number(),
+    opening_balance: v.number(),
+    closing_balance: v.number(),
+    total_income: v.number(),
+    total_expenses: v.number(),
+    status: v.union(
+      v.literal("open"),
+      v.literal("closed"),
+      v.literal("reconciled")
+    ),
+    closed_at: v.optional(v.number()),
+    closed_by: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    created_by: v.optional(v.string()),
+    created_at: v.number(),
+    updated_at: v.number(),
+    supabase_id: v.optional(v.number()),
+  })
+    .index("by_church", ["church_id"])
+    .index("by_church_and_period", ["church_id", "year", "month"])
+    .index("by_status", ["status"])
+    .index("by_year_month", ["year", "month"])
+    .index("by_supabase_id", ["supabase_id"]),
+
+  // ============================================================================
+  // ACCOUNTING ENTRIES - Registro contable de doble partida
+  // ============================================================================
+  accountingEntries: defineTable({
+    church_id: v.id("churches"),
+    date: v.number(),
+    account_code: v.string(),
+    account_name: v.string(),
+    debit: v.number(),
+    credit: v.number(),
+    balance: v.optional(v.number()),
+    reference: v.optional(v.string()),
+    description: v.string(),
+    expense_record_id: v.optional(v.id("expense_records")),
+    report_id: v.optional(v.id("reports")),
+    created_by: v.optional(v.string()),
+    created_at: v.number(),
+    supabase_id: v.optional(v.number()),
+  })
+    .index("by_church", ["church_id"])
+    .index("by_date", ["date"])
+    .index("by_account_code", ["account_code"])
+    .index("by_expense", ["expense_record_id"])
+    .index("by_report", ["report_id"])
+    .index("by_church_and_date", ["church_id", "date"])
+    .index("by_supabase_id", ["supabase_id"]),
+
+  // ============================================================================
+  // TRANSACTION CATEGORIES - Catálogo contable de referencia
+  // ============================================================================
+  transactionCategories: defineTable({
+    category_name: v.string(),
+    category_type: v.union(v.literal("income"), v.literal("expense")),
+    parent_category_id: v.optional(v.id("transactionCategories")),
+    description: v.optional(v.string()),
+    is_system: v.boolean(),
+    is_active: v.boolean(),
+    created_at: v.number(),
+    supabase_id: v.optional(v.number()),
+  })
+    .index("by_type", ["category_type"])
+    .index("by_name", ["category_name"])
+    .index("by_active", ["is_active"])
+    .index("by_parent", ["parent_category_id"]),
+
+  // ============================================================================
+  // CHURCH ACCOUNTS - Cuentas bancarias y de efectivo
+  // ============================================================================
+  churchAccounts: defineTable({
+    church_id: v.id("churches"),
+    account_name: v.string(),
+    account_type: v.union(
+      v.literal("checking"),
+      v.literal("savings"),
+      v.literal("petty_cash"),
+      v.literal("special_fund")
+    ),
+    account_number: v.optional(v.string()),
+    bank_name: v.optional(v.string()),
+    opening_balance: v.number(),
+    current_balance: v.number(),
+    is_active: v.boolean(),
+    created_at: v.number(),
+    supabase_id: v.optional(v.number()),
+  })
+    .index("by_church", ["church_id"])
+    .index("by_active", ["is_active"])
+    .index("by_church_and_type", ["church_id", "account_type"])
+    .index("by_church_and_name", ["church_id", "account_name"]),
+
+  // ============================================================================
+  // CHURCH TRANSACTIONS - Libro mayor de transacciones por cuenta
+  // ============================================================================
+  churchTransactions: defineTable({
+    church_id: v.id("churches"),
+    account_id: v.id("churchAccounts"),
+    transaction_date: v.number(),
+    amount: v.number(),
+    transaction_type: v.union(
+      v.literal("income"),
+      v.literal("expense"),
+      v.literal("transfer")
+    ),
+    category_id: v.optional(v.id("transactionCategories")),
+    description: v.string(),
+    reference_number: v.optional(v.string()),
+    check_number: v.optional(v.string()),
+    vendor_customer: v.optional(v.string()),
+    worship_record_id: v.optional(v.id("worship_records")),
+    expense_record_id: v.optional(v.id("expense_records")),
+    report_id: v.optional(v.id("reports")),
+    transfer_account_id: v.optional(v.id("churchAccounts")),
+    is_reconciled: v.boolean(),
+    reconciled_date: v.optional(v.number()),
+    created_by: v.optional(v.string()),
+    created_at: v.number(),
+    supabase_id: v.optional(v.number()),
+  })
+    .index("by_church", ["church_id"])
+    .index("by_account", ["account_id"])
+    .index("by_date", ["transaction_date"])
+    .index("by_type", ["transaction_type"])
+    .index("by_category", ["category_id"])
+    .index("by_church_and_date", ["church_id", "transaction_date"]),
+
+  // ============================================================================
+  // CHURCH BUDGETS - Presupuestos mensuales/anuales por categoría
+  // ============================================================================
+  churchBudgets: defineTable({
+    church_id: v.id("churches"),
+    budget_year: v.number(),
+    budget_month: v.optional(v.number()),
+    category_id: v.id("transactionCategories"),
+    budgeted_amount: v.number(),
+    actual_amount: v.number(),
+    variance: v.number(),
+    notes: v.optional(v.string()),
+    created_at: v.number(),
+    updated_at: v.number(),
+    supabase_id: v.optional(v.number()),
+  })
+    .index("by_church", ["church_id"])
+    .index("by_year", ["budget_year"])
+    .index("by_category", ["category_id"])
+    .index("by_church_year_month", ["church_id", "budget_year", "budget_month"]),
 
   // ============================================================================
   // PROVIDERS - Proveedores centralizados (RUC deduplication)
@@ -355,6 +528,108 @@ export default defineSchema({
     .index("by_especial", ["es_especial"]),
 
   // ============================================================================
+  // FAMILIES - Agrupaciones familiares de miembros
+  // ============================================================================
+  families: defineTable({
+    supabase_id: v.optional(v.number()),
+    church_id: v.id("churches"),
+    apellido: v.string(),
+    direccion: v.optional(v.string()),
+    telefono: v.optional(v.string()),
+    jefe_member_id: v.optional(v.string()),
+    observaciones: v.optional(v.string()),
+    es_activa: v.boolean(),
+    created_at: v.number(),
+    updated_at: v.number(),
+  })
+    .index("by_church", ["church_id"])
+    .index("by_active", ["es_activa"]),
+
+  // ============================================================================
+  // MEMBERS - Miembros de la iglesia (gestión de personas)
+  // ============================================================================
+  members: defineTable({
+    supabase_id: v.optional(v.number()),
+    church_id: v.id("churches"),
+    family_id: v.optional(v.id("families")),
+    nombre: v.string(),
+    apellido: v.string(),
+    ci_ruc: v.optional(v.string()),
+    telefono: v.optional(v.string()),
+    email: v.optional(v.string()),
+    direccion: v.optional(v.string()),
+    es_activo: v.boolean(),
+    es_bautizado: v.boolean(),
+    es_miembro_oficial: v.boolean(),
+    nota: v.optional(v.string()),
+    created_at: v.number(),
+    updated_at: v.number(),
+  })
+    .index("by_church", ["church_id"])
+    .index("by_active", ["es_activo"])
+    .index("by_church_active", ["church_id", "es_activo"])
+    .index("by_apellido", ["apellido"])
+    .index("by_supabase_id", ["supabase_id"]),
+
+  // ============================================================================
+  // DONORS - Patrocinadores y benefactores
+  // ============================================================================
+  donors: defineTable({
+    supabase_id: v.optional(v.number()),
+    church_id: v.id("churches"),
+    name: v.string(),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    address: v.optional(v.string()),
+    cedula: v.optional(v.string()),
+    type: v.union(v.literal("individual"), v.literal("family"), v.literal("business")),
+    active: v.boolean(),
+    created_by: v.optional(v.string()),
+    created_at: v.number(),
+    updated_at: v.number(),
+  })
+    .index("by_church", ["church_id"])
+    .index("by_active", ["active"])
+    .index("by_name", ["name"])
+    .index("by_cedula", ["cedula"])
+    .index("by_supabase_id", ["supabase_id"]),
+
+  // ============================================================================
+  // CONTRIBUTIONS - Contribuciones de donantes
+  // ============================================================================
+  contributions: defineTable({
+    supabase_id: v.optional(v.number()),
+    donor_id: v.id("donors"),
+    church_id: v.id("churches"),
+    date: v.number(),
+    amount: v.number(),
+    type: v.union(
+      v.literal("diezmo"),
+      v.literal("ofrenda"),
+      v.literal("especial"),
+      v.literal("promesa")
+    ),
+    method: v.optional(
+      v.union(
+        v.literal("efectivo"),
+        v.literal("transferencia"),
+        v.literal("cheque"),
+        v.literal("otro")
+      )
+    ),
+    receipt_number: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    created_by: v.optional(v.string()),
+    created_at: v.number(),
+    updated_at: v.number(),
+  })
+    .index("by_donor", ["donor_id"])
+    .index("by_church", ["church_id"])
+    .index("by_date", ["date"])
+    .index("by_receipt", ["receipt_number"])
+    .index("by_supabase_id", ["supabase_id"]),
+
+  // ============================================================================
   // FUND EVENTS - Event planning and budget tracking for fund directors
   // ============================================================================
   fund_events: defineTable({
@@ -373,7 +648,7 @@ export default defineSchema({
     ),
 
     // Audit trail
-    created_by: v.optional(v.string()), // user_id from profiles
+    created_by: v.optional(v.string()), // Convex user ID string (legacy email/system)
     approved_by: v.optional(v.string()),
     approved_at: v.optional(v.number()),
     submitted_at: v.optional(v.number()),
@@ -425,7 +700,7 @@ export default defineSchema({
   // PROFILES - Perfiles de usuarios (temporal, pre-Clerk migration)
   // ============================================================================
   profiles: defineTable({
-    user_id: v.string(), // UUID de Supabase auth (temporal)
+    user_id: v.union(v.id("users"), v.string()),
     email: v.string(),
     role: v.union(
       v.literal("admin"),
@@ -448,31 +723,4 @@ export default defineSchema({
     .index("by_church", ["church_id"])
     .index("by_active", ["active"]),
 
-  // ============================================================================
-  // USERS - Usuarios del sistema (post-Clerk migration, reemplaza profiles)
-  // ============================================================================
-  users: defineTable({
-    email: v.string(),
-    // password_hash removido - auth manejado por Clerk/Auth.js
-    // En su lugar, almacenamos tokenIdentifier del provider
-    tokenIdentifier: v.string(), // de ctx.auth.getUserIdentity()
-    name: v.optional(v.string()),
-    role: v.union(
-      v.literal("admin"),
-      v.literal("fund_director"),
-      v.literal("pastor"),
-      v.literal("treasurer"),
-      v.literal("church_manager"),
-      v.literal("secretary")
-    ),
-    church_id: v.optional(v.id("churches")),
-    active: v.boolean(),
-    created_at: v.number(),
-    updated_at: v.number(),
-  })
-    .index("by_email", ["email"])
-    .index("by_tokenIdentifier", ["tokenIdentifier"])
-    .index("by_church", ["church_id"])
-    .index("by_role", ["role"])
-    .index("by_active", ["active"]),
 });

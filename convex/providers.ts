@@ -14,6 +14,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { getAuthContext } from "./lib/auth";
+import { encodeActorId } from "./lib/audit";
 import { requireMinRole } from "./lib/permissions";
 import { validateRequired, validateStringLength } from "./lib/validators";
 import { NotFoundError, ValidationError, ConflictError } from "./lib/errors";
@@ -37,7 +38,7 @@ interface ProviderWithUsage {
   notas?: string;
   es_activo: boolean;
   es_especial: boolean;
-  created_by?: string;
+  created_by?: string; // Convex user ID string, legacy email, or "system"
   created_at: number;
   updated_at: number;
   // Calculated usage
@@ -319,7 +320,7 @@ export const create = mutation({
       notas: args.notas?.trim() || "",
       es_activo: true,
       es_especial: args.es_especial || false,
-      created_by: auth.email || "system",
+      created_by: encodeActorId(auth.userId),
       created_at: now,
       updated_at: now,
     });

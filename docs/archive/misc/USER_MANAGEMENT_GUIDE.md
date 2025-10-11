@@ -1,4 +1,8 @@
 # Guía de Gestión de Usuarios - IPU PY Tesorería
+> ⚠️ **DOCUMENTO DESACTUALIZADO**  
+> **Última verificación vigente:** pre-migración 051 (antes de la consolidación del tesorero).  
+> Describe un modelo de **7 roles** y flujos NextAuth reemplazados por Convex Auth.  
+> Para información actual, revisa [`docs/ROLE_SYSTEM_REFERENCE.md`](../../ROLE_SYSTEM_REFERENCE.md) y la UI en `src/app/admin/users/page.tsx`.
 
 **Última actualización**: 2025-10-05
 **Versión**: 2.0 (Migration 040 - Tesorero Nacional Agregado)
@@ -285,3 +289,8 @@ graph TD
 **Documentación técnica**:
 - [ROLES_AND_PERMISSIONS.md](./ROLES_AND_PERMISSIONS.md) - Sistema de permisos detallado
 - [FINAL_VERIFICATION_2025-10-05.md](./FINAL_VERIFICATION_2025-10-05.md) - Estado actual del sistema
+# Guía de Gestión de Usuarios - IPU PY Tesorería
+> ⚠️ **DOCUMENTO DESACTUALIZADO**  
+> **Última verificación vigente:** pre-migración 051 (antes de la consolidación del tesorero).  
+> Este archivo describe un modelo de **7 roles** y procesos NextAuth que ya no existen.  
+> Consulta la fuente de verdad actualizada en [`docs/ROLE_SYSTEM_REFERENCE.md`](../../ROLE_SYSTEM_REFERENCE.md) y la UI moderna en `src/app/admin/users/page.tsx`.

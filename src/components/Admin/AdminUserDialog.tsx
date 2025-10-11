@@ -22,12 +22,12 @@ export type AdminUserDialogProps = {
   mode: 'create' | 'edit';
   onClose: () => void;
   user?: AdminUserRecord | null;
-  churches: Array<{ id: number; name: string | null }>
+  churches: Array<{ id: string; name: string | null; city?: string | null }>;
 };
 
 // All roles are now assignable (migration 023 removed super_admin)
 const rolesWithLabels = getRolesWithLabels();
-const DEFAULT_ASSIGNABLE_ROLE: ProfileRole = 'admin';
+const DEFAULT_ASSIGNABLE_ROLE: ProfileRole = 'secretary';
 
 export function AdminUserDialog({ open, mode, onClose, user, churches }: AdminUserDialogProps): JSX.Element {
   const createMutation = useCreateAdminUser();
@@ -50,8 +50,7 @@ export function AdminUserDialog({ open, mode, onClose, user, churches }: AdminUs
       setEmail(user.email);
       setFullName(user.full_name ?? '');
       setRole(user.role); // user.role is already ProfileRole type
-      const churchValue = typeof user.church_id === 'number' ? String(user.church_id) : 'none';
-      setChurchId(churchValue);
+      setChurchId(user.church_id ?? 'none');
       setPhone(user.phone ?? '');
     } else {
       setEmail('');
@@ -76,21 +75,25 @@ export function AdminUserDialog({ open, mode, onClose, user, churches }: AdminUs
       return;
     }
 
-    const basePayload = {
-      email,
-      full_name: fullName || null,
-      role,
-      church_id: churchId && churchId !== 'none' ? Number(churchId) : null,
-      phone: phone || null,
-    } satisfies Omit<CreateAdminUserPayload, 'permissions'>;
+    const normalizedChurchId = churchId !== 'none' ? churchId : null;
 
     try {
       if (mode === 'create') {
-        await createMutation.mutateAsync({ ...basePayload });
+        const payload: CreateAdminUserPayload = {
+          email,
+          full_name: fullName || null,
+          role,
+          church_id: normalizedChurchId,
+          phone: phone || null,
+        };
+        await createMutation.mutateAsync(payload);
       } else if (user) {
         const payload: UpdateAdminUserPayload = {
-          id: user.id,
-          ...basePayload,
+          user_id: user.id,
+          full_name: fullName || null,
+          role,
+          church_id: normalizedChurchId,
+          phone: phone || null,
         };
         await updateMutation.mutateAsync(payload);
       }
@@ -165,8 +168,13 @@ export function AdminUserDialog({ open, mode, onClose, user, churches }: AdminUs
                     Sin asignar
                   </SelectItem>
                   {churches.map((church) => (
-                    <SelectItem key={church.id} value={String(church.id)}>
-                      {church.name ?? 'Sin nombre'}
+                    <SelectItem key={church.id} value={church.id}>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{church.name ?? 'Sin nombre'}</span>
+                        {church.city ? (
+                          <span className="text-xs text-muted-foreground">{church.city}</span>
+                        ) : null}
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -187,7 +195,7 @@ export function AdminUserDialog({ open, mode, onClose, user, churches }: AdminUs
           {mode === 'create' && (
             <Alert className="bg-muted/40">
               <AlertDescription>
-                Se creará un perfil en estado pendiente. El usuario debe iniciar sesión con Google para activar su cuenta y sincronizarse con Supabase.
+                Se creará un perfil en estado pendiente. El usuario debe iniciar sesión con Google para activar su acceso y sincronizarse con Convex.
               </AlertDescription>
             </Alert>
           )}

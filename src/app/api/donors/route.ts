@@ -1,41 +1,72 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { getAuthContext, type AuthContext } from "@/lib/auth-context";
-import { executeWithContext } from "@/lib/db";
-import { firstOrNull, expectOne } from "@/lib/db-helpers";
-import { setCORSHeaders } from "@/lib/cors";
-import type { ApiResponse } from "@/types/utils";
+import { type NextRequest, NextResponse } from 'next/server';
+import type { Id } from '../../../../convex/_generated/dataModel';
 
-interface Donor {
-  id: number;
-  church_id: number;
+import { getAuthenticatedConvexClient } from '@/lib/convex-server';
+import { api } from '../../../../convex/_generated/api';
+import { setCORSHeaders, handleCorsPreflight } from '@/lib/cors';
+import { getChurchConvexId } from '@/lib/convex-id-mapping';
+import { requireAuth } from '@/lib/auth-context';
+import type { ApiResponse } from '@/types/utils';
+
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
+type DonorType = 'individual' | 'family' | 'business';
+type ContributionType = 'diezmo' | 'ofrenda' | 'especial' | 'promesa';
+type ContributionMethod = 'efectivo' | 'transferencia' | 'cheque' | 'otro';
+
+type ConvexDonor = {
+  id: number | null;
+  convex_id: string;
+  church_id: number | null;
+  church_convex_id: Id<'churches'>;
+  church_name: string | null;
   name: string;
-  email?: string;
-  phone?: string;
-  address?: string;
-  cedula?: string;
-  type: "individual" | "family" | "business";
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  cedula: string | null;
+  type: DonorType;
   active: boolean;
+  contribution_count: number;
+  total_contributions: number;
   created_at: string;
-  updated_at?: string;
-}
+  updated_at: string;
+};
 
-interface Contribution {
-  id: number;
-  donor_id: number;
-  church_id: number;
+type ConvexContribution = {
+  id: number | null;
+  convex_id: Id<'contributions'>;
+  donor_id: number | null;
+  donor_convex_id: Id<'donors'>;
+  church_id: number | null;
+  church_convex_id: Id<'churches'>;
+  church_name: string | null;
   date: string;
   amount: number;
-  type: "diezmo" | "ofrenda" | "especial" | "promesa";
-  method: "efectivo" | "transferencia" | "cheque" | "otro";
-  receipt_number?: string;
-  notes?: string;
+  type: ContributionType;
+  method: ContributionMethod;
+  receipt_number: string | null;
+  notes: string | null;
   created_at: string;
-}
+  updated_at: string;
+};
+
+type ConvexSummary = {
+  donor: ConvexDonor;
+  summary: {
+    yearlyContributions: Array<{ year: number; count: number; total: number; average: number }>;
+    contributionsByType: Array<{ type: ContributionType; count: number; total: number }>;
+    recentContributions: ConvexContribution[];
+  };
+};
+
+type DonorResponse = ReturnType<typeof toLegacyDonor>;
 
 type DonorCreatePayload = {
   church_id: number;
   name: string;
-  type: Donor["type"];
+  type: DonorType;
   email?: string | null;
   phone?: string | null;
   address?: string | null;
@@ -43,21 +74,38 @@ type DonorCreatePayload = {
 };
 
 type ContributionCreatePayload = {
-  donor_id: number;
+  donor_id: number | string;
   church_id: number;
   date: string;
   amount: number;
-  type: Contribution["type"];
-  method?: Contribution["method"];
+  type: ContributionType;
+  method?: ContributionMethod;
   receipt_number?: string | null;
   notes?: string | null;
 };
 
-type DonorUpdatePayload = Partial<Omit<Donor, "id" | "created_at" | "updated_at" | "active" >> & { active?: boolean };
+type DonorUpdatePayload = {
+  name?: string;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  cedula?: string | null;
+  type?: DonorType;
+  active?: boolean;
+};
 
-type ContributionUpdatePayload = Partial<Omit<Contribution, "id" | "created_at" | "donor_id" | "church_id" >>;
+type ContributionUpdatePayload = {
+  date?: string;
+  amount?: number;
+  type?: ContributionType;
+  method?: ContributionMethod;
+  receipt_number?: string | null;
+  notes?: string | null;
+};
 
-type DonorAction = "donor" | "contribution";
+type DonorAction = 'donor' | 'contribution';
+
+type DonorQueryAction = 'list' | 'search' | 'summary' | 'contributions';
 
 const corsJson = <T extends ApiResponse<unknown>>(
   payload: T,
@@ -78,527 +126,492 @@ const corsError = (message: string, status: number, details?: unknown): NextResp
     { status },
   );
 
-// GET /api/donors - Search and list donors
-async function handleGet(req: NextRequest) {
+const toLegacyDonor = (donor: ConvexDonor) => ({
+  id: donor.id ?? 0,
+  convex_id: donor.convex_id,
+  church_id: donor.church_id ?? null,
+  church_convex_id: donor.church_convex_id,
+  church_name: donor.church_name,
+  name: donor.name,
+  email: donor.email,
+  phone: donor.phone,
+  address: donor.address,
+  cedula: donor.cedula,
+  type: donor.type,
+  active: donor.active,
+  contribution_count: donor.contribution_count,
+  total_contributions: donor.total_contributions,
+  created_at: donor.created_at,
+  updated_at: donor.updated_at,
+});
+
+const toLegacyContribution = (contribution: ConvexContribution) => ({
+  id: contribution.id ?? 0,
+  convex_id: contribution.convex_id,
+  donor_id: contribution.donor_id ?? null,
+  donor_convex_id: contribution.donor_convex_id,
+  church_id: contribution.church_id ?? null,
+  church_convex_id: contribution.church_convex_id,
+  church_name: contribution.church_name,
+  date: contribution.date,
+  amount: contribution.amount,
+  type: contribution.type,
+  method: contribution.method,
+  receipt_number: contribution.receipt_number,
+  notes: contribution.notes,
+  created_at: contribution.created_at,
+  updated_at: contribution.updated_at,
+});
+
+const toLegacySummary = (summary: ConvexSummary) => ({
+  success: true,
+  data: toLegacyDonor(summary.donor),
+  summary: {
+    yearlyContributions: summary.summary.yearlyContributions.map((row) => ({
+      year: row.year,
+      count: row.count,
+      total: row.total,
+      average: row.average,
+    })),
+    contributionsByType: summary.summary.contributionsByType.map((row) => ({
+      type: row.type,
+      count: row.count,
+      total: row.total,
+    })),
+    recentContributions: summary.summary.recentContributions.map(toLegacyContribution),
+  },
+});
+
+const parseNumber = (value: string | null): number | null => {
+  if (value === null) return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const parseLimit = (value: string | null, fallback: number): number => {
+  const parsed = parseNumber(value);
+  if (parsed === null || parsed <= 0) return fallback;
+  return Math.min(parsed, 500);
+};
+
+const parseOffset = (value: string | null): number => {
+  const parsed = parseNumber(value);
+  if (parsed === null || parsed < 0) return 0;
+  return parsed;
+};
+
+const parseDateToMillis = (value: string | undefined | null): number => {
+  if (!value) throw new Error('La fecha es obligatoria');
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) {
+    throw new Error('Formato de fecha inválido');
+  }
+  return timestamp;
+};
+
+const resolveDonorConvexId = async (
+  client: Awaited<ReturnType<typeof getAuthenticatedConvexClient>>,
+  rawId: string | number | null,
+): Promise<string> => {
+  if (rawId === null || rawId === undefined || rawId === '') {
+    throw new Error('ID de donante inválido');
+  }
+
+  const normalized = typeof rawId === 'string' ? rawId.trim() : String(rawId);
+  const numeric = Number.parseInt(normalized, 10);
+  if (!Number.isNaN(numeric) && normalized === String(numeric)) {
+    const legacyMatch = await client.query(api.donors.findDonorByLegacyId, {
+      supabase_id: numeric,
+    });
+    if (!legacyMatch) {
+      throw new Error('Donante no encontrado');
+    }
+    return legacyMatch;
+  }
+
+  return normalized;
+};
+
+const resolveChurchConvexId = async (
+  client: Awaited<ReturnType<typeof getAuthenticatedConvexClient>>,
+  supabaseId: number | null,
+): Promise<Id<'churches'> | undefined> => {
+  if (supabaseId === null) {
+    return undefined;
+  }
+  const convexId = await getChurchConvexId(client, supabaseId);
+  if (!convexId) {
+    throw new Error('La iglesia especificada no existe en Convex');
+  }
+  return convexId as Id<'churches'>;
+};
+
+const sanitizeString = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+};
+
+const parseContributionMethod = (value: unknown): ContributionMethod | undefined => {
+  if (typeof value !== 'string') return undefined;
+  if ((['efectivo', 'transferencia', 'cheque', 'otro'] as const).includes(value as ContributionMethod)) {
+    return value as ContributionMethod;
+  }
+  return undefined;
+};
+
+async function handleGet(req: NextRequest): Promise<NextResponse> {
+  const preflight = handleCorsPreflight(req);
+  if (preflight) return preflight;
+
+  const client = await getAuthenticatedConvexClient();
+  const { searchParams } = new URL(req.url);
+  const action = (searchParams.get('action') ?? 'list') as DonorQueryAction;
+  const churchIdParam = parseNumber(searchParams.get('church_id'));
+  const typeParam = searchParams.get('type');
+
   try {
-    const auth = await getAuthContext(req);
-    const { searchParams } = new URL(req.url);
-    const action = searchParams.get("action") || "list";
-    const church_id = searchParams.get("church_id");
-    const donor_id = searchParams.get("id");
-    const search = searchParams.get("search");
-    const type = searchParams.get("type");
+    switch (action) {
+      case 'search': {
+        const term = searchParams.get('search');
+        if (!term) {
+          return corsError('Parámetro "search" requerido', 400);
+        }
+        const churchConvex = await resolveChurchConvexId(client, churchIdParam);
 
-    if (action === "search" && search) {
-      return await searchDonors(auth, search, church_id);
+        // Build search args with conditional spreads to satisfy exactOptionalPropertyTypes
+        const searchArgs = {
+          searchTerm: term,
+          ...(churchConvex ? { churchId: churchConvex } : {}),
+        };
+
+        const results = await client.query(api.donors.search, searchArgs);
+        return corsJson<ApiResponse<DonorResponse[]>>({
+          success: true,
+          data: results.map(toLegacyDonor),
+        });
+      }
+      case 'summary': {
+        const donorIdParam = searchParams.get('id');
+        if (!donorIdParam) {
+          return corsError('ID requerido', 400);
+        }
+        const donorConvexId = await resolveDonorConvexId(client, donorIdParam);
+        const summary = await client.query(api.donors.getSummary, {
+          donorId: donorConvexId as Id<'donors'>,
+        });
+        return corsJson(toLegacySummary(summary) as ApiResponse<DonorResponse> & { summary: typeof summary.summary });
+      }
+      case 'contributions': {
+        const donorIdParam = searchParams.get('id');
+        if (!donorIdParam) {
+          return corsError('ID requerido', 400);
+        }
+        const donorConvexId = await resolveDonorConvexId(client, donorIdParam);
+        const contributions = await client.query(api.donors.getContributions, {
+          donorId: donorConvexId as Id<'donors'>,
+        });
+        return corsJson<ApiResponse<ReturnType<typeof toLegacyContribution>[]>>({
+          success: true,
+          data: contributions.map(toLegacyContribution),
+        });
+      }
+      case 'list':
+      default: {
+        const limit = parseLimit(searchParams.get('limit'), 200);
+        const offset = parseOffset(searchParams.get('offset'));
+        const sortColumn = searchParams.get('sort') ?? 'apellido';
+        const sortOrder = (searchParams.get('order') ?? 'ASC').toUpperCase() as 'ASC' | 'DESC';
+        const activeFlagParam = searchParams.get('active');
+        const activeFlag =
+          activeFlagParam === null ? undefined : activeFlagParam === 'true' ? true : activeFlagParam === 'false' ? false : undefined;
+        const typeFilter =
+          typeParam && (['individual', 'family', 'business'] as const).includes(typeParam as DonorType)
+            ? (typeParam as DonorType)
+            : undefined;
+
+        const churchConvex = await resolveChurchConvexId(client, churchIdParam);
+
+        // Build list args with conditional spreads to satisfy exactOptionalPropertyTypes
+        const listArgs = {
+          limit,
+          offset,
+          sortColumn: sortColumn as 'apellido' | 'nombre' | 'created_at' | 'updated_at' | 'ci_ruc',
+          sortOrder,
+          ...(churchConvex ? { churchId: churchConvex } : {}),
+          ...(activeFlag !== undefined ? { activeFlag } : {}),
+          ...(typeFilter ? { type: typeFilter } : {}),
+        };
+
+        const result = await client.query(api.donors.list, listArgs);
+
+        return corsJson<ApiResponse<DonorResponse[]> & { total: number }>({
+          success: true,
+          data: result.data.map(toLegacyDonor),
+          total: result.total,
+        });
+      }
     }
-
-    if (action === "summary" && donor_id) {
-      return await getDonorSummary(auth, donor_id);
-    }
-
-    if (action === "contributions" && donor_id) {
-      return await getDonorContributions(auth, donor_id);
-    }
-
-    // Default: list donors
-    return await listDonors(auth, church_id, type);
   } catch (error) {
-    console.error("Error in donors GET:", error);
+    console.error('Donors GET error:', error);
     return corsError(
-      "Error fetching donor data",
+      'Error fetching donor data',
       500,
-      error instanceof Error ? error.message : "Unknown error",
+      error instanceof Error ? error.message : 'Unknown error',
     );
   }
 }
 
-// List donors with optional filters
-async function listDonors(auth: AuthContext | null, church_id: string | null, type: string | null) {
-  let query = `
-    SELECT
-      d.*,
-      c.name as church_name,
-      COUNT(DISTINCT con.id) as contribution_count,
-      COALESCE(SUM(con.amount), 0) as total_contributions
-    FROM donors d
-    LEFT JOIN churches c ON d.church_id = c.id
-    LEFT JOIN contributions con ON d.id = con.donor_id
-    WHERE d.active = true
-  `;
-  const params: (string | number | boolean | null)[] = [];
-  let paramCount = 0;
+async function handlePost(req: NextRequest): Promise<NextResponse> {
+  const preflight = handleCorsPreflight(req);
+  if (preflight) return preflight;
 
-  if (church_id) {
-    paramCount++;
-    query += ` AND d.church_id = $${paramCount}`;
-    params.push(church_id);
-  }
+  try {
+    const auth = await requireAuth();
+    const client = await getAuthenticatedConvexClient();
 
-  if (type) {
-    paramCount++;
-    query += ` AND d.type = $${paramCount}`;
-    params.push(type);
-  }
+    const body = (await req.json()) as Record<string, unknown>;
+    const action = (typeof body['type'] === 'string' ? body['type'] : 'donor') as DonorAction;
 
-  query += ` GROUP BY d.id, c.name ORDER BY d.name ASC`;
+    if (action === 'contribution') {
+      const payload = body as ContributionCreatePayload;
+      const donorConvexId = await resolveDonorConvexId(client, payload.donor_id);
+      const churchConvexId = await resolveChurchConvexId(client, payload.church_id ?? null);
+      if (!churchConvexId) {
+        return corsError('church_id es requerido', 400);
+      }
 
-  const result = await executeWithContext(auth, query, params);
+      const receiptNumber = sanitizeString(payload.receipt_number);
+      const notes = sanitizeString(payload.notes);
+      const createdBy = auth.email;
+      const method = parseContributionMethod(payload.method);
 
-  return corsJson<ApiResponse<typeof result.rows> & { total: number }>({
-    success: true,
-    data: result.rows,
-    total: result.rows.length,
-  });
-}
-
-// Search donors by name, email, phone, or cedula
-async function searchDonors(auth: AuthContext | null, searchTerm: string, church_id: string | null) {
-  let query = `
-    SELECT
-      d.*,
-      c.name as church_name,
-      COUNT(DISTINCT con.id) as contribution_count,
-      COALESCE(SUM(con.amount), 0) as total_contributions
-    FROM donors d
-    LEFT JOIN churches c ON d.church_id = c.id
-    LEFT JOIN contributions con ON d.id = con.donor_id
-    WHERE d.active = true
-    AND (
-      LOWER(d.name) LIKE LOWER($1)
-      OR LOWER(d.email) LIKE LOWER($1)
-      OR d.phone LIKE $1
-      OR d.cedula LIKE $1
-    )
-  `;
-  const params: (string | number)[] = [`%${searchTerm}%`];
-  let paramCount = 1;
-
-  if (church_id) {
-    paramCount++;
-    query += ` AND d.church_id = $${paramCount}`;
-    params.push(church_id);
-  }
-
-  query += ` GROUP BY d.id, c.name ORDER BY d.name ASC LIMIT 20`;
-
-  const result = await executeWithContext(auth, query, params);
-
-  return corsJson<ApiResponse<typeof result.rows> & { searchTerm: string }>({
-    success: true,
-    data: result.rows,
-    searchTerm,
-  });
-}
-
-// Get donor summary with contribution history
-async function getDonorSummary(auth: AuthContext | null, donor_id: string) {
-  // Get donor details
-  const donorResult = await executeWithContext(auth, 
-    `SELECT d.*, c.name as church_name
-     FROM donors d
-     LEFT JOIN churches c ON d.church_id = c.id
-     WHERE d.id = $1`,
-    [donor_id]
-  );
-
-  if (donorResult.rows.length === 0) {
-    return corsError("Donor not found", 404);
-  }
-
-  const donor = firstOrNull(donorResult.rows);
-
-  // Get contribution summary by year
-  const yearlyContributions = await executeWithContext(auth, 
-    `SELECT
-      EXTRACT(YEAR FROM date) as year,
-      COUNT(*) as count,
-      SUM(amount) as total,
-      AVG(amount) as average
-    FROM contributions
-    WHERE donor_id = $1
-    GROUP BY EXTRACT(YEAR FROM date)
-    ORDER BY year DESC`,
-    [donor_id]
-  );
-
-  // Get contribution summary by type
-  const contributionsByType = await executeWithContext(auth, 
-    `SELECT
-      type,
-      COUNT(*) as count,
-      SUM(amount) as total
-    FROM contributions
-    WHERE donor_id = $1
-    GROUP BY type
-    ORDER BY total DESC`,
-    [donor_id]
-  );
-
-  // Get recent contributions
-  const recentContributions = await executeWithContext(auth, 
-    `SELECT *
-     FROM contributions
-     WHERE donor_id = $1
-     ORDER BY date DESC
-     LIMIT 10`,
-    [donor_id]
-  );
-
-  return corsJson<
-    ApiResponse<typeof donor> & {
-      summary: {
-        yearlyContributions: typeof yearlyContributions.rows;
-        contributionsByType: typeof contributionsByType.rows;
-        recentContributions: typeof recentContributions.rows;
+      // Build contribution args with conditional spreads to avoid type inference issues
+      const contributionArgs = {
+        donor_id: donorConvexId as Id<'donors'>,
+        church_id: churchConvexId,
+        date: parseDateToMillis(payload.date),
+        amount: payload.amount,
+        type: payload.type,
+        ...(method ? { method } : {}),
+        ...(receiptNumber ? { receipt_number: receiptNumber } : {}),
+        ...(notes ? { notes } : {}),
+        ...(createdBy ? { created_by: createdBy } : {}),
       };
-    }
-  >({
-    success: true,
-    data: donor,
-    summary: {
-      yearlyContributions: yearlyContributions.rows,
-      contributionsByType: contributionsByType.rows,
-      recentContributions: recentContributions.rows,
-    },
-  });
-}
 
-// Get all contributions for a donor
-async function getDonorContributions(auth: AuthContext | null, donor_id: string) {
-  const result = await executeWithContext(auth, 
-    `SELECT
-      c.*,
-      ch.name as church_name
-    FROM contributions c
-    LEFT JOIN churches ch ON c.church_id = ch.id
-    WHERE c.donor_id = $1
-    ORDER BY c.date DESC, c.created_at DESC`,
-    [donor_id]
-  );
+      const contribution = await client.mutation(api.donors.createContribution, contributionArgs);
 
-  return corsJson<ApiResponse<typeof result.rows>>({
-    success: true,
-    data: result.rows,
-  });
-}
-
-// POST /api/donors - Create donor or contribution
-async function handlePost(req: NextRequest) {
-  try {
-    const user = await getAuthContext(req);
-    if (!user) {
-      return corsError("Authentication required", 401);
+      return corsJson<ApiResponse<ReturnType<typeof toLegacyContribution>> & { receiptNumber: string }>(
+        {
+          success: true,
+          data: toLegacyContribution(contribution),
+          receiptNumber: contribution.receipt_number ?? '',
+        },
+        { status: 201 },
+      );
     }
 
-    const rawBody = await req.json();
-    if (typeof rawBody !== "object" || rawBody === null) {
-      return corsError("Invalid request payload", 400);
+    const payload = body as DonorCreatePayload;
+    const churchConvexId = await resolveChurchConvexId(client, payload.church_id ?? null);
+    if (!churchConvexId) {
+      return corsError('church_id es requerido', 400);
     }
 
-    const body = rawBody as Record<string, unknown>;
-    const action = (typeof body['type'] === "string" ? body['type'] : "donor") as DonorAction;
+    const email = sanitizeString(payload.email);
+    const phone = sanitizeString(payload.phone);
+    const address = sanitizeString(payload.address);
+    const cedula = sanitizeString(payload.cedula);
+    const createdBy = auth.email;
 
-    if (action === "contribution") {
-      return await createContribution(user, body as ContributionCreatePayload, user.email || "");
-    }
+    // Build donor args with conditional spreads to avoid type inference issues
+    const donorArgs = {
+      church_id: churchConvexId,
+      name: payload.name,
+      type: payload.type,
+      ...(email ? { email } : {}),
+      ...(phone ? { phone } : {}),
+      ...(address ? { address } : {}),
+      ...(cedula ? { cedula } : {}),
+      ...(createdBy ? { created_by: createdBy } : {}),
+    };
 
-    // Create donor
-    return await createDonor(user, body as DonorCreatePayload, user.email || "");
+    const donor = await client.mutation(api.donors.createDonor, donorArgs);
+
+    return corsJson<ApiResponse<DonorResponse> & { message: string }>(
+      {
+        success: true,
+        data: toLegacyDonor(donor),
+        message: 'Donor created successfully',
+      },
+      { status: 201 },
+    );
   } catch (error) {
-    console.error("Error in donors POST:", error);
+    console.error('Donors POST error:', error);
     return corsError(
-      "Error creating donor record",
+      'Error creating donor record',
       500,
-      error instanceof Error ? error.message : "Unknown error",
+      error instanceof Error ? error.message : 'Unknown error',
     );
   }
 }
 
-// Create new donor
-async function createDonor(auth: AuthContext | null, data: DonorCreatePayload, userEmail: string) {
-  const required: Array<keyof DonorCreatePayload> = ["church_id", "name", "type"];
-  for (const field of required) {
-    if (data[field] === undefined || data[field] === null || data[field] === "") {
-      return corsError(`${field as string} is required`, 400);
-    }
-  }
+async function handlePut(req: NextRequest): Promise<NextResponse> {
+  const preflight = handleCorsPreflight(req);
+  if (preflight) return preflight;
 
-  // Check for duplicate cedula if provided
-  if (data.cedula) {
-    const existing = await executeWithContext(auth, 
-      `SELECT id FROM donors WHERE cedula = $1 AND church_id = $2`,
-      [data.cedula, data.church_id]
-    );
-
-    if (existing.rows.length > 0) {
-      return corsError("A donor with this cedula already exists", 409);
-    }
-  }
-
-  const result = await executeWithContext<Donor>(auth,
-    `INSERT INTO donors (
-      church_id, name, email, phone, address,
-      cedula, type, active, created_by
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8)
-    RETURNING *`,
-    [
-      data.church_id,
-      data.name,
-      data.email ?? null,
-      data.phone ?? null,
-      data.address ?? null,
-      data.cedula ?? null,
-      data.type,
-      userEmail
-    ]
-  );
-
-  return corsJson<ApiResponse<Donor> & { message: string }>(
-    {
-      success: true,
-      data: expectOne(result.rows),
-      message: "Donor created successfully",
-    },
-    { status: 201 },
-  );
-}
-
-// Create contribution
-async function createContribution(auth: AuthContext | null, data: ContributionCreatePayload, userEmail: string) {
-  const required: Array<keyof ContributionCreatePayload> = [
-    "donor_id",
-    "church_id",
-    "date",
-    "amount",
-    "type",
-  ];
-  for (const field of required) {
-    if (data[field] === undefined || data[field] === null || data[field] === "") {
-      return corsError(`${field as string} is required`, 400);
-    }
-  }
-
-  // Generate receipt number if not provided
-  const receiptNumber = data.receipt_number ?? `REC-${data.church_id}-${Date.now().toString(36).toUpperCase()}`;
-
-  const result = await executeWithContext<Contribution>(auth,
-    `INSERT INTO contributions (
-      donor_id, church_id, date, amount, type,
-      method, receipt_number, notes, created_by
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    RETURNING *`,
-    [
-      data.donor_id,
-      data.church_id,
-      data.date,
-      data.amount,
-      data.type,
-      data.method ?? "efectivo",
-      receiptNumber,
-      data.notes ?? null,
-      userEmail
-    ]
-  );
-
-  return corsJson<ApiResponse<Contribution> & { message: string; receiptNumber: string }>(
-    {
-      success: true,
-      data: expectOne(result.rows),
-      message: "Contribution recorded successfully",
-      receiptNumber,
-    },
-    { status: 201 },
-  );
-}
-
-// PUT /api/donors - Update donor or contribution
-async function handlePut(req: NextRequest) {
   try {
-    const user = await getAuthContext(req);
-    if (!user) {
-      return corsError("Authentication required", 401);
-    }
+    await requireAuth();
+    const client = await getAuthenticatedConvexClient();
 
     const { searchParams } = new URL(req.url);
-    const donor_id = searchParams.get("id");
-    const contribution_id = searchParams.get("contribution_id");
+    const donorIdParam = searchParams.get('id');
+    const contributionIdParam = searchParams.get('contribution_id');
 
-    if (contribution_id) {
+    if (contributionIdParam) {
+      const contributionId = await resolveDonorConvexId(client, contributionIdParam);
       const payload = (await req.json()) as ContributionUpdatePayload;
-      return await updateContribution(user, contribution_id, payload);
+
+      const updates: ContributionUpdatePayload = { ...payload };
+      const dateMillis = updates.date ? parseDateToMillis(updates.date) : undefined;
+      const receiptNumber = sanitizeString(updates.receipt_number);
+      const notes = sanitizeString(updates.notes);
+
+      // Build update payload with conditional spreads to avoid type inference issues
+      const updatePayload = {
+        ...(dateMillis !== undefined ? { date: dateMillis } : {}),
+        ...(updates.amount !== undefined ? { amount: updates.amount } : {}),
+        ...(updates.type !== undefined ? { type: updates.type } : {}),
+        ...(updates.method !== undefined ? { method: updates.method } : {}),
+        ...(receiptNumber ? { receipt_number: receiptNumber } : {}),
+        ...(notes ? { notes } : {}),
+      };
+
+      const contribution = await client.mutation(api.donors.updateContribution, {
+        contribution_id: contributionId as Id<'contributions'>,
+        payload: updatePayload,
+      });
+
+      return corsJson<ApiResponse<ReturnType<typeof toLegacyContribution>> & { message: string }>(
+        {
+          success: true,
+          data: toLegacyContribution(contribution),
+          message: 'Contribution updated successfully',
+        },
+      );
     }
 
-    if (!donor_id) {
-      return corsError("Donor ID is required", 400);
+    if (!donorIdParam) {
+      return corsError('Donor ID is required', 400);
     }
 
+    const donorId = await resolveDonorConvexId(client, donorIdParam);
     const payload = (await req.json()) as DonorUpdatePayload;
-    return await updateDonor(user, donor_id, payload);
+
+    const email = sanitizeString(payload.email);
+    const phone = sanitizeString(payload.phone);
+    const address = sanitizeString(payload.address);
+    const cedula = sanitizeString(payload.cedula);
+
+    // Build donor update payload with conditional spreads to avoid type inference issues
+    const donorUpdatePayload = {
+      ...(payload.name !== undefined ? { name: payload.name } : {}),
+      ...(email ? { email } : {}),
+      ...(phone ? { phone } : {}),
+      ...(address ? { address } : {}),
+      ...(cedula ? { cedula } : {}),
+      ...(payload.type !== undefined ? { type: payload.type } : {}),
+      ...(payload.active !== undefined ? { active: payload.active } : {}),
+    };
+
+    const donor = await client.mutation(api.donors.updateDonor, {
+      donor_id: donorId as Id<'donors'>,
+      payload: donorUpdatePayload,
+    });
+
+    return corsJson<ApiResponse<DonorResponse> & { message: string }>(
+      {
+        success: true,
+        data: toLegacyDonor(donor),
+        message: 'Donor updated successfully',
+      },
+    );
   } catch (error) {
-    console.error("Error in donors PUT:", error);
+    console.error('Donors PUT error:', error);
     return corsError(
-      "Error updating donor record",
+      'Error updating donor record',
       500,
-      error instanceof Error ? error.message : "Unknown error",
+      error instanceof Error ? error.message : 'Unknown error',
     );
   }
 }
 
-// Update donor
-async function updateDonor(auth: AuthContext | null, donor_id: string, data: DonorUpdatePayload) {
-  const updates: string[] = [];
-  const values: (string | number | boolean | null)[] = [];
-  let paramCount = 0;
+async function handleDelete(req: NextRequest): Promise<NextResponse> {
+  const preflight = handleCorsPreflight(req);
+  if (preflight) return preflight;
 
-  const updatableFields: Array<keyof DonorUpdatePayload> = [
-    "name",
-    "email",
-    "phone",
-    "address",
-    "cedula",
-    "type",
-    "active",
-  ];
-  for (const field of updatableFields) {
-    if (data[field] !== undefined) {
-      paramCount++;
-      updates.push(`${field as string} = $${paramCount}`);
-      values.push(data[field] ?? null);
-    }
-  }
-
-  if (updates.length === 0) {
-    return corsError("No fields to update", 400);
-  }
-
-  paramCount++;
-  updates.push(`updated_at = CURRENT_TIMESTAMP`);
-  values.push(donor_id);
-
-  const result = await executeWithContext<Donor>(auth, 
-    `UPDATE donors SET ${updates.join(", ")} WHERE id = $${paramCount} RETURNING *`,
-    values
-  );
-
-  if (result.rows.length === 0) {
-    return corsError("Donor not found", 404);
-  }
-
-  return corsJson<ApiResponse<Donor> & { message: string }>({
-    success: true,
-    data: expectOne(result.rows),
-    message: "Donor updated successfully",
-  });
-}
-
-// Update contribution
-async function updateContribution(auth: AuthContext | null, contribution_id: string, data: ContributionUpdatePayload) {
-  const updates: string[] = [];
-  const values: (string | number | null)[] = [];
-  let paramCount = 0;
-
-  const updatableFields: Array<keyof ContributionUpdatePayload> = [
-    "date",
-    "amount",
-    "type",
-    "method",
-    "receipt_number",
-    "notes",
-  ];
-  for (const field of updatableFields) {
-    if (data[field] !== undefined) {
-      paramCount++;
-      updates.push(`${field as string} = $${paramCount}`);
-      values.push(data[field] ?? null);
-    }
-  }
-
-  if (updates.length === 0) {
-    return corsError("No fields to update", 400);
-  }
-
-  paramCount++;
-  values.push(contribution_id);
-
-  const result = await executeWithContext<Contribution>(auth, 
-    `UPDATE contributions SET ${updates.join(", ")} WHERE id = $${paramCount} RETURNING *`,
-    values
-  );
-
-  if (result.rows.length === 0) {
-    return corsError("Contribution not found", 404);
-  }
-
-  return corsJson<ApiResponse<Contribution> & { message: string }>({
-    success: true,
-    data: expectOne(result.rows),
-    message: "Contribution updated successfully",
-  });
-}
-
-// DELETE /api/donors - Delete donor or contribution
-async function handleDelete(req: NextRequest) {
   try {
-    const user = await getAuthContext(req);
-    if (!user) {
-      return corsError("Authentication required", 401);
-    }
-
+    await requireAuth();
+    const client = await getAuthenticatedConvexClient();
     const { searchParams } = new URL(req.url);
-    const donor_id = searchParams.get("id");
-    const contribution_id = searchParams.get("contribution_id");
+    const donorIdParam = searchParams.get('id');
+    const contributionIdParam = searchParams.get('contribution_id');
 
-    if (contribution_id) {
-      await executeWithContext(user, `DELETE FROM contributions WHERE id = $1`, [contribution_id]);
+    if (contributionIdParam) {
+      const contributionId = await resolveDonorConvexId(client, contributionIdParam);
+      await client.mutation(api.donors.deleteContribution, {
+        contribution_id: contributionId as Id<'contributions'>,
+      });
       return corsJson<ApiResponse<Record<string, never>> & { message: string }>({
         success: true,
         data: {},
-        message: "Contribution deleted",
+        message: 'Contribution deleted',
       });
     }
 
-    if (!donor_id) {
-      return corsError("ID is required", 400);
+    if (!donorIdParam) {
+      return corsError('ID is required', 400);
     }
 
-    // Soft delete donor (mark as inactive)
-    await executeWithContext(user, `UPDATE donors SET active = false WHERE id = $1`, [donor_id]);
+    const donorId = await resolveDonorConvexId(client, donorIdParam);
+    await client.mutation(api.donors.deactivateDonor, {
+      donor_id: donorId as Id<'donors'>,
+    });
 
     return corsJson<ApiResponse<Record<string, never>> & { message: string }>({
       success: true,
       data: {},
-      message: "Donor deactivated",
+      message: 'Donor deactivated',
     });
   } catch (error) {
-    console.error("Error in donors DELETE:", error);
+    console.error('Donors DELETE error:', error);
     return corsError(
-      "Error deleting donor record",
+      'Error deleting donor record',
       500,
-      error instanceof Error ? error.message : "Unknown error",
+      error instanceof Error ? error.message : 'Unknown error',
     );
   }
 }
 
-// OPTIONS handler for CORS
-export async function OPTIONS(): Promise<NextResponse> {
+export async function OPTIONS(request: NextRequest): Promise<NextResponse> {
+  const preflight = handleCorsPreflight(request);
+  if (preflight) return preflight;
   const response = new NextResponse(null, { status: 200 });
   setCORSHeaders(response);
   return response;
 }
 
-export async function GET(req: NextRequest): Promise<NextResponse> {
-  return handleGet(req);
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  return handleGet(request);
 }
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
-  return handlePost(req);
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  return handlePost(request);
 }
 
-export async function PUT(req: NextRequest): Promise<NextResponse> {
-  return handlePut(req);
+export async function PUT(request: NextRequest): Promise<NextResponse> {
+  return handlePut(request);
 }
 
-export async function DELETE(req: NextRequest): Promise<NextResponse> {
-  return handleDelete(req);
+export async function DELETE(request: NextRequest): Promise<NextResponse> {
+  return handleDelete(request);
 }

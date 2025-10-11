@@ -245,7 +245,9 @@ export function getBaseUrl(): string {
 /**
  * Check if a feature is enabled
  */
-export function isFeatureEnabled(feature: 'rateLimiting' | 'auditLogging'): boolean {
+export function isFeatureEnabled(
+  feature: 'rateLimiting' | 'auditLogging'
+): boolean {
   const env = getEnv();
 
   switch (feature) {

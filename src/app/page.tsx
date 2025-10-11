@@ -2,7 +2,7 @@ import type { JSX } from 'react';
 import Link from "next/link";
 
 import { executeWithContext } from "@/lib/db";
-import { auth } from "@/lib/auth";
+import { getAuthContext } from "@/lib/auth-context";
 import { formatCurrencyDisplay } from "@/lib/utils/currency";
 import { logger } from "@/lib/logger";
 import {
@@ -190,26 +190,27 @@ const withDashboardFallback = async <TReturn,>(
 };
 
 export default async function DashboardLanding(): Promise<JSX.Element> {
-  // Get NextAuth session instead of Supabase auth
-  const session = await auth().catch((error) => {
-    logger.error('[Dashboard] Failed to resolve session', error instanceof Error ? error : undefined);
+  const auth = await getAuthContext().catch((error) => {
+    logger.error('[Dashboard] Failed to resolve auth context', error instanceof Error ? error : undefined);
     return null;
   });
 
-  // For now, we don't have user profiles in the dashboard context
-  // This will be replaced with Convex profile queries in Phase 5
-  const authContext = session?.user?.email ? {
-    userId: session.user.id,
-    role: 'admin', // Temporary: all logged-in users get admin access
-    churchId: null
-  } : null;
+  const authContext = auth
+    ? {
+        userId: auth.userId,
+        role: auth.role,
+        churchId: auth.churchId ?? null,
+      }
+    : null;
 
-  const user = session?.user ? {
-    email: session.user.email ?? '',
-    role: 'admin',
-    churchName: null,
-    churchId: null
-  } : null;
+  const user = auth
+    ? {
+        email: auth.email,
+        role: auth.role,
+        churchName: null,
+        churchId: auth.churchId ?? null,
+      }
+    : null;
 
   const [summary, recentReports, pipeline, financial] = await Promise.all([
     withDashboardFallback('summary', () => loadDashboardSummary(authContext), {

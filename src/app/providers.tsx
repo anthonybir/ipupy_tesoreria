@@ -1,30 +1,15 @@
 'use client';
 
-import { type ReactNode, useState, useEffect, type JSX } from 'react';
+import { type JSX, type ReactNode, useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { SessionProvider } from 'next-auth/react';
-import { ConvexProviderWithAuth } from 'convex/react';
-import { useAuthFromNextAuth } from '@/hooks/useAuthFromNextAuth';
-import { logger } from '@/lib/logger';
-import { convexClient } from '@/lib/convex-client';
+import { ConvexAuthNextjsProvider } from '@convex-dev/auth/nextjs';
 import { ConvexConnectionBoundary } from '@/components/ConvexConnectionBoundary';
+import { convexClient } from '@/lib/convex-client';
+import { logger } from '@/lib/logger';
+import { AuthProvider } from '@/components/Auth/AuthProvider';
 
 const DEFAULT_STALE_TIME = 60 * 1000;
 const DEFAULT_GC_TIME = 15 * 60 * 1000;
-
-/**
- * Convex Provider with NextAuth Integration
- *
- * This wraps ConvexProviderWithAuth and provides the useAuth hook
- * that bridges NextAuth → Convex authentication.
- */
-function ConvexAuthProvider({ children }: { children: ReactNode }) {
-  return (
-    <ConvexProviderWithAuth client={convexClient} useAuth={useAuthFromNextAuth}>
-      <ConvexConnectionBoundary>{children}</ConvexConnectionBoundary>
-    </ConvexProviderWithAuth>
-  );
-}
 
 export function Providers({ children }: { children: ReactNode }): JSX.Element {
   const [queryClient] = useState(() => new QueryClient({
@@ -80,12 +65,14 @@ export function Providers({ children }: { children: ReactNode }): JSX.Element {
   }, []);
 
   return (
-    <SessionProvider>
-      <ConvexAuthProvider>
-        <QueryClientProvider client={queryClient}>
-          {children}
-        </QueryClientProvider>
-      </ConvexAuthProvider>
-    </SessionProvider>
+    <ConvexAuthNextjsProvider client={convexClient}>
+      <ConvexConnectionBoundary>
+        <AuthProvider>
+          <QueryClientProvider client={queryClient}>
+            {children}
+          </QueryClientProvider>
+        </AuthProvider>
+      </ConvexConnectionBoundary>
+    </ConvexAuthNextjsProvider>
   );
 }

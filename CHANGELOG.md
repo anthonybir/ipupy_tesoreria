@@ -103,6 +103,19 @@
 - **Type Safety**: Continues to pass strict TypeScript and lint checks (existing optional-chain warnings unchanged).
 - **Backward Compatibility**: Legacy response metadata/messages preserved; batch transactions `POST` intentionally maintains `BatchCreateResponse`.
 
+### Added - Documentation Cleanup (WS-3 Phase 1)
+
+- Added warning banners to `docs/archive/misc/USER_MANAGEMENT_GUIDE.md` and `docs/archive/misc/ROLES_AND_PERMISSIONS.md`, directing readers to the authoritative 6-role reference.
+- Flagged legacy smoke-test docs (`docs/WS2_PHASE2_SMOKE_TEST_RESULTS.md`, `docs/WS2_PHASE6_SMOKE_TEST_GUIDE.md`) with notes about the Convex Auth `ensureProfile` flow replacing legacy NextAuth CLI usage.
+- Created `docs/DOCUMENTATION_STATUS.md` as the single index of active vs. historical documentation with maintenance triggers.
+
+**Files Modified / Added:**
+- `docs/archive/misc/USER_MANAGEMENT_GUIDE.md`
+- `docs/archive/misc/ROLES_AND_PERMISSIONS.md`
+- `docs/WS2_PHASE2_SMOKE_TEST_RESULTS.md`
+- `docs/WS2_PHASE6_SMOKE_TEST_GUIDE.md`
+- `docs/DOCUMENTATION_STATUS.md`
+
 ### Documentation
 
 **WS-2: Role System Documentation**
@@ -110,6 +123,17 @@
 - Confirmed treasurer role is NATIONAL scope (not church-level)
 - Documented role consolidation from migrations 051-054
 - Added permission matrix and code references for all 6 roles
+
+### Added - Convex Components Adoption (WS-5 Phase 1)
+
+- Installed `@convex-dev/rate-limiter` component and registered it via `convex/convex.config.ts`.
+- Defined shared rate limit helper (`convex/rateLimiter.ts`) mirroring legacy Supabase rules for auth login, admin actions, report creation, and treasurer transactions.
+- Enforced limits within Convex mutations (`reports.create`, `reports.approve/reject`, `transactions.create`) and removed the deprecated `src/lib/rate-limit.ts` middleware.
+- Introduced Jest harness (`jest.config.js`, `tests/unit/rateLimiter.test.ts`) to validate guard behaviour and error messaging.
+- Refactored migration utilities (`scripts/migrate-profiles-to-convex.ts`) and added the `scripts/migrate-profiles-to-convex-auth.ts` wrapper so WS-4 migrations can be replayed via CLI.
+- Installed `@convex-dev/crons`, added stub cron handlers, and introduced `convex/cronJobs.ts` to register monthly/weekly/daily jobs via `ensureCronJobs`.
+
+**Follow-up:** Run `T-517` simulated-traffic checks before rolling out to production.
 
 **Key Clarifications:**
 - System has exactly **6 roles** (not 7)
@@ -145,6 +169,38 @@
 - `npm run typecheck` ✅
 - `npm run lint` ✅ (legacy optional-chain warnings unchanged)
 - Smoke test: ALL 5 TESTS PASSED ✅
+
+### Added - Role System Restoration (Phase 3 Kickoff)
+
+**WS-2: Historical Profile Migration Tooling**
+- Added internal Convex helpers in `convex/migrations.ts` to upsert profiles by Supabase metadata and support test deactivation flows.
+- Implemented `scripts/migrate-profiles-to-convex.ts` with dry-run mode, admin impersonation via Convex admin key, and JSON export deduplication; new npm script `migrate:profiles`.
+- Script expects `CONVEX_URL` + `CONVEX_ADMIN_KEY` (with optional `PROFILE_SOURCE_FILE`) and logs created/updated/skipped/error counts for auditability.
+
+**Testing & Validation:**
+- `npx convex codegen` ✅
+- `npm run typecheck` ✅
+- `npm run lint` ✅ (legacy optional-chain warnings unchanged)
+
+### Added - Role System Restoration (Phase 4)
+
+**WS-2: Admin Role Management UI**
+- Delivered dedicated `/admin/users` page with DataTable presentation, inline `RoleSelect`, activation toggles, and reuse of the create/edit dialog.
+- Created `src/components/Admin/RoleSelect.tsx` to provide scoped labels and descriptions for the six-role hierarchy.
+- Realigned `useAdminUsers` hooks with the `ApiResponse<T>` envelope, Convex identifiers, and reactivation via the create mutation.
+- Updated `AdminUserDialog` to support Convex church IDs, default secretary role, and Convex-centric messaging.
+
+**Files Added / Modified:**
+- `src/app/admin/users/page.tsx`
+- `src/components/Admin/RoleSelect.tsx`
+- `src/hooks/useAdminUsers.ts`
+- `src/components/Admin/AdminUserDialog.tsx`
+- `src/app/admin/configuration/page.tsx`
+- `docs/TASK_TRACKER.md`
+
+**Testing & Validation:**
+- `npm run lint` ✅ (legacy optional-chain warnings in existing files persist)
+- `npm run typecheck` ✅
 
 ---
 

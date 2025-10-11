@@ -111,6 +111,7 @@ export type RawTransactionRecord = {
   document_number?: string | null;
   amount_in: RawNumeric;
   amount_out: RawNumeric;
+  balance?: RawNumeric;
   created_by: string;
   created_at: string;
   updated_at?: string | null;
@@ -148,6 +149,10 @@ export const normalizeTransactionRecord = (
 ): TransactionRecord => {
   const amountIn = toNumber(raw.amount_in, 0);
   const amountOut = toNumber(raw.amount_out, 0);
+  const balance =
+    raw.balance !== undefined
+      ? toNumber(raw.balance, amountIn - amountOut)
+      : amountIn - amountOut;
 
   return {
     id: raw.id,
@@ -167,7 +172,7 @@ export const normalizeTransactionRecord = (
     amounts: {
       in: amountIn,
       out: amountOut,
-      balance: amountIn - amountOut,
+      balance,
     },
     audit: {
       createdBy: raw.created_by,

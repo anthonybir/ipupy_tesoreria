@@ -11,7 +11,7 @@
  */
 
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, type QueryCtx, type MutationCtx } from "./_generated/server";
 import { getAuthContext } from "./lib/auth";
 import { requireMinRole } from "./lib/permissions";
 import { validateRequired, validatePositiveNumber } from "./lib/validators";
@@ -63,6 +63,17 @@ interface EventWithStats {
   total_expense: number;
 }
 
+async function normalizeUserIdOrThrow(
+  ctx: QueryCtx | MutationCtx,
+  rawUserId: string
+): Promise<Id<"users">> {
+  const normalized = await ctx.db.normalizeId("users", rawUserId);
+  if (!normalized) {
+    throw new Error("Usuario no encontrado");
+  }
+  return normalized;
+}
+
 // ============================================================================
 // QUERIES
 // ============================================================================
@@ -91,12 +102,25 @@ export const list = query({
     // Get all events (will filter by permissions below)
     let events = await ctx.db.query("fund_events").collect();
 
-    // Filter by role permissions
+    /**
+     * POST-COLLECTION FILTERING: Role-Based Fund Access
+     *
+     * RATIONALE: Fund directors should only see events for their assigned fund.
+     * This requires joining profiles table to get fund_id, which can't be done
+     * efficiently in a single Convex query with current indexes.
+     *
+     * PERFORMANCE: Fund events table is small (~100 events total).
+     * Collection + filter is faster than multiple round-trips to database.
+     *
+     * PATTERN: Role-based data scoping (admins see all, fund_directors see their fund)
+     * This is defense-in-depth - endpoint authorization verifies role first.
+     */
     if (auth.role === "fund_director") {
       // Fund directors only see events for their assigned fund
+      const authUserId = await normalizeUserIdOrThrow(ctx, auth.userId);
       const profile = await ctx.db
         .query("profiles")
-        .withIndex("by_user_id", (q) => q.eq("user_id", auth.userId))
+        .withIndex("by_user_id", (q) => q.eq("user_id", authUserId))
         .first();
 
       if (!profile || !profile.fund_id) {
@@ -166,10 +190,10 @@ export const list = query({
         // Get creator name (optional)
         let createdByName: string | undefined;
         if (event.created_by) {
-          const createdBy = event.created_by;
+          const creatorUserId = await normalizeUserIdOrThrow(ctx, event.created_by);
           const creator = await ctx.db
             .query("profiles")
-            .withIndex("by_user_id", (q) => q.eq("user_id", createdBy))
+            .withIndex("by_user_id", (q) => q.eq("user_id", creatorUserId))
             .first();
           createdByName = creator?.full_name || creator?.email;
         }
@@ -232,9 +256,10 @@ export const get = query({
 
     // Check permissions
     if (auth.role === "fund_director") {
+      const authUserId = await normalizeUserIdOrThrow(ctx, auth.userId);
       const profile = await ctx.db
         .query("profiles")
-        .withIndex("by_user_id", (q) => q.eq("user_id", auth.userId))
+        .withIndex("by_user_id", (q) => q.eq("user_id", authUserId))
         .first();
 
       if (!profile || profile.fund_id !== event.fund_id) {
@@ -301,9 +326,10 @@ export const create = mutation({
 
     // Fund directors can only create events for their assigned fund
     if (auth.role === "fund_director") {
+      const authUserId = await normalizeUserIdOrThrow(ctx, auth.userId);
       const profile = await ctx.db
         .query("profiles")
-        .withIndex("by_user_id", (q) => q.eq("user_id", auth.userId))
+        .withIndex("by_user_id", (q) => q.eq("user_id", authUserId))
         .first();
 
       if (!profile || !profile.fund_id) {

@@ -1,4 +1,8 @@
-import { hasFundAccess, type AuthContext } from '@/lib/auth-supabase';
+import type { AuthContext } from '@/lib/auth-context';
+
+const hasFundAccess = (context: AuthContext, fundId: number): boolean => {
+  return context.assignedFunds?.includes(fundId) ?? false;
+};
 
 /**
  * Authorization helpers for fund event operations

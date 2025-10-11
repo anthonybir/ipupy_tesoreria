@@ -29,7 +29,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
 
     const result = await client.mutation(api.admin.assignFundDirector, {
-      user_id,
+      user_id: user_id as Id<'users'>,
       fund_id: fund_id as Id<'funds'>,
     });
 

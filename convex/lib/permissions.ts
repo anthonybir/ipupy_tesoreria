@@ -1,12 +1,13 @@
 /**
  * Permission & Authorization Utilities
- * 
+ *
  * Role-based access control helpers for Convex functions.
  * Based on the 6-role system from src/lib/authz.ts
  */
 
 import { type AuthContext, ROLE_LEVELS, type UserRole } from "./auth";
 import { type Id } from "../_generated/dataModel";
+import { AuthorizationError } from "./errors";
 
 /**
  * Check if user has a specific role
@@ -59,7 +60,7 @@ export function belongsToChurch(
  */
 export function requireAuth(auth: AuthContext | null): asserts auth is AuthContext {
   if (!auth) {
-    throw new Error("No autenticado");
+    throw new AuthorizationError("No autenticado");
   }
 }
 
@@ -68,7 +69,7 @@ export function requireAuth(auth: AuthContext | null): asserts auth is AuthConte
  */
 export function requireAdmin(auth: AuthContext): void {
   if (!isAdmin(auth)) {
-    throw new Error("Acceso denegado: se requiere rol de administrador");
+    throw new AuthorizationError("Se requiere rol de administrador");
   }
 }
 
@@ -77,7 +78,7 @@ export function requireAdmin(auth: AuthContext): void {
  */
 export function requireMinRole(auth: AuthContext, minRole: UserRole): void {
   if (!hasMinRole(auth, minRole)) {
-    throw new Error(`Acceso denegado: se requiere rol ${minRole} o superior`);
+    throw new AuthorizationError(`Se requiere rol ${minRole} o superior`);
   }
 }
 
@@ -89,7 +90,7 @@ export function requireChurch(
   churchId: Id<"churches">
 ): void {
   if (!belongsToChurch(auth, churchId)) {
-    throw new Error("Acceso denegado: no pertenece a esta iglesia");
+    throw new AuthorizationError("No pertenece a esta iglesia");
   }
 }
 
@@ -102,33 +103,31 @@ export function requireChurchModify(
   churchId: Id<"churches">
 ): void {
   if (isAdmin(auth)) return; // Admins can modify all
-  
+
   if (!belongsToChurch(auth, churchId)) {
-    throw new Error("Acceso denegado: no pertenece a esta iglesia");
+    throw new AuthorizationError("No pertenece a esta iglesia");
   }
-  
+
   if (!hasMinRole(auth, "treasurer")) {
-    throw new Error("Acceso denegado: se requiere rol de tesorero o superior");
+    throw new AuthorizationError("Se requiere rol de tesorero o superior");
   }
 }
 
 /**
  * Ensure user can approve reports
- * (must be pastor of that church OR admin)
+ * (admin or national treasurer)
  */
 export function requireReportApproval(
   auth: AuthContext,
-  churchId: Id<"churches">
+  _churchId: Id<"churches">
 ): void {
-  if (isAdmin(auth)) return; // Admins can approve all
-  
-  if (!belongsToChurch(auth, churchId)) {
-    throw new Error("Acceso denegado: no pertenece a esta iglesia");
+  if (isAdmin(auth) || isTreasurer(auth)) {
+    return;
   }
-  
-  if (!isPastor(auth)) {
-    throw new Error("Acceso denegado: se requiere rol de pastor");
-  }
+
+  throw new AuthorizationError(
+    "Se requiere rol de tesorero nacional o administrador"
+  );
 }
 
 /**
@@ -172,6 +171,6 @@ export function filterByChurchAccess<T extends { church_id?: Id<"churches"> }>(
  */
 export function requireFundDirector(auth: AuthContext): void {
   if (!hasMinRole(auth, "fund_director")) {
-    throw new Error("Acceso denegado: se requiere rol de director de fondo o superior");
+    throw new AuthorizationError("Se requiere rol de director de fondo o superior");
   }
 }

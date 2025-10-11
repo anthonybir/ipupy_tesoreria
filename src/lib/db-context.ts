@@ -7,7 +7,7 @@
  */
 
 import { type PoolClient } from 'pg';
-import { type AuthContext } from '@/lib/auth-supabase';
+import { type AuthContext } from '@/lib/auth-context';
 
 /**
  * Set database session context for RLS policies
@@ -17,7 +17,7 @@ import { type AuthContext } from '@/lib/auth-supabase';
  * policies reference to determine access permissions.
  *
  * @param client - PostgreSQL client connection
- * @param auth - Authentication context from auth-supabase
+ * @param auth - Authentication context from auth-context module
  */
 export async function setDatabaseContext(
   client: PoolClient,

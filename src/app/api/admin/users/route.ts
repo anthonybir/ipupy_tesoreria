@@ -153,12 +153,12 @@ export async function PUT(req: NextRequest): Promise<NextResponse> {
     }
 
     const payload: {
-      user_id: string;
+      user_id: Id<'users'>;
       role: string;
       church_id?: Id<'churches'>;
       fund_id?: Id<'funds'>;
     } = {
-      user_id,
+      user_id: user_id as Id<'users'>,
       role,
     };
 
@@ -197,7 +197,7 @@ export async function DELETE(req: NextRequest): Promise<NextResponse> {
 
     // Deactivate via Convex (soft delete only - no hard delete in Convex migration)
     const result = await client.mutation(api.admin.deactivateUser, {
-      user_id: userId,
+      user_id: userId as Id<'users'>,
     });
 
     // ApiResponse envelope with message at top level (backward compatibility)

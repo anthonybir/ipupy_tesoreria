@@ -13,6 +13,7 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { getAuthContext } from "./lib/auth";
+import { encodeActorId } from "./lib/audit";
 import { requireAdmin } from "./lib/permissions";
 import { validateRequired, validateStringLength } from "./lib/validators";
 import { NotFoundError, ValidationError, ConflictError } from "./lib/errors";
@@ -31,7 +32,7 @@ interface FundWithStats {
   type?: string; // Optional in schema
   current_balance: number;
   is_active: boolean;
-  created_by?: string; // Optional in schema
+  created_by?: string; // Convex user ID string, legacy email, or "system"
   created_at: number;
   updated_at: number;
   // Calculated stats
@@ -352,7 +353,7 @@ export const create = mutation({
       type: args.type || "general",
       current_balance: args.initial_balance || 0,
       is_active: args.is_active !== false,
-      created_by: auth.email || "system",
+      created_by: encodeActorId(auth.userId),
       created_at: now,
       updated_at: now,
     });
@@ -550,7 +551,7 @@ export const getOrCreate = mutation({
       type,
       current_balance: 0,
       is_active: true,
-      created_by: auth.email || "system",
+      created_by: encodeActorId(auth.userId),
       created_at: now,
       updated_at: now,
     });

@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useConvex } from 'convex/react';
-import type { FunctionReference } from 'convex/server';
 
 export type ConvexQueryState<Data> = {
   data: Data | undefined;
@@ -19,7 +18,7 @@ export type ConvexQueryOptions = {
 
 const serializeArgs = (args: readonly unknown[]): string => JSON.stringify(args);
 
-export function useConvexQueryState<QueryRef extends FunctionReference<'query'>, Raw, Data>(
+export function useConvexQueryState<QueryRef, Raw, Data>(
   queryRef: QueryRef,
   args: readonly unknown[],
   mapResult: (raw: Raw) => Data,

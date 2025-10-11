@@ -680,25 +680,14 @@ const schema = z.object({
 
 ### Authentication Components
 
-#### SupabaseAuth Component
+#### SupabaseAuth Component (Legacy)
 
-**File**: `src/components/Auth/SupabaseAuth.tsx`
+> **Updated 2025-10-10:** This component was removed after the Convex auth
+> migration. The historical notes remain here for context only.
 
-**Purpose**: Google OAuth login
-
-**Usage**:
-```tsx
-import { SupabaseAuth } from '@/components/Auth/SupabaseAuth';
-
-// In login page
-<SupabaseAuth />
-```
-
-**Features**:
-- Google OAuth button
-- Email restriction (`@ipupy.org.py`)
-- Auto-redirect after login
-- Error handling
+- **Former file**: `src/components/Auth/SupabaseAuth.tsx`
+- **Original purpose**: Google OAuth login using Supabase JS SDK
+- **Current status**: Replaced by Convex-based `AuthProvider` + login flows
 
 #### RequireAuth Component
 

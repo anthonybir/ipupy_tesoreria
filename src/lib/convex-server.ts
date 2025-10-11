@@ -1,13 +1,10 @@
 /**
- * Server-side Convex client for API routes
+ * Server-side Convex client utilities for API routes and server components.
  *
- * Phase 4.1b - NextAuth → Convex OIDC Bridge (2025-01-07)
+ * This wrapper retrieves the Convex Auth access token tied to the current request
+ * and provides an authenticated Convex HTTP client.
  *
- * This wrapper provides an authenticated Convex client that can be used in Next.js API routes
- * and server components. It handles Google ID token management via NextAuth for each request.
- *
- * CRITICAL: This creates per-request clients with the user's Google ID token.
- * Convex validates these tokens against Google's JWKS (configured in convex/auth.config.ts).
+ * CRITICAL: Each call creates a per-request client to avoid leaking authentication state.
  *
  * Usage:
  * ```typescript
@@ -20,7 +17,7 @@
  */
 
 import { ConvexHttpClient } from 'convex/browser';
-import { auth } from '@/lib/auth';
+import { convexAuthNextjsToken } from '@convex-dev/auth/nextjs/server';
 import { AuthenticationError } from '@/lib/api-errors';
 
 // Get deployment URL from environment
@@ -40,15 +37,9 @@ const CONVEX_URL: string = deploymentUrl;
  * Create an authenticated Convex client for the current request
  *
  * This function:
- * 1. Gets the current NextAuth session (which contains Google ID token)
+ * 1. Retrieves the Convex Auth access token for the current request
  * 2. Creates a new Convex HTTP client
- * 3. Sets the Google ID token for Convex authentication
- *
- * Flow:
- * - NextAuth session contains Google ID token (from OAuth)
- * - We pass this token to Convex via setAuth()
- * - Convex validates token against Google's JWKS
- * - ctx.auth.getUserIdentity() returns the token payload
+ * 3. Sets the token for Convex authentication
  *
  * IMPORTANT: This creates a per-request client to avoid auth leakage between requests.
  * Do not cache or reuse this client across requests.
@@ -56,25 +47,14 @@ const CONVEX_URL: string = deploymentUrl;
  * @throws {AuthenticationError} if user is not authenticated or token is missing
  */
 export async function getAuthenticatedConvexClient(): Promise<ConvexHttpClient> {
-  // Get NextAuth session
-  const session = await auth();
+  const token = await convexAuthNextjsToken();
 
-  if (!session) {
-    throw new AuthenticationError('No autenticado - se requiere sesión de NextAuth');
+  if (!token) {
+    throw new AuthenticationError('No autenticado - se requiere sesión válida');
   }
 
-  // Extract Google ID token from session
-  const idToken = session.idToken;
-  if (!idToken) {
-    throw new AuthenticationError('Token de Google ID no disponible en la sesión de NextAuth');
-  }
-
-  // Create a new client for this request
   const client = new ConvexHttpClient(CONVEX_URL);
-
-  // Set the Google ID token for Convex authentication
-  // Convex will validate this against Google's OIDC JWKS
-  client.setAuth(idToken);
+  client.setAuth(token);
 
   return client;
 }

@@ -1,9 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { getAuthContext, type AuthContext } from "@/lib/auth-context";
-import { executeWithContext } from "@/lib/db";
-import { firstOrDefault, firstOrNull, expectOne } from "@/lib/db-helpers";
 import { setCORSHeaders } from "@/lib/cors";
 import type { ApiResponse } from "@/types/utils";
+import { getAuthenticatedConvexClient } from "@/lib/convex-server";
+import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
+import { getChurchConvexId } from "@/lib/convex-id-mapping";
 
 interface MonthlyLedger {
   id?: number;
@@ -102,373 +104,294 @@ const corsError = (message: string, status: number, details?: unknown): NextResp
     { status },
   );
 
+type LedgerStatus = "open" | "closed" | "reconciled";
+
+const ACCOUNTING_STATUSES: ReadonlySet<LedgerStatus> = new Set([
+  "open",
+  "closed",
+  "reconciled",
+]);
+
+interface ConvexQueryParams {
+  type: string;
+  churchIdParam: string | null;
+  monthParam: string | null;
+  yearParam: string | null;
+  statusParam: string | null;
+}
+
+function parseOptionalInt(value: string | null): { valid: boolean; value: number | null } {
+  if (value === null || value.trim().length === 0) {
+    return { valid: true, value: null };
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed)) {
+    return { valid: false, value: null };
+  }
+
+  return { valid: true, value: parsed };
+}
+
+function parseStatusParam(value: string | null): { valid: boolean; value: LedgerStatus | undefined } {
+  if (value === null || value.trim().length === 0) {
+    return { valid: true, value: undefined };
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (ACCOUNTING_STATUSES.has(normalized as LedgerStatus)) {
+    return { valid: true, value: normalized as LedgerStatus };
+  }
+
+  return { valid: false, value: undefined };
+}
+
+function normalizeDateInput(input: string): string {
+  const timestamp = Date.parse(input);
+  if (Number.isNaN(timestamp)) {
+    throw new Error("Invalid date format");
+  }
+  return new Date(timestamp).toISOString();
+}
+
+type ConvexLedgerResponse = {
+  id: number | null;
+  convex_id: string;
+  month: number;
+  year: number;
+  opening_balance: number;
+  closing_balance: number;
+  total_income: number;
+  total_expenses: number;
+  status: LedgerStatus;
+  closed_at: string | null;
+  closed_by: string | null;
+  notes: string | null;
+};
+
+type ConvexEntryResponse = {
+  id: number | null;
+  convex_id: string;
+  date: string;
+  account_code: string;
+  account_name: string;
+  debit: number;
+  credit: number;
+  balance: number | null;
+  reference: string | null;
+  description: string;
+};
+
+
+function mapLedgerResponseToLegacy(
+  ledger: ConvexLedgerResponse,
+  churchId: number
+): MonthlyLedger {
+  return {
+    ...(ledger.id !== null ? { id: ledger.id } : {}),
+    church_id: churchId,
+    month: ledger.month,
+    year: ledger.year,
+    opening_balance: ledger.opening_balance,
+    closing_balance: ledger.closing_balance,
+    total_income: ledger.total_income,
+    total_expenses: ledger.total_expenses,
+    status: ledger.status,
+    ...(ledger.closed_at !== null ? { closed_at: ledger.closed_at } : {}),
+    ...(ledger.closed_by !== null ? { closed_by: ledger.closed_by } : {}),
+    ...(ledger.notes !== null ? { notes: ledger.notes } : {}),
+  };
+}
+
+function mapEntryResponseToLegacy(
+  entry: ConvexEntryResponse,
+  fallbackChurchId: number
+): AccountingEntry {
+  return {
+    ...(entry.id !== null ? { id: entry.id } : {}),
+    church_id: fallbackChurchId,
+    date: entry.date,
+    account_code: entry.account_code,
+    account_name: entry.account_name,
+    debit: entry.debit,
+    credit: entry.credit,
+    ...(entry.balance !== null ? { balance: entry.balance } : {}),
+    ...(entry.reference !== null ? { reference: entry.reference } : {}),
+    description: entry.description,
+  };
+}
+
+function buildLegacyExpenseResponse(
+  payload: ExpenseCreatePayload,
+  userEmail: string
+): ExpenseRecord {
+  return {
+    id: 0,
+    church_id: payload.church_id,
+    date: normalizeDateInput(payload.date),
+    concept: payload.concept,
+    category: payload.category,
+    amount: payload.amount,
+    ...(payload.provider !== null && payload.provider !== undefined ? { provider: payload.provider } : {}),
+    ...(payload.document_number !== null && payload.document_number !== undefined ? { document_number: payload.document_number } : {}),
+    approved_by: payload.approved_by ?? userEmail,
+    ...(payload.notes !== null && payload.notes !== undefined ? { notes: payload.notes } : {}),
+  };
+}
+
 // GET /api/accounting - Get accounting records
 async function handleGet(req: NextRequest) {
   try {
-    const auth = await getAuthContext(req);
+    const _auth = await getAuthContext(); // Auth context available for future server-side checks
     const { searchParams } = new URL(req.url);
     const type = searchParams.get("type") || "ledger";
-    const church_id = searchParams.get("church_id");
-    const month = searchParams.get("month");
-    const year = searchParams.get("year");
-    const status = searchParams.get("status");
+    const churchIdParam = searchParams.get("church_id");
+    const monthParam = searchParams.get("month");
+    const yearParam = searchParams.get("year");
+    const statusParam = searchParams.get("status");
+
+    return await handleGetConvex({
+      type,
+      churchIdParam,
+      monthParam,
+      yearParam,
+      statusParam,
+    });
+  } catch (error) {
+    console.error("Error in accounting GET:", error);
+    return corsError(
+      "Error fetching accounting data",
+      500,
+      error instanceof Error ? error.message : "Unknown error",
+    );
+  }
+}
+
+async function handleGetConvex({
+  type,
+  churchIdParam,
+  monthParam,
+  yearParam,
+  statusParam,
+}: ConvexQueryParams): Promise<NextResponse> {
+  try {
+    const client = await getAuthenticatedConvexClient();
+
+    const churchResult = parseOptionalInt(churchIdParam);
+    if (!churchResult.valid) {
+      return corsError("Invalid church_id parameter", 400);
+    }
+
+    const monthResult = parseOptionalInt(monthParam);
+    if (
+      !monthResult.valid ||
+      (monthResult.value !== null && (monthResult.value < 1 || monthResult.value > 12))
+    ) {
+      return corsError("Invalid month parameter", 400);
+    }
+
+    const yearResult = parseOptionalInt(yearParam);
+    if (!yearResult.valid || (yearResult.value !== null && yearResult.value < 0)) {
+      return corsError("Invalid year parameter", 400);
+    }
+
+    const statusResult = parseStatusParam(statusParam);
+    if (!statusResult.valid) {
+      return corsError("Invalid status parameter", 400);
+    }
+
+    let churchConvexId: Id<"churches"> | undefined;
+    if (churchResult.value !== null) {
+      if (churchResult.value <= 0) {
+        return corsError("Invalid church_id parameter", 400);
+      }
+
+      const lookup = await getChurchConvexId(client, churchResult.value);
+      if (!lookup) {
+        return corsError("Church not found", 404);
+      }
+      churchConvexId = lookup;
+    }
 
     switch (type) {
-      case "ledger":
-        return await getMonthlyLedger(auth, church_id, month, year, status);
-      case "expenses":
-        return await getExpenses(auth, church_id, month, year);
-      case "entries":
-        return await getAccountingEntries(auth, church_id, month, year);
-    case "summary":
-      return await getAccountingSummary(auth, church_id, month, year);
-    default:
-      return corsError("Invalid type parameter", 400);
+      case "summary": {
+        const args = {
+          ...(churchConvexId ? { church_id: churchConvexId } : {}),
+          ...(monthResult.value !== null ? { month: monthResult.value } : {}),
+          ...(yearResult.value !== null ? { year: yearResult.value } : {}),
+        };
+
+        const summary = await client.query(api.accounting.getSummary, args);
+        return corsJson({
+          success: true,
+          data: summary,
+        });
+      }
+      case "ledger": {
+        const args = {
+          ...(churchConvexId ? { church_id: churchConvexId } : {}),
+          ...(monthResult.value !== null ? { month: monthResult.value } : {}),
+          ...(yearResult.value !== null ? { year: yearResult.value } : {}),
+          ...(statusResult.value ? { status: statusResult.value } : {}),
+        };
+
+        const ledgers = await client.query(api.monthlyLedgers.listLedgers, args);
+        return corsJson({
+          success: true,
+          data: ledgers,
+        });
+      }
+      case "expenses": {
+        const args = {
+          ...(churchConvexId ? { church_id: churchConvexId } : {}),
+          ...(monthResult.value !== null ? { month: monthResult.value } : {}),
+          ...(yearResult.value !== null ? { year: yearResult.value } : {}),
+        };
+
+        const [expenses, categoryTotals] = await Promise.all([
+          client.query(api.expenseRecords.listExpenses, args),
+          client.query(api.expenseRecords.getCategoryTotals, args),
+        ]);
+
+        return corsJson({
+          success: true,
+          data: expenses,
+          categoryTotals,
+        });
+      }
+      case "entries": {
+        const args = {
+          ...(churchConvexId ? { church_id: churchConvexId } : {}),
+          ...(monthResult.value !== null ? { month: monthResult.value } : {}),
+          ...(yearResult.value !== null ? { year: yearResult.value } : {}),
+        };
+
+        const [entries, trialBalance] = await Promise.all([
+          client.query(api.accountingEntries.listEntries, args),
+          client.query(api.accountingEntries.getTrialBalance, args),
+        ]);
+
+        return corsJson({
+          success: true,
+          data: entries,
+          trialBalance,
+        });
+      }
+      default:
+        return corsError("Invalid type parameter", 400);
+    }
+  } catch (error) {
+    console.error("Error fetching accounting data from Convex:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    const statusCode = message.toLowerCase().includes("no autenticado") ? 401 : 500;
+    return corsError("Error fetching accounting data", statusCode, message);
   }
-} catch (error) {
-  console.error("Error in accounting GET:", error);
-  return corsError(
-    "Error fetching accounting data",
-    500,
-    error instanceof Error ? error.message : "Unknown error",
-  );
-}
-}
-
-// Get monthly ledger records
-async function getMonthlyLedger(
-  auth: AuthContext | null,
-  church_id: string | null,
-  month: string | null,
-  year: string | null,
-  status: string | null,
-) {
-  let query = `
-    SELECT
-      ml.*,
-      c.name as church_name,
-      c.city as church_city
-    FROM monthly_ledger ml
-    JOIN churches c ON ml.church_id = c.id
-    WHERE 1=1
-  `;
-  const params: (string | number)[] = [];
-  let paramCount = 0;
-
-  if (church_id) {
-    paramCount++;
-    query += ` AND ml.church_id = $${paramCount}`;
-    params.push(church_id);
-  }
-
-  if (month) {
-    paramCount++;
-    query += ` AND ml.month = $${paramCount}`;
-    params.push(month);
-  }
-
-  if (year) {
-    paramCount++;
-    query += ` AND ml.year = $${paramCount}`;
-    params.push(year);
-  }
-
-  if (status) {
-    paramCount++;
-    query += ` AND ml.status = $${paramCount}`;
-    params.push(status);
-  }
-
-  query += ` ORDER BY ml.year DESC, ml.month DESC, c.name ASC`;
-
-const result = await executeWithContext(auth, query, params);
-
-  return corsJson<ApiResponse<typeof result.rows>>({
-    success: true,
-    data: result.rows,
-  });
-}
-
-// Get expense records
-async function getExpenses(
-  auth: AuthContext | null,
-  church_id: string | null,
-  month: string | null,
-  year: string | null,
-) {
-  const filters: string[] = [];
-  const values: (string | number)[] = [];
-
-  if (church_id) {
-    values.push(church_id);
-    filters.push(`e.church_id = $${values.length}`);
-  }
-
-  if (month && year) {
-    values.push(month);
-    filters.push(`EXTRACT(MONTH FROM e.date) = $${values.length}`);
-    values.push(year);
-    filters.push(`EXTRACT(YEAR FROM e.date) = $${values.length}`);
-  }
-
-  const whereClause = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
-
-  const result = await executeWithContext(auth, 
-    `
-    SELECT
-      e.*,
-      c.name as church_name
-    FROM expense_records e
-    JOIN churches c ON e.church_id = c.id
-    ${whereClause}
-    ORDER BY e.date DESC, e.created_at DESC
-  `,
-    values
-  );
-
-const categoryTotals = await executeWithContext(auth, 
-  `
-  SELECT
-    category,
-    COUNT(*) as count,
-      SUM(amount) as total
-    FROM expense_records e
-    ${whereClause}
-    GROUP BY category
-  ORDER BY total DESC
-`,
-  values
-);
-
-  return corsJson<ApiResponse<typeof result.rows> & { categoryTotals: typeof categoryTotals.rows }>(
-    {
-      success: true,
-      data: result.rows,
-      categoryTotals: categoryTotals.rows,
-    },
-  );
-}
-
-// Get accounting entries (double-entry bookkeeping)
-async function getAccountingEntries(
-  auth: AuthContext | null,
-  church_id: string | null,
-  month: string | null,
-  year: string | null,
-) {
-  const filters: string[] = [];
-  const values: (string | number)[] = [];
-
-  if (church_id) {
-    values.push(church_id);
-    filters.push(`ae.church_id = $${values.length}`);
-  }
-
-  if (month && year) {
-    values.push(month);
-    filters.push(`EXTRACT(MONTH FROM ae.date) = $${values.length}`);
-    values.push(year);
-    filters.push(`EXTRACT(YEAR FROM ae.date) = $${values.length}`);
-  }
-
-  const whereClause = filters.length > 0 ? `WHERE ${filters.join(" AND ")}` : "";
-
-  const result = await executeWithContext(auth, 
-    `
-    SELECT
-      ae.*,
-      c.name as church_name
-    FROM accounting_entries ae
-    JOIN churches c ON ae.church_id = c.id
-    ${whereClause}
-    ORDER BY ae.date DESC, ae.id DESC
-  `,
-    values
-  );
-
-const trialBalance = await executeWithContext(auth, 
-  `
-  SELECT
-    account_code,
-    account_name,
-      SUM(debit) as total_debit,
-      SUM(credit) as total_credit,
-      SUM(debit - credit) as balance
-    FROM accounting_entries ae
-    ${whereClause}
-  GROUP BY account_code, account_name
-  ORDER BY account_code
-`,
-  values
-);
-
-  return corsJson<ApiResponse<typeof result.rows> & { trialBalance: typeof trialBalance.rows }>(
-    {
-      success: true,
-      data: result.rows,
-      trialBalance: trialBalance.rows,
-    },
-  );
-}
-
-// Get accounting summary for a period
-async function getAccountingSummary(
-  auth: AuthContext | null,
-  church_id: string | null,
-  month: string | null,
-  year: string | null,
-) {
-  const reportFilters: string[] = [];
-  const reportValues: (string | number)[] = [];
-
-  if (church_id) {
-    reportValues.push(church_id);
-    reportFilters.push(`church_id = $${reportValues.length}`);
-  }
-
-  if (month && year) {
-    reportValues.push(month);
-    reportFilters.push(`month = $${reportValues.length}`);
-    reportValues.push(year);
-    reportFilters.push(`year = $${reportValues.length}`);
-  }
-
-  const reportWhere = reportFilters.length > 0 ? `WHERE ${reportFilters.join(" AND ")}` : "";
-
-  const income = await executeWithContext(auth, 
-    `
-    SELECT
-      SUM(diezmos) as total_diezmos,
-      SUM(ofrendas) as total_ofrendas,
-      SUM(anexos) as total_anexos,
-      SUM(total_entradas) as total_income,
-      COUNT(*) as report_count
-    FROM reports
-    ${reportWhere}
-  `,
-    reportValues
-  );
-
-  const expenseFilters: string[] = [];
-  const expenseValues: (string | number)[] = [];
-
-  if (church_id) {
-    expenseValues.push(church_id);
-    expenseFilters.push(`church_id = $${expenseValues.length}`);
-  }
-
-  if (month && year) {
-    expenseValues.push(month);
-    expenseFilters.push(`EXTRACT(MONTH FROM date) = $${expenseValues.length}`);
-    expenseValues.push(year);
-    expenseFilters.push(`EXTRACT(YEAR FROM date) = $${expenseValues.length}`);
-  }
-
-  const expenseWhere = expenseFilters.length > 0 ? `WHERE ${expenseFilters.join(" AND ")}` : "";
-
-  const expenses = await executeWithContext(auth, 
-    `
-    SELECT
-      SUM(amount) as total_expenses,
-      COUNT(*) as expense_count
-    FROM expense_records
-    ${expenseWhere}
-  `,
-    expenseValues
-  );
-
-  const movementFilters: string[] = [];
-  const movementValues: (string | number)[] = [];
-
-  if (church_id) {
-    movementValues.push(church_id);
-    movementFilters.push(`r.church_id = $${movementValues.length}`);
-  }
-
-  if (month && year) {
-    movementValues.push(month);
-    movementFilters.push(`r.month = $${movementValues.length}`);
-    movementValues.push(year);
-    movementFilters.push(`r.year = $${movementValues.length}`);
-  }
-
-  const movementWhere = movementFilters.length > 0 ? `WHERE ${movementFilters.join(" AND ")}` : "";
-
-  const movements = await executeWithContext(auth, 
-    `
-    SELECT
-      SUM(amount) as total_movements,
-      COUNT(*) as movement_count
-    FROM fund_movements fm
-    JOIN reports r ON fm.report_id = r.id
-    ${movementWhere}
-  `,
-    movementValues
-  );
-
-  const ledgerFilters: string[] = [];
-  const ledgerValues: (string | number)[] = [];
-
-  if (church_id) {
-    ledgerValues.push(church_id);
-    ledgerFilters.push(`church_id = $${ledgerValues.length}`);
-  }
-
-  if (month && year) {
-    ledgerValues.push(month);
-    ledgerFilters.push(`month = $${ledgerValues.length}`);
-    ledgerValues.push(year);
-    ledgerFilters.push(`year = $${ledgerValues.length}`);
-  }
-
-  const ledgerWhere = ledgerFilters.length > 0 ? `WHERE ${ledgerFilters.join(" AND ")}` : "";
-
-  const ledger = await executeWithContext(auth, 
-    `
-    SELECT
-      status,
-      opening_balance,
-      closing_balance,
-      closed_at,
-      closed_by
-    FROM monthly_ledger
-    ${ledgerWhere}
-    ORDER BY id DESC
-    LIMIT 1
-  `,
-    ledgerValues
-  );
-
-  const incomeRow = firstOrDefault(income.rows, {});
-  const expensesRow = firstOrDefault(expenses.rows, {});
-  const movementsRow = firstOrDefault(movements.rows, {});
-  const ledgerRow = firstOrDefault(ledger.rows, { status: "not_created" });
-
-  return corsJson<
-    ApiResponse<{
-      income: typeof incomeRow;
-      expenses: typeof expensesRow;
-      movements: typeof movementsRow;
-      ledger: typeof ledgerRow;
-      netResult: number;
-    }>
-  >({
-    success: true,
-    data: {
-      income: incomeRow,
-      expenses: expensesRow,
-      movements: movementsRow,
-      ledger: ledgerRow,
-      netResult:
-        Number(incomeRow["total_income"] || 0) - Number(expensesRow["total_expenses"] || 0),
-    },
-  });
 }
 
 // POST /api/accounting - Create accounting records
 async function handlePost(req: NextRequest) {
   try {
-    const user = await getAuthContext(req);
+    const user = await getAuthContext();
     if (!user) {
       return corsError("Authentication required", 401);
     }
@@ -481,18 +404,7 @@ async function handlePost(req: NextRequest) {
     const body = rawBody as Record<string, unknown>;
     const action = (typeof body['type'] === "string" ? body['type'] : "expense") as AccountingAction;
 
-    switch (action) {
-      case "expense":
-        return await createExpense(user, body as ExpenseCreatePayload, user.email || "");
-      case "entry":
-        return await createAccountingEntry(user, body as AccountingEntriesRequest, user.email || "");
-      case "open_ledger":
-        return await openMonthlyLedger(user, body as LedgerOpenPayload, user.email || "");
-      case "close_ledger":
-        return await closeMonthlyLedger(user, body as LedgerClosePayload, user.email || "");
-      default:
-        return corsError("Invalid type", 400);
-    }
+    return await handlePostConvex(user, action, body);
   } catch (error) {
     console.error("Error in accounting POST:", error);
     return corsError(
@@ -503,8 +415,38 @@ async function handlePost(req: NextRequest) {
   }
 }
 
-// Create expense record
-async function createExpense(auth: AuthContext | null, data: ExpenseCreatePayload, userEmail: string) {
+async function handlePostConvex(
+  user: AuthContext,
+  action: AccountingAction,
+  rawBody: Record<string, unknown>
+): Promise<NextResponse> {
+  const client = await getAuthenticatedConvexClient();
+
+  try {
+    switch (action) {
+      case "expense":
+        return await createExpenseConvex(client, rawBody as ExpenseCreatePayload, user.email || "");
+      case "entry":
+        return await createAccountingEntryConvex(client, rawBody as AccountingEntriesRequest);
+      case "open_ledger":
+        return await openMonthlyLedgerConvex(client, rawBody as LedgerOpenPayload);
+      case "close_ledger":
+        return await closeMonthlyLedgerConvex(client, rawBody as LedgerClosePayload);
+      default:
+        return corsError("Invalid type", 400);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("Convex accounting POST failed:", error);
+    return corsError(message, 400, message);
+  }
+}
+
+async function createExpenseConvex(
+  client: Awaited<ReturnType<typeof getAuthenticatedConvexClient>>,
+  data: ExpenseCreatePayload,
+  userEmail: string
+): Promise<NextResponse> {
   const required: Array<keyof ExpenseCreatePayload> = [
     "church_id",
     "date",
@@ -519,66 +461,57 @@ async function createExpense(auth: AuthContext | null, data: ExpenseCreatePayloa
     }
   }
 
-  const result = await executeWithContext<ExpenseRecord>(auth,
-    `INSERT INTO expense_records (
-      church_id, date, concept, category, amount,
-      provider, document_number, approved_by, notes, created_by
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-    RETURNING *`,
-    [
-      data.church_id,
-      data.date,
-      data.concept,
-      data.category,
-      data.amount,
-      data.provider ?? null,
-      data.document_number ?? null,
-      data.approved_by ?? userEmail,
-      data.notes ?? null,
-      userEmail
-    ]
-  );
+  const churchConvexId = await getChurchConvexId(client, data.church_id);
+  if (!churchConvexId) {
+    return corsError("Church not found", 404);
+  }
 
-  // Create corresponding accounting entry
-  await executeWithContext(auth, 
-    `INSERT INTO accounting_entries (
-      church_id, date, account_code, account_name,
-      debit, credit, reference, description, created_by
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-    [
-      data.church_id,
-      data.date,
-      "5000", // Expense account code
-      data.category,
-      data.amount,
-      0,
-      `EXP-${expectOne(result.rows).id}`,
-      data.concept,
-      userEmail
-    ]
-  );
+  const isoDate = normalizeDateInput(String(data.date));
 
-  return corsJson<ApiResponse<ExpenseRecord> & { message: string }>(
+  // Build args object with conditional spreads from the start to avoid type inference issues
+  const convexArgs = {
+    church_id: churchConvexId,
+    date: isoDate,
+    concept: data.concept,
+    category: data.category,
+    amount: data.amount,
+    ...(data.provider !== null && data.provider !== undefined ? { provider: data.provider } : {}),
+    ...(data.document_number !== null && data.document_number !== undefined ? { document_number: data.document_number } : {}),
+    ...(data.approved_by ?? userEmail ? { approved_by: data.approved_by ?? userEmail } : {}),
+    ...(data.notes !== null && data.notes !== undefined ? { notes: data.notes } : {}),
+  };
+
+  const result = await client.mutation(api.accountingEntries.createExpenseWithEntry, convexArgs);
+
+  const legacyExpense = buildLegacyExpenseResponse({ ...data, date: isoDate }, userEmail);
+
+  return corsJson<ApiResponse<ExpenseRecord> & { message: string; meta: Record<string, unknown> }>(
     {
       success: true,
-      data: expectOne(result.rows),
+      data: legacyExpense,
       message: "Expense record created successfully",
+      meta: {
+        expenseConvexId: result.expense.convex_id,
+        accountingEntryConvexId: result.entry.convex_id,
+      },
     },
-    { status: 201 },
+    { status: 201 }
   );
 }
 
-// Create accounting entry (double-entry)
-async function createAccountingEntry(auth: AuthContext | null, data: AccountingEntriesRequest, userEmail: string) {
+async function createAccountingEntryConvex(
+  client: Awaited<ReturnType<typeof getAuthenticatedConvexClient>>,
+  body: AccountingEntriesRequest
+): Promise<NextResponse> {
   let entries: AccountingEntryPayload[];
 
-  if ("entries" in data) {
-    if (!Array.isArray(data.entries) || data.entries.length === 0) {
+  if ("entries" in body) {
+    if (!Array.isArray(body.entries) || body.entries.length === 0) {
       return corsError("entries must be a non-empty array", 400);
     }
-    entries = data.entries;
+    entries = body.entries;
   } else {
-    entries = [data];
+    entries = [body];
   }
 
   const requiredEntryFields: Array<keyof AccountingEntryPayload> = [
@@ -597,184 +530,150 @@ async function createAccountingEntry(auth: AuthContext | null, data: AccountingE
     }
   }
 
-  const totalDebit = entries.reduce((sum, entry) => sum + (entry.debit ?? 0), 0);
-  const totalCredit = entries.reduce((sum, entry) => sum + (entry.credit ?? 0), 0);
+  const uniqueChurchIds = Array.from(new Set(entries.map((entry) => entry.church_id)));
+  const convexChurchMap = new Map<number, Id<"churches">>();
 
-  if (Math.abs(totalDebit - totalCredit) > 0.01) {
-    return corsJson<ApiResponse<never>>(
-      {
-        success: false,
-        error: "Debits must equal credits",
-        details: { totalDebit, totalCredit },
-      },
-      { status: 400 },
-    );
+  for (const churchId of uniqueChurchIds) {
+    if (typeof churchId !== "number" || Number.isNaN(churchId)) {
+      return corsError("Invalid church_id", 400);
+    }
+    const convexId = await getChurchConvexId(client, churchId);
+    if (!convexId) {
+      return corsError(`Church ${churchId} not found`, 404);
+    }
+    convexChurchMap.set(churchId, convexId);
   }
 
-  const results: AccountingEntry[] = [];
+  const convexPayload: Array<{
+    church_id: Id<"churches">;
+    date: string;
+    account_code: string;
+    account_name: string;
+    debit?: number;
+    credit?: number;
+    reference?: string;
+    description: string;
+    expense_record_id?: Id<"expense_records">;
+    report_id?: Id<"reports">;
+  }> = [];
 
   for (const entry of entries) {
-    const result = await executeWithContext<AccountingEntry>(auth,
-      `INSERT INTO accounting_entries (
-        church_id, date, account_code, account_name,
-        debit, credit, reference, description, created_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING *`,
-      [
-        entry.church_id,
-        entry.date,
-        entry.account_code,
-        entry.account_name,
-        entry.debit ?? 0,
-        entry.credit ?? 0,
-        entry.reference ?? null,
-        entry.description,
-        userEmail
-      ]
-    );
-    const row = expectOne(result.rows);
-    results.push(row);
+    const convexId = convexChurchMap.get(entry.church_id);
+    if (!convexId) {
+      return corsError(`Church ${entry.church_id} not found`, 404);
+    }
+
+    const entryPayload: {
+      church_id: Id<"churches">;
+      date: string;
+      account_code: string;
+      account_name: string;
+      description: string;
+      debit?: number;
+      credit?: number;
+      reference?: string;
+      expense_record_id?: Id<"expense_records">;
+      report_id?: Id<"reports">;
+    } = {
+      church_id: convexId,
+      date: normalizeDateInput(String(entry.date)),
+      account_code: entry.account_code,
+      account_name: entry.account_name,
+      description: entry.description,
+      ...(entry.debit !== undefined ? { debit: entry.debit } : {}),
+      ...(entry.credit !== undefined ? { credit: entry.credit } : {}),
+      ...(entry.reference !== null && entry.reference !== undefined ? { reference: entry.reference } : {}),
+    };
+
+    convexPayload.push(entryPayload);
   }
 
-  return corsJson<ApiResponse<typeof results> & { message: string }>(
+  const result = await client.mutation(api.accountingEntries.createEntries, {
+    entries: convexPayload,
+  });
+
+  const legacyEntries = result.map((entry, index) => {
+    const originalEntry = entries[index];
+    if (!originalEntry) {
+      throw new Error(`Missing original entry at index ${index}`);
+    }
+    return mapEntryResponseToLegacy(entry, originalEntry.church_id);
+  });
+
+  return corsJson<ApiResponse<typeof legacyEntries> & { message: string }>(
     {
       success: true,
-      data: results,
-      message: `Created ${results.length} accounting entries`,
+      data: legacyEntries,
+      message: `Created ${legacyEntries.length} accounting entries`,
     },
-    { status: 201 },
+    { status: 201 }
   );
 }
 
-// Open monthly ledger
-async function openMonthlyLedger(auth: AuthContext | null, data: LedgerOpenPayload, userEmail: string) {
-  const { church_id, month, year } = data;
+async function openMonthlyLedgerConvex(
+  client: Awaited<ReturnType<typeof getAuthenticatedConvexClient>>,
+  payload: LedgerOpenPayload
+): Promise<NextResponse> {
+  const { church_id, month, year } = payload;
 
   if (!church_id || !month || !year) {
     return corsError("church_id, month, and year are required", 400);
   }
 
-  // Check if ledger already exists
-  const existing = await executeWithContext(auth, 
-    `SELECT id, status FROM monthly_ledger WHERE church_id = $1 AND month = $2 AND year = $3`,
-    [church_id, month, year]
-  );
-
-  const existingRow = firstOrNull(existing.rows);
-  if (existingRow) {
-    return corsError(
-      `Ledger already exists with status: ${existingRow["status"] || "unknown"}`,
-      409,
-    );
+  const churchConvexId = await getChurchConvexId(client, church_id);
+  if (!churchConvexId) {
+    return corsError("Church not found", 404);
   }
 
-  // Get previous month's closing balance
-  const prevMonth = month === 1 ? 12 : month - 1;
-  const prevYear = month === 1 ? year - 1 : year;
-
-  const previous = await executeWithContext(auth,
-    `SELECT closing_balance FROM monthly_ledger
-     WHERE church_id = $1 AND month = $2 AND year = $3`,
-    [church_id, prevMonth, prevYear]
-  );
-
-  const previousRow = firstOrNull(previous.rows);
-  const openingBalance = previousRow?.['closing_balance'] || 0;
-
-  // Create new ledger
-  const result = await executeWithContext<MonthlyLedger>(auth,
-    `INSERT INTO monthly_ledger (
-      church_id, month, year, opening_balance,
-      closing_balance, total_income, total_expenses,
-      status, created_by
-    ) VALUES ($1, $2, $3, $4, $5, 0, 0, 'open', $6)
-    RETURNING *`,
-    [church_id, month, year, openingBalance, openingBalance, userEmail]
-  );
+  const ledger = await client.mutation(api.monthlyLedgers.openLedger, {
+    church_id: churchConvexId,
+    month,
+    year,
+  });
 
   return corsJson<ApiResponse<MonthlyLedger> & { message: string }>(
     {
       success: true,
-      data: expectOne(result.rows),
+      data: mapLedgerResponseToLegacy(ledger, church_id),
       message: "Monthly ledger opened successfully",
     },
-    { status: 201 },
+    { status: 201 }
   );
 }
 
-// Close monthly ledger
-async function closeMonthlyLedger(auth: AuthContext | null, data: LedgerClosePayload, userEmail: string) {
-  const { church_id, month, year, notes } = data;
+async function closeMonthlyLedgerConvex(
+  client: Awaited<ReturnType<typeof getAuthenticatedConvexClient>>,
+  payload: LedgerClosePayload
+): Promise<NextResponse> {
+  const { church_id, month, year } = payload;
 
   if (!church_id || !month || !year) {
     return corsError("church_id, month, and year are required", 400);
   }
 
-  // Get ledger
-  const ledger = await executeWithContext(auth, 
-    `SELECT * FROM monthly_ledger WHERE church_id = $1 AND month = $2 AND year = $3`,
-    [church_id, month, year]
-  );
-
-  const ledgerRow = firstOrNull(ledger.rows);
-  if (!ledgerRow) {
-    return corsError("Ledger not found", 404);
+  const churchConvexId = await getChurchConvexId(client, church_id);
+  if (!churchConvexId) {
+    return corsError("Church not found", 404);
   }
 
-  if (ledgerRow["status"] === "closed") {
-    return corsError("Ledger is already closed", 409);
-  }
+  // Build args object with conditional spreads from the start to avoid type inference issues
+  const closeArgs = {
+    church_id: churchConvexId,
+    month,
+    year,
+    ...(payload.notes !== null && payload.notes !== undefined ? { notes: payload.notes } : {}),
+  };
 
-  // Calculate totals
-  const income = await executeWithContext(auth,
-    `SELECT SUM(total_entradas) as total FROM reports
-     WHERE church_id = $1 AND month = $2 AND year = $3`,
-    [church_id, month, year]
+  const ledger = await client.mutation(api.monthlyLedgers.closeLedger, closeArgs);
+
+  return corsJson<ApiResponse<MonthlyLedger> & { message: string }>(
+    {
+      success: true,
+      data: mapLedgerResponseToLegacy(ledger, church_id),
+      message: "Monthly ledger closed successfully",
+    },
+    { status: 200 }
   );
-
-  const expenses = await executeWithContext(auth,
-    `SELECT SUM(amount) as total FROM expense_records
-     WHERE church_id = $1
-     AND EXTRACT(MONTH FROM date) = $2
-     AND EXTRACT(YEAR FROM date) = $3`,
-    [church_id, month, year]
-  );
-
-  const incomeRow = firstOrNull(income.rows);
-  const expensesRow = firstOrNull(expenses.rows);
-  const totalIncome = Number(incomeRow?.['total'] || 0);
-  const totalExpenses = Number(expensesRow?.['total'] || 0);
-  const closingBalance = parseFloat(String(ledgerRow['opening_balance'])) + totalIncome - totalExpenses;
-
-  // Update ledger
-  const result = await executeWithContext<MonthlyLedger>(auth,
-    `UPDATE monthly_ledger SET
-      closing_balance = $1,
-      total_income = $2,
-      total_expenses = $3,
-      status = 'closed',
-      closed_at = CURRENT_TIMESTAMP,
-      closed_by = $4,
-      notes = $5
-    WHERE church_id = $6 AND month = $7 AND year = $8
-    RETURNING *`,
-    [
-      closingBalance,
-      totalIncome,
-      totalExpenses,
-      userEmail,
-      notes ?? null,
-      church_id,
-      month,
-      year
-    ]
-  );
-
-  return corsJson<ApiResponse<MonthlyLedger> & { message: string }>({
-    success: true,
-    data: expectOne(result.rows),
-    message: "Monthly ledger closed successfully",
-  });
 }
 
 // OPTIONS handler for CORS

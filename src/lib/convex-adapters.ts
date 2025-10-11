@@ -560,6 +560,7 @@ export const mapTransactionDocumentToRaw = (
   document_number: transaction.document_number ?? null,
   amount_in: transaction.amount_in,
   amount_out: transaction.amount_out,
+  balance: transaction.balance,
   created_by: transaction.created_by ?? 'Sistema',
   created_at: timestampToIsoOrNow(transaction.created_at),
   updated_at: timestampToIso(transaction.updated_at),

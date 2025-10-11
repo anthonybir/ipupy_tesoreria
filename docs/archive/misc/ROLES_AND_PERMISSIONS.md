@@ -3,13 +3,9 @@
 **Última actualización**: 2025-10-06
 **Versión**: 5.0 (Treasurer Role Consolidation - Migrations 051-054)
 
-> **⚠️ IMPORTANTE**: Este documento requiere actualización completa al modelo de 6 roles.
->
-> **Para información actualizada**, consulte:
-> - [`docs/architecture/AUTHENTICATION_AUTHORIZATION.md`](./architecture/AUTHENTICATION_AUTHORIZATION.md) - Sistema de autenticación actual
-> - [`docs/api/API_COMPLETE_REFERENCE.md`](./api/API_COMPLETE_REFERENCE.md) - Permisos de API actualizados
-> - [`docs/SECURITY.md`](./SECURITY.md) - Documentación de seguridad actual
-> - [`src/lib/authz.ts`](../src/lib/authz.ts) - Fuente de verdad del código
+> ⚠️ **DOCUMENTO EN REFERENCIA HISTÓRICA**  
+> Última revisión: migraciones 051-054 (Oct 2025). Mantiene notas previas a la consolidación final del sistema.  
+> Para la definición oficial de roles y permisos utiliza [`docs/ROLE_SYSTEM_REFERENCE.md`](../../ROLE_SYSTEM_REFERENCE.md) y `docs/SECURITY.md`. Este archivo solo se conserva para rastrear decisiones históricas.
 
 ---
 

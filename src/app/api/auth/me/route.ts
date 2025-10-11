@@ -5,9 +5,9 @@ import { setCORSHeaders } from '@/lib/cors';
 export const runtime = 'nodejs';
 
 // GET /api/auth/me - Get current user info
-export async function GET(req: NextRequest): Promise<NextResponse> {
+export async function GET(_req: NextRequest): Promise<NextResponse> {
   try {
-    const auth = await getAuthContext(req);
+    const auth = await getAuthContext();
 
     if (!auth) {
       const response = NextResponse.json({ error: 'Not authenticated' }, { status: 401 });

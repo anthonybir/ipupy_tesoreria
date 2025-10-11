@@ -7,6 +7,10 @@
 
 Sistema integral de gestión de tesorería para la **Iglesia Pentecostal Unida del Paraguay** (IPU PY). Plataforma moderna construida con Next.js 15, Convex y NextAuth para administrar las finanzas de 22 iglesias locales con reportes mensuales centralizados.
 
+> **Nota importante**
+>
+> Mientras el sistema se encuentra en desarrollo, la base de datos de Convex contiene **únicamente datos históricos** importados del archivo legacy `legacy_data/Registro Diario IPU PY (1).xlsx`. No existe todavía actividad en vivo. Cuando el sistema entre en producción, se ingresarán registros nuevos y los históricos quedarán disponibles solo para referencia y auditoría.
+
 🌐 **Producción**: [ipupytesoreria.vercel.app](https://ipupytesoreria.vercel.app)
 
 ## ✨ Características Principales
@@ -316,3 +320,9 @@ Para soporte técnico, contactar a administracion@ipupy.org.py
 **IPU PY** - Iglesia Pentecostal Unida del Paraguay
 Personería Jurídica N° 17028
 RUC: 80017726-6
+
+## Datos Históricos vs Producción
+
+- Todo el contenido actual proviene del archivo `legacy_data/Registro Diario IPU PY (1).xlsx`.
+- No existe actividad operativa en Convex hasta el go-live.
+- Una vez en producción, los nuevos registros se crearán directamente en Convex y los datos históricos quedarán solo para consulta/auditoría.

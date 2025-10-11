@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
+import { convexAuthNextjsMiddleware } from "@convex-dev/auth/nextjs/server";
 
 // Build ID for cache busting (Vercel sets VERCEL_GIT_COMMIT_SHA)
 const BUILD_ID = process.env['VERCEL_GIT_COMMIT_SHA'] ||
@@ -31,31 +31,18 @@ const applyBuildIdCookie = (request: NextRequest, response: NextResponse) => {
   }
 };
 
-export async function middleware(request: NextRequest): Promise<NextResponse> {
+export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
   const { pathname } = request.nextUrl;
 
-  // Allow public routes without auth check
   if (isPublicRoute(pathname)) {
     const response = NextResponse.next();
     applyBuildIdCookie(request, response);
     return response;
   }
 
-  const secret = process.env['NEXTAUTH_SECRET'];
-  if (!secret) {
-    throw new Error("NEXTAUTH_SECRET is not configured");
-  }
+  const authenticated = await convexAuth.isAuthenticated();
 
-  const proto = request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol;
-  const secureCookie = proto?.includes("https") ?? false;
-
-  const token = await getToken({
-    req: request,
-    secret,
-    secureCookie,
-  });
-
-  if (!token) {
+  if (!authenticated) {
     if (pathname.startsWith("/api/")) {
       const jsonResponse = NextResponse.json(
         { error: "Autenticación requerida" },
@@ -75,11 +62,10 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const response = NextResponse.next();
   applyBuildIdCookie(request, response);
   return response;
-}
+});
 
 export const config = {
   matcher: [
-    // Match all routes except static files and images
     "/((?!_next/static|_next/image|favicon.ico|public/|.*\\..*$).*)",
   ],
 };

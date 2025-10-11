@@ -66,12 +66,12 @@ export default function FundEventsPage(): JSX.Element {
 
   const viewerContext = useMemo(
     () => ({
-      ...(profile?.id ? { profileId: profile.id } : {}),
+      ...(profile?.profileId ? { profileId: profile.profileId } : {}),
       isAdmin,
       isTreasurer,
       isFundDirector,
     }),
-    [profile?.id, isAdmin, isTreasurer, isFundDirector]
+    [profile?.profileId, isAdmin, isTreasurer, isFundDirector]
   );
 
   const events = eventsData?.records || [];

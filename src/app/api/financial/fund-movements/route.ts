@@ -46,7 +46,7 @@ const corsError = (message: string, status: number, details?: unknown) =>
 // GET /api/financial/fund-movements - Get fund movements
 async function handleGet(req: NextRequest) {
   try {
-    const auth = await getAuthContext(req);
+    const auth = await getAuthContext();
     const { searchParams } = new URL(req.url);
 
     const report_id = searchParams.get("report_id");
@@ -177,7 +177,7 @@ async function handleGet(req: NextRequest) {
 // POST /api/financial/fund-movements - Create fund movement(s)
 async function handlePost(req: NextRequest) {
   try {
-    const user = await getAuthContext(req);
+    const user = await getAuthContext();
     if (!user) {
       return corsError("Authentication required", 401);
     }
@@ -520,7 +520,7 @@ async function processReportMovements(auth: AuthContext | null, reportId: number
 // DELETE /api/financial/fund-movements?id=X - Reverse a fund movement
 async function handleDelete(req: NextRequest) {
   try {
-    const user = await getAuthContext(req);
+    const user = await getAuthContext();
     if (!user) {
       return corsError("Authentication required", 401);
     }

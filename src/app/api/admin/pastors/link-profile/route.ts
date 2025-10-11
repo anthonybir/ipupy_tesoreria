@@ -32,7 +32,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     // Update user profile with church assignment
     const user = await client.mutation(api.admin.updateUserRole, {
-      user_id,
+      user_id: user_id as Id<'users'>,
       role: 'pastor',
       church_id: church_id as Id<'churches'>,
     });

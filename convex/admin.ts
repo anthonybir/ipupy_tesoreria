@@ -13,10 +13,17 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
 import { getAuthContext } from "./lib/auth";
-import { requireAdmin } from "./lib/permissions";
+import {
+  filterByChurchAccess,
+  requireAdmin,
+  requireChurchModify,
+  requireMinRole,
+} from "./lib/permissions";
 import { validateRequired, validateStringLength } from "./lib/validators";
 import { NotFoundError, ValidationError, ConflictError } from "./lib/errors";
-import { type Id } from "./_generated/dataModel";
+import { type Id, type Doc } from "./_generated/dataModel";
+import { enforceRateLimit } from "./rateLimiter";
+import type { QueryCtx, MutationCtx } from "./_generated/server";
 
 // ============================================================================
 // TYPES
@@ -25,7 +32,7 @@ import { type Id } from "./_generated/dataModel";
 interface ProfileWithChurch {
   _id: Id<"profiles">;
   _creationTime: number;
-  user_id: string; // UUID from Supabase
+  user_id: Id<"users">;
   email: string;
   role: "admin" | "fund_director" | "pastor" | "treasurer" | "church_manager" | "secretary";
   church_id?: Id<"churches">;
@@ -37,6 +44,189 @@ interface ProfileWithChurch {
   // Calculated fields
   church_name?: string;
   church_city?: string;
+}
+
+interface DashboardMetrics {
+  total_churches: number;
+  total_reports: number;
+  current_month_reports: number;
+  current_month_total: number;
+  average_amount: number;
+}
+
+interface DashboardRecentReport {
+  id: number | null;
+  convex_id: Id<"reports">;
+  church_id: number | null;
+  church_convex_id: Id<"churches">;
+  month: number;
+  year: number;
+  diezmos: number;
+  ofrendas: number;
+  fondo_nacional: number;
+  total_entradas: number;
+  created_at: number;
+  estado: string;
+  church_name: string | null;
+  church_city: string | null;
+}
+
+interface DashboardChurchOverview {
+  id: number | null;
+  convex_id: Id<"churches">;
+  name: string;
+  city: string;
+  pastor: string;
+  pastor_grado: string | null;
+  pastor_posicion: string | null;
+  pastor_cedula: string | null;
+  phone: string | null;
+  active: boolean;
+  report_count: number;
+  last_report_date: number | null;
+}
+
+interface DashboardPeriod {
+  current_year: number;
+  current_month: number;
+  current_period: string;
+}
+
+interface DashboardFundSummary {
+  total_funds: number;
+  active_funds: number;
+  total_balance: number;
+}
+
+interface DashboardTrend {
+  month_name: string;
+  month: number;
+  year: number;
+  report_count: number;
+  total_amount: number;
+}
+
+interface MemberResponse {
+  id: number | null;
+  convex_id: Id<"members">;
+  church_id: number | null;
+  church_convex_id: Id<"churches">;
+  family_id: number | null;
+  family_convex_id: Id<"families"> | null;
+  apellido_familia: string | null;
+  nombre: string;
+  apellido: string;
+  ci_ruc: string | null;
+  telefono: string | null;
+  email: string | null;
+  direccion: string | null;
+  es_activo: boolean;
+  es_bautizado: boolean;
+  es_miembro_oficial: boolean;
+  nota: string | null;
+  estado_label: string;
+  created_at: number;
+  updated_at: number;
+}
+
+interface MemberListResult {
+  data: MemberResponse[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+  };
+}
+
+type GenericCtx = QueryCtx | MutationCtx;
+
+async function loadFamiliesMap(
+  ctx: GenericCtx,
+  familyIds: Id<"families">[]
+): Promise<Map<Id<"families">, Doc<"families">>> {
+  if (familyIds.length === 0) {
+    return new Map();
+  }
+
+  const unique = Array.from(new Set(familyIds));
+  const records = await Promise.all(unique.map((id) => ctx.db.get(id)));
+  const map = new Map<Id<"families">, Doc<"families">>();
+  records.forEach((record, index) => {
+    const key = unique[index];
+    if (!record || !key) {
+      return;
+    }
+    map.set(key, record);
+  });
+  return map;
+}
+
+async function loadChurchesMap(
+  ctx: GenericCtx,
+  churchIds: Id<"churches">[]
+): Promise<Map<Id<"churches">, Doc<"churches">>> {
+  if (churchIds.length === 0) {
+    return new Map();
+  }
+
+  const unique = Array.from(new Set(churchIds));
+  const records = await Promise.all(unique.map((id) => ctx.db.get(id)));
+  const map = new Map<Id<"churches">, Doc<"churches">>();
+  records.forEach((record, index) => {
+    const key = unique[index];
+    if (!record || !key) {
+      return;
+    }
+    map.set(key, record);
+  });
+  return map;
+}
+
+async function hydrateMembers(
+  ctx: GenericCtx,
+  members: Doc<"members">[]
+): Promise<MemberResponse[]> {
+  if (members.length === 0) {
+    return [];
+  }
+
+  const familyIds = members
+    .map((member) => member.family_id)
+    .filter((id): id is Id<"families"> => Boolean(id));
+  const churchIds = members.map((member) => member.church_id);
+
+  const [familiesMap, churchesMap] = await Promise.all([
+    loadFamiliesMap(ctx, familyIds),
+    loadChurchesMap(ctx, churchIds),
+  ]);
+
+  return members.map((member) => {
+    const family = member.family_id ? familiesMap.get(member.family_id) ?? null : null;
+    const church = churchesMap.get(member.church_id) ?? null;
+
+    return {
+      id: member.supabase_id ?? null,
+      convex_id: member._id,
+      church_id: church?.supabase_id ?? null,
+      church_convex_id: member.church_id,
+      family_id: family?.supabase_id ?? null,
+      family_convex_id: member.family_id ?? null,
+      apellido_familia: family?.apellido ?? null,
+      nombre: member.nombre,
+      apellido: member.apellido,
+      ci_ruc: member.ci_ruc ?? null,
+      telefono: member.telefono ?? null,
+      email: member.email ?? null,
+      direccion: member.direccion ?? null,
+      es_activo: member.es_activo,
+      es_bautizado: member.es_bautizado,
+      es_miembro_oficial: member.es_miembro_oficial,
+      nota: member.nota ?? null,
+      estado_label: member.es_activo ? "activo" : "inactivo",
+      created_at: member.created_at,
+      updated_at: member.updated_at,
+    } satisfies MemberResponse;
+  });
 }
 
 interface DashboardStats {
@@ -63,6 +253,12 @@ interface DashboardStats {
     name: string;
     current_balance: number;
   }>;
+  metrics: DashboardMetrics;
+  recentReports: DashboardRecentReport[];
+  churchesOverview: DashboardChurchOverview[];
+  currentPeriod: DashboardPeriod;
+  fundSummary: DashboardFundSummary;
+  trends: DashboardTrend[];
 }
 
 // Note: user_activity table will be added in schema later
@@ -218,13 +414,19 @@ export const getDashboardStats = query({
     const currentDate = new Date();
     const currentMonth = currentDate.getMonth() + 1;
     const currentYear = currentDate.getFullYear();
+    const startOfCurrentMonth = new Date(currentYear, currentMonth - 1, 1).getTime();
+
+    const trendStartDate = new Date(currentYear, currentMonth - 5, 1);
+    const trendWindowStart = trendStartDate.getTime();
 
     // Get all churches
     const churches = await ctx.db.query("churches").collect();
-    const totalChurches = churches.filter((c) => c.active).length;
+    const activeChurches = churches.filter((c) => c.active);
+    const totalChurches = activeChurches.length;
 
     // Get all reports
     const reports = await ctx.db.query("reports").collect();
+    const totalReports = reports.length;
 
     // Calculate totals
     const totalTithes = reports.reduce((sum, r) => sum + r.diezmos, 0);
@@ -232,9 +434,7 @@ export const getDashboardStats = query({
     const totalNationalFund = reports.reduce((sum, r) => sum + r.fondo_nacional, 0);
 
     // Current month stats
-    const currentMonthReports = reports.filter(
-      (r) => r.month === currentMonth && r.year === currentYear
-    );
+    const currentMonthReports = reports.filter((r) => r.created_at >= startOfCurrentMonth);
 
     const monthTithes = currentMonthReports.reduce((sum, r) => sum + r.diezmos, 0);
     const monthOfferings = currentMonthReports.reduce((sum, r) => sum + r.ofrendas, 0);
@@ -251,6 +451,123 @@ export const getDashboardStats = query({
     const funds = await ctx.db.query("funds").collect();
     const activeFunds = funds.filter((f) => f.is_active);
 
+    const churchMap = new Map(churches.map((church) => [church._id, church]));
+
+    const recentReports: DashboardRecentReport[] = reports
+      .slice()
+      .sort((a, b) => b.created_at - a.created_at)
+      .slice(0, 10)
+      .map((report) => {
+        const church = churchMap.get(report.church_id);
+        return {
+          id: report.supabase_id ?? null,
+          convex_id: report._id,
+          church_id: church?.supabase_id ?? null,
+          church_convex_id: report.church_id,
+          month: report.month,
+          year: report.year,
+          diezmos: report.diezmos,
+          ofrendas: report.ofrendas,
+          fondo_nacional: report.fondo_nacional,
+          total_entradas: report.total_entradas,
+          created_at: report.created_at,
+          estado: report.estado,
+          church_name: church?.name ?? null,
+          church_city: church?.city ?? null,
+        };
+      });
+
+    const reportsByChurch = new Map<Id<"churches">, { count: number; last: number | null }>();
+    for (const report of reports) {
+      const existing = reportsByChurch.get(report.church_id) ?? { count: 0, last: null };
+      const latest = existing.last === null ? report.created_at : Math.max(existing.last, report.created_at);
+      reportsByChurch.set(report.church_id, {
+        count: existing.count + 1,
+        last: latest,
+      });
+    }
+
+    const churchesOverview: DashboardChurchOverview[] = churches
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name, "es"))
+      .map((church) => {
+        const statsForChurch = reportsByChurch.get(church._id);
+        return {
+          id: church.supabase_id ?? null,
+          convex_id: church._id,
+          name: church.name,
+          city: church.city,
+          pastor: church.pastor,
+          pastor_grado: church.pastor_grado ?? null,
+          pastor_posicion: church.pastor_posicion ?? null,
+          pastor_cedula: church.pastor_cedula ?? null,
+          phone: church.phone ?? null,
+          active: church.active,
+          report_count: statsForChurch?.count ?? 0,
+          last_report_date: statsForChurch?.last ?? null,
+        };
+      });
+
+    const metrics: DashboardMetrics = {
+      total_churches: totalChurches,
+      total_reports: totalReports,
+      current_month_reports: currentMonthReports.length,
+      current_month_total: monthTithes + monthOfferings,
+      average_amount:
+        totalReports > 0
+          ? (reports.reduce((sum, r) => sum + r.diezmos + r.ofrendas, 0) / totalReports)
+          : 0,
+    };
+
+    const currentPeriod: DashboardPeriod = {
+      current_year: currentYear,
+      current_month: currentMonth,
+      current_period: `${currentDate.toLocaleString("es-PY", {
+        month: "long",
+      })} ${currentYear}`.replace(/^./, (char) => char.toUpperCase()),
+    };
+
+    const fundSummary: DashboardFundSummary = {
+      total_funds: funds.length,
+      active_funds: activeFunds.length,
+      total_balance: funds.reduce((sum, fund) => sum + fund.current_balance, 0),
+    };
+
+    const trendAccumulator = new Map<string, DashboardTrend>();
+    for (const report of reports) {
+      if (report.created_at < trendWindowStart) {
+        continue;
+      }
+      const reportDate = new Date(report.created_at);
+      const month = reportDate.getMonth() + 1;
+      const year = reportDate.getFullYear();
+      const key = `${year}-${month}`;
+      const monthName = reportDate
+        .toLocaleString("es-PY", { month: "short" })
+        .replace(/^./, (char) => char.toUpperCase());
+
+      const existing = trendAccumulator.get(key);
+      if (existing) {
+        existing.report_count += 1;
+        existing.total_amount += report.diezmos + report.ofrendas;
+      } else {
+        trendAccumulator.set(key, {
+          month_name: monthName,
+          month,
+          year,
+          report_count: 1,
+          total_amount: report.diezmos + report.ofrendas,
+        });
+      }
+    }
+
+    const trends = Array.from(trendAccumulator.values()).sort((a, b) => {
+      if (a.year === b.year) {
+        return a.month - b.month;
+      }
+      return a.year - b.year;
+    });
+
     const stats: DashboardStats = {
       totalChurches,
       reportedChurches,
@@ -258,7 +575,7 @@ export const getDashboardStats = query({
       nationalFund: monthNationalFund,
       overview: {
         total_churches: totalChurches,
-        total_reports: reports.length,
+        total_reports: totalReports,
         total_tithes: totalTithes,
         total_offerings: totalOfferings,
         total_national_fund: totalNationalFund,
@@ -277,9 +594,289 @@ export const getDashboardStats = query({
           name: f.name,
           current_balance: f.current_balance,
         })),
+      metrics,
+      recentReports,
+      churchesOverview,
+      currentPeriod,
+      fundSummary,
+      trends,
     };
 
     return stats;
+  },
+});
+
+type MemberSortColumn = "apellido" | "nombre" | "created_at" | "updated_at" | "ci_ruc";
+
+function sortMembers(
+  members: Doc<"members">[],
+  column: MemberSortColumn,
+  order: "ASC" | "DESC"
+): Doc<"members">[] {
+  const direction = order === "DESC" ? -1 : 1;
+
+  return members.slice().sort((a, b) => {
+    const compare = (): number => {
+      switch (column) {
+        case "nombre":
+          return a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" });
+        case "created_at":
+          return a.created_at - b.created_at;
+        case "updated_at":
+          return a.updated_at - b.updated_at;
+        case "ci_ruc":
+          return (a.ci_ruc ?? "").localeCompare(b.ci_ruc ?? "", "es", {
+            sensitivity: "base",
+          });
+        case "apellido":
+        default:
+          return a.apellido.localeCompare(b.apellido, "es", { sensitivity: "base" });
+      }
+    };
+
+    return compare() * direction;
+  });
+}
+
+export const listMembers = query({
+  args: {
+    churchId: v.optional(v.id("churches")),
+    limit: v.number(),
+    offset: v.number(),
+    sortColumn: v.optional(
+      v.union(
+        v.literal("apellido"),
+        v.literal("nombre"),
+        v.literal("created_at"),
+        v.literal("updated_at"),
+        v.literal("ci_ruc")
+      )
+    ),
+    sortOrder: v.optional(v.union(v.literal("ASC"), v.literal("DESC"))),
+    activeFlag: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args): Promise<MemberListResult> => {
+    const auth = await getAuthContext(ctx);
+    requireMinRole(auth, "church_manager");
+
+    const sortColumn = (args.sortColumn ?? "apellido") as MemberSortColumn;
+    const sortOrder = args.sortOrder ?? "ASC";
+
+    const membersBase = args.churchId
+      ? await ctx
+          .db
+          .query("members")
+          .withIndex("by_church", (q) => q.eq("church_id", args.churchId as Id<"churches">))
+          .collect()
+      : await ctx.db.query("members").collect();
+
+    let members = membersBase;
+    members = filterByChurchAccess(auth, members);
+
+    if (args.activeFlag !== undefined && args.activeFlag !== null) {
+      members = members.filter((member) => member.es_activo === args.activeFlag);
+    }
+
+    const total = members.length;
+    const sorted = sortMembers(members, sortColumn, sortOrder);
+    const paged = sorted.slice(args.offset, args.offset + args.limit);
+
+    const data = await hydrateMembers(ctx, paged);
+
+    return {
+      data,
+      pagination: {
+        total,
+        limit: args.limit,
+        offset: args.offset,
+      },
+    } satisfies MemberListResult;
+  },
+});
+
+export const findMemberByLegacyId = query({
+  args: {
+    supabase_id: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const auth = await getAuthContext(ctx);
+    requireMinRole(auth, "church_manager");
+
+    const member = await ctx.db
+      .query("members")
+      .withIndex("by_supabase_id", (q) => q.eq("supabase_id", args.supabase_id))
+      .first();
+
+    if (!member) {
+      return null;
+    }
+
+    const accessible = filterByChurchAccess(auth, [member]);
+    if (accessible.length === 0) {
+      return null;
+    }
+
+    return member._id;
+  },
+});
+
+const memberPayloadValidator = v.object({
+  nombre: v.string(),
+  apellido: v.string(),
+  family_id: v.optional(v.id("families")),
+  ci_ruc: v.optional(v.string()),
+  telefono: v.optional(v.string()),
+  email: v.optional(v.string()),
+  direccion: v.optional(v.string()),
+  es_activo: v.optional(v.boolean()),
+  es_bautizado: v.optional(v.boolean()),
+  es_miembro_oficial: v.optional(v.boolean()),
+  nota: v.optional(v.string()),
+});
+
+function sanitizeMemberPayload(payload: typeof memberPayloadValidator.type) {
+  return {
+    nombre: payload.nombre.trim(),
+    apellido: payload.apellido.trim(),
+    family_id: payload.family_id ?? null,
+    ci_ruc: payload.ci_ruc?.trim() ?? null,
+    telefono: payload.telefono?.trim() ?? null,
+    email: payload.email?.trim() ?? null,
+    direccion: payload.direccion?.trim() ?? null,
+    es_activo: payload.es_activo ?? true,
+    es_bautizado: payload.es_bautizado ?? false,
+    es_miembro_oficial: payload.es_miembro_oficial ?? false,
+    nota: payload.nota?.trim() ?? null,
+  } as const;
+}
+
+export const createMember = mutation({
+  args: {
+    church_id: v.id("churches"),
+    payload: memberPayloadValidator,
+  },
+  handler: async (ctx, args) => {
+    const auth = await getAuthContext(ctx);
+    requireMinRole(auth, "church_manager");
+    requireChurchModify(auth, args.church_id);
+
+    if (args.payload.family_id) {
+      const family = await ctx.db.get(args.payload.family_id);
+      if (!family) {
+        throw new ValidationError("Familia no encontrada");
+      }
+      if (family.church_id !== args.church_id) {
+        throw new ValidationError("La familia pertenece a otra iglesia");
+      }
+    }
+
+    const sanitized = sanitizeMemberPayload(args.payload);
+    const now = Date.now();
+
+    const memberId = await ctx.db.insert("members", {
+      church_id: args.church_id,
+      nombre: sanitized.nombre,
+      apellido: sanitized.apellido,
+      es_activo: sanitized.es_activo,
+      es_bautizado: sanitized.es_bautizado,
+      es_miembro_oficial: sanitized.es_miembro_oficial,
+      created_at: now,
+      updated_at: now,
+      ...(args.payload.family_id ? { family_id: args.payload.family_id } : {}),
+      ...(sanitized.ci_ruc ? { ci_ruc: sanitized.ci_ruc } : {}),
+      ...(sanitized.telefono ? { telefono: sanitized.telefono } : {}),
+      ...(sanitized.email ? { email: sanitized.email } : {}),
+      ...(sanitized.direccion ? { direccion: sanitized.direccion } : {}),
+      ...(sanitized.nota ? { nota: sanitized.nota } : {}),
+    });
+
+    const memberDoc = await ctx.db.get(memberId);
+    if (!memberDoc) {
+      throw new Error("No se pudo crear el miembro");
+    }
+
+    const [member] = await hydrateMembers(ctx, [memberDoc]);
+
+    return member;
+  },
+});
+
+export const updateMember = mutation({
+  args: {
+    member_id: v.id("members"),
+    payload: memberPayloadValidator,
+  },
+  handler: async (ctx, args) => {
+    const auth = await getAuthContext(ctx);
+    requireMinRole(auth, "church_manager");
+
+    const existing = await ctx.db.get(args.member_id);
+    if (!existing) {
+      throw new NotFoundError("Miembro no encontrado");
+    }
+
+    requireChurchModify(auth, existing.church_id);
+
+    if (args.payload.family_id) {
+      const family = await ctx.db.get(args.payload.family_id);
+      if (!family) {
+        throw new ValidationError("Familia no encontrada");
+      }
+      if (family.church_id !== existing.church_id) {
+        throw new ValidationError("La familia pertenece a otra iglesia");
+      }
+    }
+
+    const sanitized = sanitizeMemberPayload(args.payload);
+
+    const updatePayload: Partial<Doc<"members">> = {
+      nombre: sanitized.nombre,
+      apellido: sanitized.apellido,
+      es_activo: sanitized.es_activo,
+      es_bautizado: sanitized.es_bautizado,
+      es_miembro_oficial: sanitized.es_miembro_oficial,
+      updated_at: Date.now(),
+      ...(args.payload.family_id !== undefined
+        ? { family_id: args.payload.family_id ?? undefined }
+        : {}),
+      ...(sanitized.ci_ruc !== null ? { ci_ruc: sanitized.ci_ruc ?? undefined } : {}),
+      ...(sanitized.telefono !== null ? { telefono: sanitized.telefono ?? undefined } : {}),
+      ...(sanitized.email !== null ? { email: sanitized.email ?? undefined } : {}),
+      ...(sanitized.direccion !== null ? { direccion: sanitized.direccion ?? undefined } : {}),
+      ...(sanitized.nota !== null ? { nota: sanitized.nota ?? undefined } : {}),
+    };
+
+    await ctx.db.patch(args.member_id, updatePayload);
+
+    const updated = await ctx.db.get(args.member_id);
+    if (!updated) {
+      throw new Error("No se pudo actualizar el miembro");
+    }
+
+    const [member] = await hydrateMembers(ctx, [updated]);
+
+    return member;
+  },
+});
+
+export const deleteMember = mutation({
+  args: {
+    member_id: v.id("members"),
+  },
+  handler: async (ctx, args) => {
+    const auth = await getAuthContext(ctx);
+    requireMinRole(auth, "church_manager");
+
+    const existing = await ctx.db.get(args.member_id);
+    if (!existing) {
+      throw new NotFoundError("Miembro no encontrado");
+    }
+
+    requireChurchModify(auth, existing.church_id);
+
+    await ctx.db.delete(args.member_id);
+
+    return { success: true } as const;
   },
 });
 
@@ -362,6 +959,7 @@ export const updateSystemConfig = mutation({
   handler: async (ctx, args) => {
     const auth = await getAuthContext(ctx);
     requireAdmin(auth);
+    await enforceRateLimit(ctx, "adminActions", auth.userId as string);
 
     validateRequired(args.section, "Sección");
 
@@ -371,7 +969,8 @@ export const updateSystemConfig = mutation({
 
     // Log the configuration change
     logActivityHelper({
-      user_id: auth.email || "admin",
+      actor: auth.userId,
+      actorEmail: auth.email,
       action: "admin.configuration.update",
       details: JSON.stringify({
         section: args.section,
@@ -396,7 +995,7 @@ export const updateSystemConfig = mutation({
  */
 export const updateUserRole = mutation({
   args: {
-    user_id: v.string(),
+    user_id: v.id("users"),
     role: v.string(),
     church_id: v.optional(v.id("churches")),
     fund_id: v.optional(v.id("funds")),
@@ -404,6 +1003,7 @@ export const updateUserRole = mutation({
   handler: async (ctx, args) => {
     const auth = await getAuthContext(ctx);
     requireAdmin(auth);
+    await enforceRateLimit(ctx, "adminActions", auth.userId as string);
 
     // Validate role
     const validRoles = [
@@ -423,7 +1023,7 @@ export const updateUserRole = mutation({
     // Find profile by user_id
     const profile = await ctx.db
       .query("profiles")
-      .filter((q) => q.eq(q.field("user_id"), args.user_id))
+      .withIndex("by_user_id", (q) => q.eq("user_id", args.user_id))
       .first();
 
     if (!profile) {
@@ -456,7 +1056,8 @@ export const updateUserRole = mutation({
 
     // Log the role change
     logActivityHelper({
-      user_id: auth.email || "admin",
+      actor: auth.userId,
+      actorEmail: auth.email,
       action: "admin.user.update_role",
       details: JSON.stringify({
         updated_user_id: args.user_id,
@@ -482,7 +1083,8 @@ export const updateUserRole = mutation({
  * This is a placeholder for future implementation
  */
 function logActivityHelper(args: {
-  user_id: string;
+  actor: Id<"users">;
+  actorEmail?: string | null;
   action: string;
   details?: string;
   ip_address?: string;
@@ -490,7 +1092,8 @@ function logActivityHelper(args: {
 }) {
   // For now, just log to console
   console.warn("[AUDIT]", {
-    user_id: args.user_id,
+    user_id: args.actor,
+    user_email: args.actorEmail ?? null,
     action: args.action,
     details: args.details,
     timestamp: new Date().toISOString(),
@@ -505,17 +1108,18 @@ function logActivityHelper(args: {
  */
 export const assignFundDirector = mutation({
   args: {
-    user_id: v.string(),
+    user_id: v.id("users"),
     fund_id: v.id("funds"),
   },
   handler: async (ctx, args) => {
     const auth = await getAuthContext(ctx);
     requireAdmin(auth);
+    await enforceRateLimit(ctx, "adminActions", auth.userId as string);
 
     // Find profile
     const profile = await ctx.db
       .query("profiles")
-      .filter((q) => q.eq(q.field("user_id"), args.user_id))
+      .withIndex("by_user_id", (q) => q.eq("user_id", args.user_id))
       .first();
 
     if (!profile) {
@@ -537,7 +1141,8 @@ export const assignFundDirector = mutation({
 
     // Log the assignment
     logActivityHelper({
-      user_id: auth.email || "admin",
+      actor: auth.userId,
+      actorEmail: auth.email,
       action: "admin.fund_director.assign",
       details: JSON.stringify({
         assigned_user_id: args.user_id,
@@ -573,6 +1178,7 @@ export const createUser = mutation({
   handler: async (ctx, args) => {
     const auth = await getAuthContext(ctx);
     requireAdmin(auth);
+    await enforceRateLimit(ctx, "adminActions", auth.userId as string);
 
     // Validate email
     validateRequired(args.email, "Email");
@@ -611,6 +1217,29 @@ export const createUser = mutation({
       throw new ConflictError("Ya existe un usuario activo con este email");
     }
 
+    // Ensure Convex Auth user exists
+    const existingUser = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", email))
+      .first();
+
+    let userId: Id<"users">;
+    let userCreated = false;
+    const trimmedName = args.full_name?.trim();
+
+    if (existingUser) {
+      userId = existingUser._id;
+      if (trimmedName && trimmedName.length > 0 && trimmedName !== existingUser.name) {
+        await ctx.db.patch(existingUser._id, { name: trimmedName });
+      }
+    } else {
+      userCreated = true;
+      userId = await ctx.db.insert("users", {
+        email,
+        name: trimmedName && trimmedName.length > 0 ? trimmedName : undefined,
+      });
+    }
+
     // Validate church if specified
     if (args.church_id) {
       const church = await ctx.db.get(args.church_id);
@@ -627,11 +1256,6 @@ export const createUser = mutation({
       }
     }
 
-    // Generate user_id (UUID equivalent)
-    // In Convex, we'll use email as user_id for now
-    // TODO: Integrate with Clerk authentication for proper user IDs
-    const userId = email;
-
     // Create or update profile
     const now = Date.now();
     let profileId: Id<"profiles">;
@@ -640,12 +1264,13 @@ export const createUser = mutation({
       // Reactivate existing inactive profile
       await ctx.db.patch(existing._id, {
         email,
-        full_name: args.full_name?.trim() || "",
+        full_name: trimmedName ?? "",
         role: args.role as "admin" | "fund_director" | "pastor" | "treasurer" | "church_manager" | "secretary",
         church_id: args.church_id,
         fund_id: args.fund_id,
         active: true,
         updated_at: now,
+        user_id: userId,
       });
       profileId = existing._id;
     } else {
@@ -656,7 +1281,7 @@ export const createUser = mutation({
         role: args.role as "admin" | "fund_director" | "pastor" | "treasurer" | "church_manager" | "secretary",
         ...(args.church_id ? { church_id: args.church_id } : {}),
         ...(args.fund_id ? { fund_id: args.fund_id } : {}),
-        full_name: args.full_name?.trim() || "",
+        full_name: trimmedName ?? "",
         active: true,
         created_at: now,
         updated_at: now,
@@ -665,13 +1290,15 @@ export const createUser = mutation({
 
     // Log user creation
     logActivityHelper({
-      user_id: auth.email || "admin",
+      actor: auth.userId,
+      actorEmail: auth.email,
       action: "admin.user.create",
       details: JSON.stringify({
         created_user_id: userId,
         email,
         role: args.role,
         reused_placeholder: !!existing,
+        userCreated,
       }),
       ip_address: "unknown",
       user_agent: "unknown",
@@ -696,16 +1323,17 @@ export const createUser = mutation({
  */
 export const deactivateUser = mutation({
   args: {
-    user_id: v.string(),
+    user_id: v.id("users"),
   },
   handler: async (ctx, args) => {
     const auth = await getAuthContext(ctx);
     requireAdmin(auth);
+    await enforceRateLimit(ctx, "adminActions", auth.userId as string);
 
     // Find profile
     const profile = await ctx.db
       .query("profiles")
-      .filter((q) => q.eq(q.field("user_id"), args.user_id))
+      .withIndex("by_user_id", (q) => q.eq("user_id", args.user_id))
       .first();
 
     if (!profile) {
@@ -720,7 +1348,8 @@ export const deactivateUser = mutation({
 
     // Log deactivation
     logActivityHelper({
-      user_id: auth.email || "admin",
+      actor: auth.userId,
+      actorEmail: auth.email,
       action: "admin.user.deactivate",
       details: JSON.stringify({
         deactivated_user_id: args.user_id,

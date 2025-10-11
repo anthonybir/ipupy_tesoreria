@@ -13,11 +13,16 @@
  */
 
 import { mutation } from "./_generated/server";
+import { getAuthContext } from "./lib/auth";
+import { requireAdmin } from "./lib/permissions";
 
 // Clean up temporary fields after FK resolution
 export const cleanupTempFields = mutation({
   args: {},
   handler: async (ctx) => {
+    const auth = await getAuthContext(ctx);
+    requireAdmin(auth);
+
     console.log("🧹 Cleaning up temporary fields...\n");
 
     // Clean reports

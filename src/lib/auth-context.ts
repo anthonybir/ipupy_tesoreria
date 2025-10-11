@@ -1,89 +1,132 @@
-import { type NextRequest } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+'use server';
+
+import { convexAuthNextjsToken, isAuthenticatedNextjs } from '@convex-dev/auth/nextjs/server';
+import { ConvexHttpClient } from 'convex/browser';
+import type { Id } from '../../convex/_generated/dataModel';
+
+import { api } from '../../convex/_generated/api';
 import type { ProfileRole } from '@/lib/authz';
 
+type NullableNumber = number | null;
+
+const envConvexUrl = process.env['NEXT_PUBLIC_CONVEX_URL'];
+
+if (!envConvexUrl) {
+  throw new Error('NEXT_PUBLIC_CONVEX_URL must be defined to resolve Convex authentication context');
+}
+
+const convexUrl: string = envConvexUrl;
+
 export type AuthContext = {
-  userId?: string | undefined;  // Changed to string (UUID) from number
-  email?: string | undefined;
-  role?: ProfileRole | undefined;
-  churchId?: number | null | undefined;
-  fullName?: string | undefined;
-  phone?: string | undefined;
-  permissions?: Record<string, boolean | string | number> | undefined;
+  userId: string;
+  email: string;
+  role: ProfileRole;
+  churchId?: NullableNumber;
+  fullName?: string;
+  permissions?: Record<string, boolean | string | number>;
+  assignedFunds?: number[];
+  assignedChurches?: number[];
+  preferredLanguage?: string;
 };
 
-
-/**
- * Get authentication context from Supabase Auth only
- * No more legacy JWT token support - all auth goes through Supabase
- *
- * @param _request - Request parameter kept for backward compatibility, not used
- */
-export const getAuthContext = async (_request?: NextRequest): Promise<AuthContext | null> => {
-  const supabase = await createClient();
-  const { data: { user }, error } = await supabase.auth.getUser();
-
-  if (error) {
-    console.error('[AUTH_CONTEXT] Supabase auth.getUser() failed:', {
-      error: error.message,
-      status: error.status,
-      name: error.name
-    });
+async function getConvexClient(): Promise<ConvexHttpClient | null> {
+  const token = await convexAuthNextjsToken();
+  if (!token) {
     return null;
   }
 
-  if (!user) {
-    console.warn('[AUTH_CONTEXT] No authenticated user found in session');
+  const client = new ConvexHttpClient(convexUrl);
+  client.setAuth(token);
+  return client;
+}
+
+async function resolveChurchSupabaseId(
+  client: ConvexHttpClient,
+  churchId: Id<"churches"> | null
+): Promise<NullableNumber> {
+  if (!churchId) {
     return null;
   }
 
-  // Get enhanced profile data from profiles table
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select(`
-      id,
-      email,
-      role,
-      church_id,
-      full_name,
-      phone,
-      permissions
-    `)
-    .eq('id', user.id)
-    .single();
+  try {
+    const church = await client.query(api.churches.get, { id: churchId });
+    return church?.supabase_id ?? null;
+  } catch (error) {
+    console.warn('[auth-context] Failed to resolve church supabase_id', error);
+    return null;
+  }
+}
 
-  if (profile) {
-    // Update last seen timestamp (if we add this function later)
-    // await supabase.rpc('update_last_seen');
-
-    return {
-      userId: profile.id,
-      email: profile.email,
-      role: profile.role || 'secretary', // Default to lowest privilege role
-      churchId: profile.church_id || null,
-      fullName: profile.full_name || undefined,
-      phone: profile.phone || undefined,
-      permissions: profile.permissions || {}
-    };
+async function resolveFundSupabaseId(
+  client: ConvexHttpClient,
+  fundId: Id<"funds"> | null
+): Promise<NullableNumber> {
+  if (!fundId) {
+    return null;
   }
 
-  // Fallback if no profile exists yet (shouldn't happen with trigger)
-  console.error('[AUTH_CONTEXT] No profile found for authenticated user:', {
-    userId: user.id,
-    email: user.email
-  });
-  return {
-    userId: user.id,
-    email: user.email || undefined,
-    role: 'secretary', // Default to lowest privilege role
-    churchId: null
+  try {
+    const fund = await client.query(api.funds.get, { id: fundId });
+    return fund?.supabase_id ?? null;
+  } catch (error) {
+    console.warn('[auth-context] Failed to resolve fund supabase_id', error);
+    return null;
+  }
+}
+
+export const getAuthContext = async (): Promise<AuthContext | null> => {
+  const client = await getConvexClient();
+  if (!client) {
+    return null;
+  }
+
+  const profile = await client.query(api.auth.getCurrentProfile, {});
+
+  if (!profile) {
+    return null;
+  }
+
+  const churchSupabaseId = await resolveChurchSupabaseId(client, profile.church?.id ?? null);
+  const fundSupabaseId = await resolveFundSupabaseId(client, profile.fundId ?? null);
+
+  const assignedFunds =
+    fundSupabaseId !== null && fundSupabaseId !== undefined ? [fundSupabaseId] : undefined;
+
+  const assignedChurches =
+    churchSupabaseId !== null && churchSupabaseId !== undefined ? [churchSupabaseId] : undefined;
+
+  const context: AuthContext = {
+    userId: profile.userId,
+    email: profile.email,
+    role: profile.role,
+    churchId: churchSupabaseId ?? null,
+    permissions: {},
+    preferredLanguage: 'es',
   };
+
+  if (profile.fullName) {
+    context.fullName = profile.fullName;
+  }
+
+  if (assignedFunds) {
+    context.assignedFunds = assignedFunds;
+  }
+
+  if (assignedChurches) {
+    context.assignedChurches = assignedChurches;
+  }
+
+  return context;
 };
 
-export const requireAuth = async (request: NextRequest): Promise<AuthContext> => {
-  const context = await getAuthContext(request);
+export const requireAuth = async (): Promise<AuthContext> => {
+  const context = await getAuthContext();
   if (!context) {
     throw new Error('Autenticación requerida');
   }
   return context;
+};
+
+export const isAuthenticated = async (): Promise<boolean> => {
+  return isAuthenticatedNextjs({ convexUrl });
 };

@@ -106,7 +106,7 @@ export async function OPTIONS(): Promise<NextResponse> {
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
-    const auth = await getAuthContext(req);
+    const auth = await getAuthContext();
     if (!auth?.email) {
       return unauthorizedResponse();
     }
@@ -127,7 +127,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   try {
-    const auth = await getAuthContext(req);
+    const auth = await getAuthContext();
     if (!auth?.email) {
       return unauthorizedResponse();
     }

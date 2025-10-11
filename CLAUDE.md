@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**IPU PY Tesorería** is a modern treasury management system for the Iglesia Pentecostal Unida del Paraguay (United Pentecostal Church of Paraguay). Built with Next.js 15, TypeScript, Convex, and NextAuth to manage financial operations for 22 local churches with centralized reporting.
+**IPU PY Tesorería** is a modern treasury management system for the Iglesia Pentecostal Unida del Paraguay (United Pentecostal Church of Paraguay). Built with Next.js 15, TypeScript, Convex, and Convex Auth to manage financial operations for 22 local churches with centralized reporting.
 
-**Stack**: Next.js 15 (App Router) + React 19 + TypeScript + Convex (Document Database + Real-time) + NextAuth v5 + Tailwind CSS 4 + shadcn/ui
+**Stack**: Next.js 15 (App Router) + React 19 + TypeScript + Convex (Document Database + Real-time) + Convex Auth + Tailwind CSS 4 + shadcn/ui
 
 **Production**: https://ipupytesoreria.vercel.app
 
@@ -68,12 +68,11 @@ src/
 │   ├── Shared/               # Reusable UI components
 │   └── Layout/               # Layout components
 ├── lib/                      # Core utilities
-│   ├── auth.ts               # NextAuth configuration
 │   ├── convex-server.ts      # Server-side Convex client
 │   ├── convex-id-mapping.ts  # Legacy ID compatibility layer
 │   ├── auth-context.ts       # Auth context type definitions
 │   ├── cors.ts               # CORS configuration
-│   └── rate-limit.ts         # API rate limiting
+│   └── fund-event-authz.ts   # Fund event authorization
 ├── hooks/                    # React hooks (TanStack Query)
 │   ├── useChurches.ts        # Church data queries
 │   ├── useReports.ts         # Report data queries
@@ -83,10 +82,14 @@ src/
 
 convex/                      # Convex backend functions
 ├── schema.ts                # Database schema definition
+├── auth.ts                  # Convex Auth configuration
 ├── churches.ts              # Church queries and mutations
 ├── reports.ts               # Report operations
 ├── fundEvents.ts            # Fund events with approval workflow
-├── auth.config.ts           # OIDC bridge configuration
+├── lib/
+│   ├── auth.ts              # Auth context helpers
+│   ├── permissions.ts       # Role-based authorization
+│   └── audit.ts             # Audit logging utilities
 └── _generated/             # Auto-generated API files
 
 scripts/                     # Utility scripts
@@ -163,20 +166,23 @@ The Convex schema is defined in `convex/schema.ts` and automatically deployed. C
 
 ### Auth Provider
 
-**NextAuth v5** with Google OAuth + Convex OIDC Bridge
-- **Frontend**: NextAuth handles Google OAuth flow
-- **Backend**: Convex OIDC bridge validates JWT tokens
+**Convex Auth** (`@convex-dev/auth`) with Google OAuth
+- **Frontend**: Convex Auth React hooks (`useAuthActions`, `useAuthToken`)
+- **Backend**: Direct Convex authentication with `ctx.auth.getUserIdentity()`
+- **Profile Auto-Provisioning**: `ensureProfile` mutation creates/updates profiles on sign-in
 - Domain restriction: `@ipupy.org.py` only
 - Admin: `administracion@ipupy.org.py`
 
 #### Auth Flow
 
-1. User initiates Google OAuth via NextAuth (`/api/auth/signin`)
-2. Google returns JWT token with email/profile
-3. NextAuth creates session with user info
-4. Convex receives JWT via OIDC bridge
-5. Convex validates token and loads user profile from `profiles` collection
-6. Backend functions access user via `ctx.auth.getUserIdentity()`
+1. User clicks Google sign-in button (`signIn("google")` from `useAuthActions()`)
+2. Google OAuth flow redirects back with authentication token
+3. Convex Auth validates Google token and creates session
+4. `AuthProvider` detects sign-in via `useAuthToken()`
+5. `AuthProvider` calls `api.auth.getCurrentProfile` query
+6. If no profile exists, `AuthProvider` calls `api.auth.ensureProfile` mutation
+7. `ensureProfile` creates profile with auto-assigned role (admin or secretary)
+8. Backend functions access user via `ctx.auth.getUserIdentity()`
 
 ### Role System
 
@@ -191,19 +197,45 @@ The system uses a 6-role hierarchical model defined in the `profiles` collection
 
 **Authorization Pattern in Convex**:
 ```typescript
-// Always verify role in Convex functions
-const identity = await ctx.auth.getUserIdentity();
-if (!identity) throw new Error("Not authenticated");
+import { getAuthContext } from "./lib/auth";
+import { requireReportApproval } from "./lib/permissions";
 
-const user = await ctx.db
-  .query("profiles")
-  .withIndex("by_email", (q) => q.eq("email", identity.email))
-  .unique();
+// Pattern 1: Get auth context and use permission helpers
+export const approve = mutation({
+  args: { id: v.id("reports") },
+  handler: async (ctx, { id }) => {
+    const auth = await getAuthContext(ctx);
 
-if (!["admin", "treasurer"].includes(user.role)) {
-  throw new Error("Unauthorized");
-}
+    const report = await ctx.db.get(id);
+    if (!report) throw new Error("Informe no encontrado");
+
+    // Use permission helper (throws if unauthorized)
+    requireReportApproval(auth, report.church_id);
+
+    // Perform operation...
+  },
+});
+
+// Pattern 2: Manual role check
+export const listUsers = query({
+  args: {},
+  handler: async (ctx) => {
+    const auth = await getAuthContext(ctx);
+
+    if (!["admin", "treasurer"].includes(auth.role)) {
+      throw new Error("No autorizado");
+    }
+
+    return await ctx.db.query("profiles").collect();
+  },
+});
 ```
+
+**Permission helpers available** (see `convex/lib/permissions.ts`):
+- `requireReportApproval(auth, churchId)` - Admin or treasurer only
+- `requireChurchAccess(auth, churchId)` - Church-specific access
+- `requireFundAccess(auth, fundId)` - Fund director access
+- `isAdmin(auth)`, `isTreasurer(auth)`, `isPastor(auth)` - Role checks
 
 ## Key System Features
 
@@ -304,35 +336,29 @@ const churches = useQuery(api.churches.list);
 
 ### API Routes Pattern
 
-REST API routes now call Convex functions as a compatibility layer:
+**⚠️ Legacy Pattern - Being Phased Out**
+
+REST API routes currently exist as compatibility wrappers that call Convex functions. These will be removed as frontend migrates to direct Convex React hooks.
 
 ```typescript
-// src/app/api/example/route.ts
+// src/app/api/example/route.ts (Legacy pattern)
 import { NextRequest, NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { ConvexHttpClient } from 'convex/browser';
+import { fetchQuery } from 'convex/nextjs';
 import { api } from '@/convex/_generated/api';
 
 export async function GET(req: NextRequest) {
-  // 1. Verify NextAuth session
-  const session = await getServerSession(authOptions);
-
-  if (!session?.user?.email) {
-    return NextResponse.json(
-      { error: 'No autenticado' },
-      { status: 401 }
-    );
-  }
-
-  // 2. Initialize Convex HTTP client
-  const client = new ConvexHttpClient(process.env['CONVEX_URL']!);
-
-  // 3. Call Convex function (auth handled by OIDC bridge)
-  const data = await client.query(api.example.list);
-
+  // Call Convex function directly (auth handled by Convex Auth)
+  const data = await fetchQuery(api.example.list);
   return NextResponse.json(data);
 }
+```
+
+**Preferred Pattern**: Use Convex React hooks directly in client components:
+```typescript
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+const data = useQuery(api.example.list);
 ```
 
 ## Environment Variables
@@ -344,13 +370,11 @@ Required variables (see `.env.example`):
 CONVEX_DEPLOYMENT=prod:your-deployment
 NEXT_PUBLIC_CONVEX_URL=https://your-deployment.convex.cloud
 
-# NextAuth (Required)
-NEXTAUTH_URL=https://ipupytesoreria.vercel.app
-NEXTAUTH_SECRET=<generate-with-openssl-rand>
-
-# Google OAuth (Required)
-GOOGLE_CLIENT_ID=<from-google-console>
-GOOGLE_CLIENT_SECRET=<from-google-console>
+# Convex Auth - Google OAuth (Required)
+# Configure in Convex dashboard: https://dashboard.convex.dev
+# Auth > Providers > Google OAuth
+# Add client ID and secret from Google Cloud Console
+# Redirect URI: https://your-deployment.convex.site/api/auth/callback/google
 
 # Organization
 SYSTEM_OWNER_EMAIL=administracion@ipupy.org.py
@@ -371,12 +395,12 @@ NODE_ENV=production
 
 ## Security Best Practices
 
-1. **Always verify auth in Convex functions**: Use `ctx.auth.getUserIdentity()` at start of every function
-2. **Check role permissions**: Load user profile and verify role before operations
-3. **Validate auth on API routes**: Use `getServerSession()` from NextAuth
-4. **CORS restrictions**: Only allow approved origins (see `src/lib/cors.ts`)
-5. **Rate limiting**: Applied on sensitive API routes
-6. **Audit logging**: User actions logged in `userActivity` collection
+1. **Always verify auth in Convex functions**: Use `getAuthContext()` from `convex/lib/auth.ts`
+2. **Check role permissions**: Use permission helpers from `convex/lib/permissions.ts`
+3. **Rate limiting**: Enforced via `@convex-dev/rate-limiter` on mutations
+4. **Audit logging**: User actions logged in `userActivity` collection
+5. **CORS restrictions**: Only allow approved origins (see `src/lib/cors.ts`)
+6. **Domain restriction**: Only `@ipupy.org.py` emails allowed (enforced in `convex/auth.ts`)
 
 ## Development Best Practices
 
@@ -495,13 +519,15 @@ if (typeof process !== 'undefined') {
 
 ## Common Development Tasks
 
-### Adding a New API Route
+### Adding a New API Route (Legacy - Avoid)
 
+**⚠️ API routes are being phased out. Use Convex queries/mutations directly instead.**
+
+If you must add an API route for external integration:
 1. Create route file in `src/app/api/[name]/route.ts`
-2. Import `getServerSession` from NextAuth
-3. Validate authentication with NextAuth session
-4. Initialize `ConvexHttpClient` to call Convex functions
-5. Add CORS headers if needed (see `src/lib/cors.ts`)
+2. Use `fetchQuery` or `fetchMutation` from `convex/nextjs`
+3. Add CORS headers if needed (see `src/lib/cors.ts`)
+4. Add auth checks in Convex function, not in API route
 
 ### Adding a New Convex Function
 
@@ -527,8 +553,8 @@ if (typeof process !== 'undefined') {
 **Current State:**
 - ✅ **Schema**: Fully migrated to Convex (`convex/schema.ts`)
 - ✅ **Backend Functions**: Core queries/mutations implemented in `convex/*.ts`
-- ✅ **Auth**: NextAuth v5 with Convex OIDC bridge active
-- ⚠️ **API Routes**: REST endpoints (`src/app/api/`) still call Convex via HTTP client
+- ✅ **Auth**: Convex Auth (`@convex-dev/auth`) with Google OAuth
+- ⚠️ **API Routes**: REST endpoints (`src/app/api/`) exist as legacy compatibility layer
 - ⚠️ **Frontend**: Mix of TanStack Query hooks and Convex React hooks
 - ⚠️ **Data**: Legacy `supabase_id` fields preserved for compatibility
 
@@ -582,7 +608,7 @@ Monitors schema changes and deploys functions automatically.
 - ✅ `npm run build` succeeds
 - ✅ Environment variables configured in Vercel
 - ✅ `npx convex deploy` completed successfully
-- ✅ Convex OIDC bridge configured for Google OAuth
+- ✅ Convex Auth configured with Google OAuth in Convex dashboard
 
 ## Common Pitfalls & Quick Fixes
 
@@ -642,10 +668,12 @@ npm run validate  # Check types + lint
 **Symptom**: "Not authenticated" or "Unauthorized" errors
 
 **Fix**:
-1. Verify NextAuth session is active (check `/api/auth/session`)
-2. Ensure `NEXTAUTH_SECRET` is set correctly
-3. Check Convex OIDC bridge configuration in dashboard
-4. Verify Google OAuth credentials and redirect URLs
+1. Verify Convex Auth token exists (`useAuthToken()` hook returns non-null)
+2. Check Convex dashboard: Auth > Providers > Google OAuth
+3. Verify Google OAuth credentials and redirect URLs in Google Cloud Console
+4. Ensure redirect URI matches: `https://your-deployment.convex.site/api/auth/callback/google`
+5. Check browser console for auth errors
+6. Verify domain restriction: only `@ipupy.org.py` emails allowed
 
 ### TypeScript Errors
 
@@ -667,11 +695,12 @@ npm run validate  # Check types + lint
 ### Auth Issues
 
 Check:
-1. NextAuth configured correctly in `src/lib/auth.ts`
-2. Google OAuth credentials valid
-3. Redirect URLs match production domain
+1. Convex Auth configured in Convex dashboard (Auth > Providers > Google)
+2. Google OAuth credentials valid in Google Cloud Console
+3. Redirect URLs match Convex deployment: `https://<deployment>.convex.site/api/auth/callback/google`
 4. Cookies enabled in browser
-5. OIDC bridge active in Convex dashboard
+5. Domain restriction working: only `@ipupy.org.py` emails allowed
+6. Profile auto-provisioning working: `ensureProfile` mutation succeeds
 
 ## Documentation References
 

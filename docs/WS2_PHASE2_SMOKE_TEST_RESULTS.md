@@ -5,6 +5,8 @@
 **Environment:** Convex Dev Deployment (`dashing-clownfish-472`)
 **Status:** ✅ ALL TESTS PASSED
 
+> **Update (Oct 9, 2025 – WS-4 Phase 4):** `ensureProfile` now resolves the target user from the authenticated Convex session. The CLI invocations documented below applied to the legacy NextAuth flow and are retained for historical reference only.
+
 ---
 
 ## Test Environment Setup

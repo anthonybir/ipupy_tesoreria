@@ -1,7 +1,7 @@
 import type { JSX } from 'react';
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
-import NextAuthLogin from '@/components/Auth/NextAuthLogin';
+import ConvexAuthLogin from '@/components/Auth/ConvexAuthLogin';
 
 export const metadata: Metadata = {
   title: 'Iniciar Sesión • IPU PY Tesorería',
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 export default function LoginPage(): JSX.Element {
   return (
     <Suspense fallback={<LoginFallback />}>
-      <NextAuthLogin />
+      <ConvexAuthLogin />
     </Suspense>
   );
 }
