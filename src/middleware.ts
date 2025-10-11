@@ -42,6 +42,9 @@ export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
 
   const authenticated = await convexAuth.isAuthenticated();
 
+  // Temporary debug logging
+  console.log('[Middleware] Path:', pathname, 'Authenticated:', authenticated);
+
   if (!authenticated) {
     if (pathname.startsWith("/api/")) {
       const jsonResponse = NextResponse.json(
@@ -52,6 +55,7 @@ export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
       return jsonResponse;
     }
 
+    console.log('[Middleware] Redirecting to login from:', pathname);
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("from", pathname);
     const redirectResponse = NextResponse.redirect(loginUrl);
