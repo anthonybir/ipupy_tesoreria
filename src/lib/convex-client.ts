@@ -18,9 +18,4 @@ const convexUrl = process.env['NEXT_PUBLIC_CONVEX_URL'] ?? (() => {
   );
 })();
 
-// Temporary debug logging to verify correct URL
-if (typeof window !== 'undefined') {
-  console.log('[Convex Client] Using URL:', convexUrl);
-}
-
 export const convexClient = new ConvexReactClient(convexUrl);
