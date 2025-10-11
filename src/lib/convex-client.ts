@@ -11,11 +11,16 @@ import { ConvexReactClient } from 'convex/react';
  * static replacement to work correctly. Assigning it to a variable first
  * breaks the build-time replacement.
  */
-export const convexClient = new ConvexReactClient(
-  process.env['NEXT_PUBLIC_CONVEX_URL'] ?? (() => {
-    throw new Error(
-      'Missing NEXT_PUBLIC_CONVEX_URL environment variable. ' +
-        'Set this value to your Convex deployment URL before running the app.'
-    );
-  })()
-);
+const convexUrl = process.env['NEXT_PUBLIC_CONVEX_URL'] ?? (() => {
+  throw new Error(
+    'Missing NEXT_PUBLIC_CONVEX_URL environment variable. ' +
+      'Set this value to your Convex deployment URL before running the app.'
+  );
+})();
+
+// Temporary debug logging to verify correct URL
+if (typeof window !== 'undefined') {
+  console.log('[Convex Client] Using URL:', convexUrl);
+}
+
+export const convexClient = new ConvexReactClient(convexUrl);
